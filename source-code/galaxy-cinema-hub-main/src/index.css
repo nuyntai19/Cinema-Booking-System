@@ -1,0 +1,292 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    /* Galaxy Cinema Theme */
+    --background: 0 0% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Primary: Vibrant Orange */
+    --primary: 22 90% 54%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Dark Blue */
+    --secondary: 218 75% 16%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 22 90% 54%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 0%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 22 90% 54%;
+
+    --radius: 0.75rem;
+
+    /* Custom Cinema tokens */
+    --cinema-orange: 22 90% 54%;
+    --cinema-blue: 218 75% 16%;
+    --cinema-blue-light: 218 60% 25%;
+    --cinema-gold: 45 93% 47%;
+    --cinema-silver: 220 9% 70%;
+
+    /* Seat Colors */
+    --seat-available: 0 0% 95%;
+    --seat-selected: 22 90% 54%;
+    --seat-held: 45 93% 47%;
+    --seat-sold: 220 9% 70%;
+    --seat-vip: 270 60% 50%;
+    --seat-couple: 340 65% 55%;
+
+    /* Age Rating Colors */
+    --age-p: 142 76% 36%;
+    --age-t13: 45 93% 47%;
+    --age-t16: 22 90% 54%;
+    --age-t18: 0 84% 60%;
+
+    --sidebar-background: 218 75% 16%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 22 90% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 218 60% 25%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 218 60% 25%;
+    --sidebar-ring: 22 90% 54%;
+  }
+
+  .dark {
+    --background: 218 75% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 218 75% 12%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 218 75% 12%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 22 90% 54%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 218 60% 25%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 218 60% 20%;
+    --muted-foreground: 220 9% 70%;
+
+    --accent: 22 90% 54%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 218 60% 25%;
+    --input: 218 60% 25%;
+    --ring: 22 90% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Effect */
+  .glass {
+    @apply bg-white/10 backdrop-blur-xl border border-white/20;
+  }
+
+  .glass-dark {
+    @apply bg-black/40 backdrop-blur-xl border border-white/10;
+  }
+
+  /* Glow Effects */
+  .glow-orange {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4),
+                0 0 40px hsl(var(--primary) / 0.2);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 20px hsl(var(--success) / 0.4),
+                0 0 40px hsl(var(--success) / 0.2);
+  }
+
+  /* Seat Styles */
+  .seat {
+    @apply w-8 h-8 rounded-md transition-all duration-200 cursor-pointer flex items-center justify-center text-xs font-medium;
+  }
+
+  .seat-available {
+    @apply bg-muted hover:bg-primary/20 border border-border;
+  }
+
+  .seat-selected {
+    @apply bg-primary text-primary-foreground glow-orange;
+  }
+
+  .seat-held {
+    @apply bg-warning text-warning-foreground animate-pulse;
+  }
+
+  .seat-sold {
+    @apply bg-muted-foreground/30 text-muted-foreground cursor-not-allowed;
+  }
+
+  .seat-vip {
+    @apply bg-purple-500/20 border-purple-500 hover:bg-purple-500/30;
+  }
+
+  .seat-couple {
+    @apply w-16 bg-pink-500/20 border-pink-500 hover:bg-pink-500/30;
+  }
+
+  /* Age Rating Badges */
+  .age-badge {
+    @apply px-2 py-0.5 rounded text-xs font-bold uppercase;
+  }
+
+  .age-p {
+    @apply bg-green-500 text-white;
+  }
+
+  .age-t13 {
+    @apply bg-yellow-500 text-black;
+  }
+
+  .age-t16 {
+    @apply bg-orange-500 text-white;
+  }
+
+  .age-t18 {
+    @apply bg-red-500 text-white;
+  }
+
+  /* Status Badges */
+  .status-badge {
+    @apply px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .status-success {
+    @apply bg-green-100 text-green-700;
+  }
+
+  .status-pending {
+    @apply bg-yellow-100 text-yellow-700;
+  }
+
+  .status-failed {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .status-used {
+    @apply bg-gray-100 text-gray-600;
+  }
+
+  /* Floating Card */
+  .floating-card {
+    @apply bg-card rounded-xl shadow-lg border border-border/50;
+  }
+
+  /* Cinema Header */
+  .cinema-header {
+    @apply bg-secondary text-secondary-foreground;
+  }
+
+  /* Quick Booking Bar */
+  .quick-booking-bar {
+    @apply bg-card shadow-xl rounded-2xl p-4 -mt-8 relative z-10 mx-4 lg:mx-auto max-w-6xl;
+  }
+}
+
+@layer utilities {
+  .text-gradient-orange {
+    @apply bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent;
+  }
+
+  .bg-gradient-cinema {
+    @apply bg-gradient-to-br from-secondary via-secondary to-blue-900;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from { 
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to { 
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}

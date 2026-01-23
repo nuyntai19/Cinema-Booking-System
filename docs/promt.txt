@@ -1,0 +1,238 @@
+MASTER PROMPT V6: CINEMA BOOKING SYSTEM (FULL LOGIC + ALL SCREENS)
+I. OVERVIEW & DESIGN SYSTEM
+Theme: Modern Cinema E-commerce.
+
+Color Palette (Galaxy Style):
+
+Primary: Vibrant Orange (#F37021) - For CTA buttons, prices, highlight icons.
+
+Secondary: Dark Blue (#0B1E45) - For Header, Footer, Headings, Admin Sidebar.
+
+Background: White (#FFFFFF) or Light Gray (#F5F7FA) for web background.
+
+Semantic Colors: Red (Error/Sold/Rated T18), Green (Success/Available/Rated P), Yellow (Warning/Holding/Pending), Gray (Expired/Disabled).
+
+Typography: Sans-serif (Roboto/Inter), bold, high readability.
+
+Style: Card-based layout, slight rounded corners (8px-12px), soft shadows.
+
+DEMO CREDENTIALS (PRE-FILLED)
+Please enable easy login/switching for these roles:
+
+Admin: admin@cinema.com / admin123 (Access to Dashboard).
+
+Staff: staff@cinema.com / staff123 (Access to Scanner & POS).
+
+Client: client@gmail.com / client123 (Access to Booking).
+
+II. CLIENT MODULE (WEBSITE)
+1. Homepage
+Header: Dark Blue background. Logo (Left). Menu (Schedule, Movies, Cinemas, Promotions). Right: Search bar + Notification Bell + User Avatar.
+
+Hero Banner: Full-width large image slider. Crucial: No text overlaying the center.
+
+Quick Booking Bar: Located IMMEDIATELY BELOW the Banner (floating shadow). Dropdowns: [Movie] -> [Cinema] -> [Date] -> [Time]. Orange "Buy Ticket" button.
+
+Movie Grid: Tabs: "Now Showing" / "Coming Soon".
+
+Card: Vertical Poster, Age Badge (Top-left: P/T13/T16/T18), VN Flag (Top-right). Hover: "Book Now".
+
+2. Cinema List Page (NEW)
+Goal: Browse cinemas before selecting a movie.
+
+Filter Bar: Dropdown [Area/District], Checkbox [IMAX / 4DX].
+
+Cinema Card (List View):
+
+Cinema Name (e.g., Galaxy Nguyen Du).
+
+Address (Map Pin Icon), Hotline.
+
+Badges: IMAX, 4DX, Standard.
+
+Actions: Buttons "See Showtimes", "Directions".
+
+3. Cinema Showtime Page (NEW)
+Goal: User selects a specific Cinema, then sees movies available there.
+
+Sticky Info Bar: Shows selected Cinema Name & Address.
+
+Movie List (Horizontal Cards):
+
+Left: Small Poster.
+
+Center: Movie Title + Age Badge.
+
+Right: List of Time Slots (Buttons).
+
+Logic: Gray out sold-out slots. Show Lock Icon for slots violating curfew logic.
+
+4. Movie Detail Page & Age Modal
+Layout: Split View (Poster Left, Info Right).
+
+Legal Warning Box: Light yellow box: "Warning: T18 - Restricted to viewers 18+. ID check required."
+
+Showtime Selector: Date Picker + Cinema Accordion + Time Buttons.
+
+Sub-view: Age Confirmation Modal (NEW):
+
+Trigger: User < 18 selects a T18 movie (Simulation).
+
+Icon: Warning Triangle ⚠️.
+
+Text: "This movie is rated T18 - viewers must be 18+."
+
+Subtext: "Please bring your ID card to the cinema."
+
+Buttons: "I Understand & Continue" (Orange), "Go Back" (Gray).
+
+5. Booking Flow (Critical Path)
+A. Step 1: Seat Selection
+
+Header: Movie Summary + Countdown Timer (10:00).
+
+Seat Map: "SCREEN" arc at top. Grid of Standard/VIP/Couple seats.
+
+States: White (Available), Orange (Selected), Yellow (Held by others), Gray X (Sold).
+
+Timeout: If Timer = 00:00, show Toast "Seat hold expired" and reset map.
+
+B. Step 2: Concessions
+
+Grid: Popcorn/Drink Combos with Quantity Steppers (+/-).
+
+Footer: Total Price calculation. "Continue" button.
+
+C. Step 3: Checkout & Payment QR
+
+Method Selection: Radio buttons (MoMo, ATM, Visa). Voucher Input before Total.
+
+Payment Modal (Overlay):
+
+Visual: Blurred background. Center card.
+
+Elements: Large QR Code (Simulated), Payment Timer (05:00).
+
+Instruction: "Scan to pay 120.000đ".
+
+Simulation Controls: Button "Simulate Success" (Goes to E-Ticket), Button "Simulate Timeout" (Goes to Failure Page).
+
+D. Step 4: Transaction Results
+
+Success (E-Ticket): Dark Mode, Glassmorphism. QR Code, Ticket Code, Glowing "VALID" badge.
+
+Failure Page (NEW):
+
+Icon: Large Red X ❌.
+
+Text: "Payment Failed. Transaction timed out or cancelled."
+
+Actions: "Retry", "Back to Home".
+
+6. User Profile & Ticket Detail
+Dashboard: Member Card (Rank/Barcode), Spending Progress.
+
+Booking History List:
+
+Status Badges: Green (Upcoming), Gray (Used), Red (Cancelled).
+
+Action: "View QR" (Only for Upcoming).
+
+Ticket Detail View (NEW):
+
+Opened from History. Similar to E-Ticket but static (no animation).
+
+Logic: If "Upcoming", show "Save Image" button. If "Used", show Disabled state (Lock icon).
+
+7. Notification Center (NEW)
+Trigger: Bell Icon in Header.
+
+UI: Dropdown Panel or Mobile Full Screen.
+
+Items:
+
+Icon (Ticket/Money/Alert).
+
+Text: "Payment successful for Movie MAI", "Show starts in 30 mins".
+
+State: Unread (Light bg) vs Read (White bg).
+
+III. STAFF MODULE (TABLET APP)
+8. Ticket Scanner
+View: Camera Frame.
+
+Popups:
+
+Valid: Green "VALID".
+
+Warning: Yellow "CHECK ID REQUIRED" (T18 Logic). Buttons: Approve/Reject.
+
+Invalid: Red "USED/INVALID".
+
+9. POS Box Office
+Split Screen: Showtimes List (Left) + Mini Seat Map (Right).
+
+Sync: Shows Online-Held seats in Yellow.
+
+IV. ADMIN DASHBOARD (WEB)
+10. Overview & Analytics
+KPI Cards: Revenue, Tickets, Occupancy.
+
+Charts: Revenue Bar Chart. "VN Movie Ratio" Donut Chart (Alert < 15%).
+
+Analytics Detail Page (NEW):
+
+Filters: Time Range, Cinema, Movie.
+
+Charts: Revenue by Movie, Ticket Sales by Hour heat map.
+
+11. Cinema & Room Management (NEW)
+Cinema Management:
+
+Table: Name, Address, Room Count, Status (Active/Maintenance).
+
+Actions: Edit, View Rooms.
+
+Room Management:
+
+List: Room Name (e.g., Room 1, IMAX), Capacity, Type.
+
+Actions: "Preview Seat Map" (Layout only, no booking data), Edit.
+
+12. Scheduler
+Gantt Chart: Drag & drop blocks. Conflict detection (Red border).
+
+13. Movie Management
+Table: List Movies.
+
+Add Modal: Title, Duration, Age Rating (P/T13/T16/T18), Origin (VN/Intl).
+
+14. Transactions & Reviews
+Transaction History: Table with Status (Success/Pending/Failed). Detail view shows Promo Code.
+
+Reviews: Moderation list. Toggle "Show/Hide". "Verified Viewer" badge.
+
+15. System Config
+Settings: Seat Hold Timeout (sec), Cleanup Time (min), Booking Cancellation Limit.
+
+V. MICRO-INTERACTIONS & SPECIFIC STATES
+Please ensure these specific text states are included:
+
+Empty Seat Map: If no seats available/open, show message: "Booking not open for this showtime yet".
+
+No Showtime: "No showtimes available for the selected date".
+
+Admin No Data: "No data available to display".
+
+Loading: Skeleton loaders for lists. Spinner for Payment processing.
+
+Toast: "Login Successful", "Added to Cart".
+
+404 Page: Friendly graphic + "Back to Home".
+
+NOTES FOR AI GENERATION:
+Completeness: Do not skip any module (Client, Staff, or Admin).
+
+Logic: The "Simulate" buttons in the Payment Modal are essential for the prototype flow.
+
+Language: Use English for the UI structure/code variables, but use Vietnamese for the dummy content (Movie titles like "Mai", "Đào Phở Piano", descriptions, and status messages) to match the context.
