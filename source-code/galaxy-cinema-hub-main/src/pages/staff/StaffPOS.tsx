@@ -208,7 +208,7 @@ const StaffPOS: React.FC = () => {
   const getSeatClass = (seat: Seat) => {
     const isSelected = selectedSeats.find((s) => s.id === seat.id);
 
-    let baseClass =
+    const baseClass =
       "w-8 h-8 rounded text-xs font-medium transition-all cursor-pointer hover:scale-110";
 
     if (seat.status === "sold") {
