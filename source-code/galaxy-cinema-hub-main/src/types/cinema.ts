@@ -1,14 +1,22 @@
-export type UserRole = 'admin' | 'staff' | 'client';
+export type UserRole = "admin" | "staff" | "client" | "manager";
 
-export type AgeRating = 'P' | 'T13' | 'T16' | 'T18' | 'C';
+export type AgeRating = "P" | "K" | "T13" | "T16" | "T18" | "C";
 
-export type SeatType = 'standard' | 'vip' | 'couple';
+export type MembershipTier = "bronze" | "silver" | "gold" | "platinum";
 
-export type SeatStatus = 'available' | 'selected' | 'held' | 'sold';
+export type SeatType = "standard" | "vip" | "couple";
 
-export type BookingStatus = 'pending' | 'success' | 'failed' | 'cancelled' | 'used' | 'expired';
+export type SeatStatus = "available" | "selected" | "held" | "sold";
 
-export type PaymentMethod = 'momo' | 'atm' | 'visa';
+export type BookingStatus =
+  | "pending"
+  | "success"
+  | "failed"
+  | "cancelled"
+  | "used"
+  | "expired";
+
+export type PaymentMethod = "momo" | "atm" | "visa";
 
 export interface User {
   id: string;
@@ -18,7 +26,8 @@ export interface User {
   phone?: string;
   dob?: string;
   avatar?: string;
-  rank?: 'silver' | 'gold' | 'platinum';
+  membershipTier?: MembershipTier;
+  loyaltyPoints?: number;
   totalSpent?: number;
 }
 
@@ -30,7 +39,7 @@ export interface Movie {
   backdrop?: string;
   duration: number;
   ageRating: AgeRating;
-  origin: 'VN' | 'INT';
+  origin: "VN" | "INT";
   genre: string[];
   director: string;
   cast: string[];
@@ -46,7 +55,7 @@ export interface Cinema {
   name: string;
   address: string;
   hotline: string;
-  features: ('IMAX' | '4DX' | 'Standard')[];
+  features: ("IMAX" | "4DX" | "Standard")[];
   rooms: Room[];
 }
 
@@ -54,11 +63,12 @@ export interface Room {
   id: string;
   name: string;
   cinemaId: string;
-  type: 'Standard' | 'IMAX' | '4DX';
+  type: "Standard" | "IMAX" | "4DX";
   capacity: number;
   rows: number;
   seatsPerRow: number;
   seatMap: Seat[][];
+  cleanupDuration?: number; // Thời gian dọn phòng (phút)
 }
 
 export interface Seat {
@@ -77,6 +87,7 @@ export interface Showtime {
   roomId: string;
   date: string;
   time: string;
+  endTime?: string; // Thời gian kết thúc suất chiếu
   price: {
     standard: number;
     vip: number;
@@ -101,7 +112,9 @@ export interface Booking {
   paymentMethod: PaymentMethod;
   status: BookingStatus;
   createdAt: string;
+  expiresAt?: string; // Thời gian hết hạn giữ ghế
   qrCode?: string;
+  loyaltyPointsEarned?: number; // Điểm tích lũy nhận được
 }
 
 export interface ConcessionItem {
@@ -117,7 +130,7 @@ export interface Promo {
   id: string;
   code: string;
   discount: number;
-  type: 'percent' | 'fixed';
+  type: "percent" | "fixed";
   minAmount: number;
   maxDiscount?: number;
   validUntil: string;
@@ -131,7 +144,7 @@ export interface Transaction {
   customerPhone: string;
   paymentMethod: PaymentMethod;
   amount: number;
-  status: 'success' | 'pending' | 'failed' | 'refunded';
+  status: "success" | "pending" | "failed" | "refunded";
   promoCode?: string;
   discountAmount?: number;
   createdAt: string;
@@ -149,4 +162,52 @@ export interface Review {
   isVerified: boolean;
   isVisible: boolean;
   createdAt: string;
+}
+
+export interface SystemConfig {
+  id: string;
+  curfewTimeU13: string; // Giờ giới nghiêm cho dưới 13 tuổi (HH:mm)
+  curfewTimeU16: string; // Giờ giới nghiêm cho dưới 16 tuổi (HH:mm)
+  minVietnameseQuota: number; // Tỷ lệ phim Việt tối thiểu (%)
+  seatHoldDuration: number; // Thời gian giữ ghế (phút)
+  defaultCleanupDuration: number; // Thời gian dọn phòng mặc định (phút)
+  loyaltyPointsRate: number; // Tỷ lệ quy đổi: amount -> points (VD: 10000 = 1 point)
+  membershipTiers: {
+    bronze: { minSpent: number; discount: number };
+    silver: { minSpent: number; discount: number };
+    gold: { minSpent: number; discount: number };
+    platinum: { minSpent: number; discount: number };
+  };
+}
+
+export interface ScheduleConflict {
+  hasConflict: boolean;
+  conflictingShowtime?: {
+    id: string;
+    movieTitle: string;
+    startTime: string;
+    endTime: string;
+  };
+}
+
+export interface QuotaCheck {
+  isValid: boolean;
+  currentPercent: number;
+  requiredPercent: number;
+  warning?: string;
+}
+
+export interface AgeValidation {
+  isValid: boolean;
+  userAge: number;
+  requiredAge: number;
+  message?: string;
+}
+
+export interface CurfewValidation {
+  isValid: boolean;
+  userAge: number;
+  showtimeEnd: string;
+  curfewTime: string;
+  message?: string;
 }

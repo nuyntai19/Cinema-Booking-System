@@ -7,6 +7,7 @@ import {
   Film,
   Calendar as CalendarIcon,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { movies, cinemas } from "@/data/mockData";
+import { movies, cinemas, systemConfig } from "@/data/mockData";
+import {
+  detectScheduleConflict,
+  checkVietnameseQuota,
+  calculateShowtimeEnd,
+} from "@/lib/validation";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Showtime {
   id: string;
@@ -119,6 +126,9 @@ const AdminScheduler: React.FC = () => {
     price: "",
   });
 
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+
   const filteredShowtimes = showtimes.filter(
     (showtime) =>
       showtime.movieTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -129,21 +139,87 @@ const AdminScheduler: React.FC = () => {
     const movie = movies.find((m) => m.id === formData.movieId);
     const cinema = cinemas.find((c) => c.id === formData.cinemaId);
 
-    if (movie && cinema) {
-      toast({
-        title: "Thêm lịch chiếu thành công",
-        description: `Đã thêm suất chiếu ${movie.title}`,
-      });
-      setIsAddDialogOpen(false);
-      setFormData({
-        movieId: "",
-        cinemaId: "",
-        room: "",
-        date: "",
-        time: "",
-        price: "",
-      });
+    if (!movie || !cinema) return;
+
+    // Check conflict
+    const conflict = detectScheduleConflict(
+      formData.room,
+      formData.date,
+      formData.time,
+      movie.duration,
+      systemConfig.defaultCleanupDuration,
+      showtimes.map((s) => ({
+        id: s.id,
+        movieId: s.movieId,
+        cinemaId: s.cinemaId,
+        roomId: s.room,
+        date: s.date,
+        time: s.time,
+        price: { standard: s.price, vip: s.price, couple: s.price },
+        availableSeats: s.availableSeats,
+        totalSeats: s.totalSeats,
+      })),
+    );
+
+    if (conflict.hasConflict) {
+      setConflictError(
+        `Xụng đột lịch chiếu! Phòng ${formData.room} đã có phim chiếu từ ${conflict.conflictingShowtime?.startTime} đến ${conflict.conflictingShowtime?.endTime}`,
+      );
+      return;
     }
+
+    // Check Vietnamese quota
+    const priceValue = Number(formData.price);
+    const quotaCheck = checkVietnameseQuota(
+      formData.date,
+      [
+        ...showtimes.map((s) => ({
+          id: s.id,
+          movieId: s.movieId,
+          cinemaId: s.cinemaId,
+          roomId: s.room,
+          date: s.date,
+          time: s.time,
+          price: { standard: s.price, vip: s.price, couple: s.price },
+          availableSeats: s.availableSeats,
+          totalSeats: s.totalSeats,
+        })),
+        {
+          id: "temp",
+          movieId: formData.movieId,
+          cinemaId: formData.cinemaId,
+          roomId: formData.room,
+          date: formData.date,
+          time: formData.time,
+          price: { standard: priceValue, vip: priceValue, couple: priceValue },
+          availableSeats: 120,
+          totalSeats: 120,
+        },
+      ],
+      movies,
+      systemConfig,
+    );
+
+    if (quotaCheck.warning) {
+      setQuotaWarning(quotaCheck.warning);
+    } else {
+      setQuotaWarning(null);
+    }
+
+    setConflictError(null);
+    toast({
+      title: "Thêm lịch chiếu thành công",
+      description: `Đã thêm suất chiếu ${movie.title}`,
+    });
+    setIsAddDialogOpen(false);
+    setFormData({
+      movieId: "",
+      cinemaId: "",
+      room: "",
+      date: "",
+      time: "",
+      price: "",
+    });
   };
 
   const handleDelete = (id: string, title: string) => {
@@ -313,6 +389,26 @@ const AdminScheduler: React.FC = () => {
                   placeholder="90000"
                 />
               </div>
+
+              {/* Conflict Error Alert */}
+              {conflictError && (
+                <Alert className="border-red-500 bg-red-50">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-900">
+                    {conflictError}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Quota Warning Alert */}
+              {quotaWarning && (
+                <Alert className="border-yellow-500 bg-yellow-50">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-900">
+                    {quotaWarning}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -321,7 +417,9 @@ const AdminScheduler: React.FC = () => {
               >
                 Hủy
               </Button>
-              <Button onClick={handleAdd}>Thêm</Button>
+              <Button onClick={handleAdd} disabled={!!conflictError}>
+                Thêm
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

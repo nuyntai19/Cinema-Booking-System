@@ -13,12 +13,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import MembershipBadge from "@/components/ui/MembershipBadge";
+import { systemConfig } from "@/data/mockData";
+import {
+  determineMembershipTier,
+  getMembershipDiscount,
+} from "@/lib/validation";
 
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
@@ -55,21 +60,30 @@ const ProfilePage: React.FC = () => {
     setIsEditing(false);
   };
 
-  const getMembershipColor = (rank?: string) => {
-    switch (rank) {
+  const membershipTier = user?.membershipTier || "bronze";
+  const totalSpent = user?.totalSpent || 0;
+  const loyaltyPoints = user?.loyaltyPoints || 0;
+  const discount = getMembershipDiscount(membershipTier, systemConfig);
+
+  const getMembershipColor = (tier: string) => {
+    switch (tier) {
+      case "platinum":
+        return "bg-gradient-to-br from-purple-600 to-purple-800";
       case "gold":
-        return "bg-yellow-500";
+        return "bg-gradient-to-br from-yellow-500 to-yellow-700";
       case "silver":
-        return "bg-gray-400";
+        return "bg-gradient-to-br from-gray-400 to-gray-600";
       case "bronze":
-        return "bg-orange-700";
+        return "bg-gradient-to-br from-orange-700 to-orange-900";
       default:
-        return "bg-gray-500";
+        return "bg-gradient-to-br from-gray-500 to-gray-700";
     }
   };
 
-  const getMembershipName = (rank?: string) => {
-    switch (rank) {
+  const getMembershipName = (tier: string) => {
+    switch (tier) {
+      case "platinum":
+        return "Kim Cương";
       case "gold":
         return "Vàng";
       case "silver":
@@ -233,32 +247,32 @@ const ProfilePage: React.FC = () => {
           {/* Membership Card */}
           <div className="space-y-6">
             <Card
-              className={`${getMembershipColor(user?.rank)} text-white overflow-hidden relative`}
+              className={`${getMembershipColor(membershipTier)} text-white overflow-hidden relative`}
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full" />
               <CardContent className="pt-6 relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <Award className="w-12 h-12" />
-                  <Badge variant="secondary" className="bg-white/20 text-white">
-                    {getMembershipName(user?.rank)}
-                  </Badge>
+                  <MembershipBadge tier={membershipTier} size="md" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Hạng Thành Viên</h3>
                 <p className="text-white/90 text-sm mb-4">
-                  Bạn đang ở hạng {getMembershipName(user?.rank)}
+                  Bạn đang ở hạng {getMembershipName(membershipTier)}
                 </p>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Tổng chi tiêu:</span>
                     <span className="font-bold">
-                      {user?.totalSpent?.toLocaleString("vi-VN")}đ
+                      {totalSpent.toLocaleString("vi-VN")}đ
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Điểm tích lũy:</span>
-                    <span className="font-bold">
-                      {Math.floor((user?.totalSpent || 0) / 10000)} điểm
-                    </span>
+                    <span className="font-bold">{loyaltyPoints} điểm</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Giảm giá:</span>
+                    <span className="font-bold">{discount}%</span>
                   </div>
                 </div>
               </CardContent>
@@ -272,11 +286,17 @@ const ProfilePage: React.FC = () => {
               <CardContent className="space-y-3">
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
-                  <p className="text-sm">Giảm giá 10% cho tất cả vé phim</p>
+                  <p className="text-sm">
+                    Giảm giá {discount}% cho tất cả vé phim
+                  </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
-                  <p className="text-sm">Tích điểm x2 vào cuối tuần</p>
+                  <p className="text-sm">
+                    Tích điểm tự động:{" "}
+                    {systemConfig.loyaltyPointsRate.toLocaleString("vi-VN")}đ =
+                    1 điểm
+                  </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
@@ -286,6 +306,19 @@ const ProfilePage: React.FC = () => {
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
                   <p className="text-sm">Quà tặng sinh nhật đặc biệt</p>
                 </div>
+                {membershipTier !== "bronze" && (
+                  <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                    <p className="text-xs font-medium text-primary">
+                      🎉 Thăng hạng tiếp theo:
+                      {membershipTier === "silver" &&
+                        ` Vàng (${systemConfig.membershipTiers.gold.minSpent.toLocaleString("vi-VN")}đ)`}
+                      {membershipTier === "gold" &&
+                        ` Kim Cương (${systemConfig.membershipTiers.platinum.minSpent.toLocaleString("vi-VN")}đ)`}
+                      {membershipTier === "platinum" &&
+                        " Bạn đã đạt hạng cao nhất!"}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
