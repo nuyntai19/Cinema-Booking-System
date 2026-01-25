@@ -60,6 +60,10 @@ const AdminScheduler: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDate, setFilterDate] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(
+    null,
+  );
 
   const [showtimes, setShowtimes] = useState<Showtime[]>([
     {
@@ -148,6 +152,27 @@ const AdminScheduler: React.FC = () => {
       title: "Xóa lịch chiếu thành công",
       description: `Đã xóa suất chiếu ${title}`,
     });
+  };
+
+  const handleEdit = (showtime: Showtime) => {
+    setSelectedShowtime(showtime);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = () => {
+    if (selectedShowtime) {
+      setShowtimes(
+        showtimes.map((s) =>
+          s.id === selectedShowtime.id ? selectedShowtime : s,
+        ),
+      );
+      toast({
+        title: "Cập nhật lịch chiếu thành công",
+        description: `Đã cập nhật suất chiếu ${selectedShowtime.movieTitle}`,
+      });
+      setIsEditDialogOpen(false);
+      setSelectedShowtime(null);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -427,7 +452,11 @@ const AdminScheduler: React.FC = () => {
                   <TableCell>{getStatusBadge(showtime.status)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(showtime)}
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
@@ -447,6 +476,177 @@ const AdminScheduler: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Showtime Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh Sửa Suất Chiếu</DialogTitle>
+          </DialogHeader>
+          {selectedShowtime && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-movie">Phim</Label>
+                  <Select
+                    value={selectedShowtime.movieId}
+                    onValueChange={(value) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        movieId: value,
+                        movieTitle:
+                          movies.find((m) => m.id === value)?.title || "",
+                      })
+                    }
+                  >
+                    <SelectTrigger id="edit-movie">
+                      <SelectValue placeholder="Chọn phim" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {movies.map((movie) => (
+                        <SelectItem key={movie.id} value={movie.id}>
+                          {movie.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-cinema">Rạp</Label>
+                  <Select
+                    value={selectedShowtime.cinemaId}
+                    onValueChange={(value) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        cinemaId: value,
+                        cinemaName:
+                          cinemas.find((c) => c.id === value)?.name || "",
+                      })
+                    }
+                  >
+                    <SelectTrigger id="edit-cinema">
+                      <SelectValue placeholder="Chọn rạp" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cinemas.map((cinema) => (
+                        <SelectItem key={cinema.id} value={cinema.id}>
+                          {cinema.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-room">Phòng</Label>
+                  <Input
+                    id="edit-room"
+                    value={selectedShowtime.room}
+                    onChange={(e) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        room: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Ngày Chiếu</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={selectedShowtime.date}
+                    onChange={(e) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        date: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-time">Giờ Chiếu</Label>
+                  <Input
+                    id="edit-time"
+                    type="time"
+                    value={selectedShowtime.time}
+                    onChange={(e) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        time: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Giá Vé (VNĐ)</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    value={selectedShowtime.price}
+                    onChange={(e) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        price: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-total-seats">Tổng Ghế</Label>
+                  <Input
+                    id="edit-total-seats"
+                    type="number"
+                    value={selectedShowtime.totalSeats}
+                    onChange={(e) =>
+                      setSelectedShowtime({
+                        ...selectedShowtime,
+                        totalSeats: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Trạng Thái</Label>
+                <Select
+                  value={selectedShowtime.status}
+                  onValueChange={(
+                    value: "scheduled" | "ongoing" | "completed" | "cancelled",
+                  ) =>
+                    setSelectedShowtime({
+                      ...selectedShowtime,
+                      status: value,
+                    })
+                  }
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">Đã Lên Lịch</SelectItem>
+                    <SelectItem value="ongoing">Đang Chiếu</SelectItem>
+                    <SelectItem value="completed">Hoàn Thành</SelectItem>
+                    <SelectItem value="cancelled">Đã Hủy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button onClick={handleUpdate}>Cập Nhật</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

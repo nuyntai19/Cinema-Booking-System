@@ -40,6 +40,8 @@ const AdminCinemas: React.FC = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedCinema, setSelectedCinema] = useState<Cinema | null>(null);
   const [cinemas, setCinemas] = useState<Cinema[]>([
     {
       id: "1",
@@ -96,6 +98,33 @@ const AdminCinemas: React.FC = () => {
     });
     setIsAddDialogOpen(false);
     setFormData({ name: "", address: "", hotline: "", manager: "" });
+  };
+
+  const handleEdit = (cinema: Cinema) => {
+    setSelectedCinema(cinema);
+    setFormData({
+      name: cinema.name,
+      address: cinema.address,
+      hotline: cinema.hotline,
+      manager: cinema.manager,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = () => {
+    if (selectedCinema) {
+      setCinemas(
+        cinemas.map((c) =>
+          c.id === selectedCinema.id ? { ...c, ...formData } : c,
+        ),
+      );
+      toast({
+        title: "Cập nhật thành công",
+        description: `Đã cập nhật rạp ${formData.name}`,
+      });
+      setIsEditDialogOpen(false);
+      setFormData({ name: "", address: "", hotline: "", manager: "" });
+    }
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -344,7 +373,11 @@ const AdminCinemas: React.FC = () => {
                   <TableCell className="text-sm">{cinema.manager}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(cinema)}
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
@@ -362,6 +395,73 @@ const AdminCinemas: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Cinema Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chỉnh Sửa Rạp Chiếu</DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin rạp {selectedCinema?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Tên rạp *</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="Galaxy Nguyễn Du"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-address">Địa chỉ *</Label>
+              <Input
+                id="edit-address"
+                value={formData.address}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
+                placeholder="116 Nguyễn Du, Quận 1, TP.HCM"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-hotline">Hotline</Label>
+              <Input
+                id="edit-hotline"
+                value={formData.hotline}
+                onChange={(e) =>
+                  setFormData({ ...formData, hotline: e.target.value })
+                }
+                placeholder="1900 2224"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-manager">Quản lý</Label>
+              <Input
+                id="edit-manager"
+                value={formData.manager}
+                onChange={(e) =>
+                  setFormData({ ...formData, manager: e.target.value })
+                }
+                placeholder="Nguyễn Văn A"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button onClick={handleUpdate}>Cập Nhật</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

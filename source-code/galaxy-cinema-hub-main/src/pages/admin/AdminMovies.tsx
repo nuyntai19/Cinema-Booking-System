@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, Search, Edit, Trash2, Eye, Flag } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from "react";
+import { Plus, Search, Edit, Trash2, Eye, Flag } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -20,36 +20,64 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { movies as mockMovies } from '@/data/mockData';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/select";
+import { movies as mockMovies } from "@/data/mockData";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+
+interface Movie {
+  id: string;
+  title: string;
+  duration: number;
+  ageRating: string;
+  origin: string;
+  poster: string;
+  genre: string[];
+  isNowShowing: boolean;
+}
 
 const AdminMovies: React.FC = () => {
+  const { toast } = useToast();
   const [movies, setMovies] = useState(mockMovies);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
-  const filteredMovies = movies.filter(m =>
-    m.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredMovies = movies.filter((m) =>
+    m.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const getAgeRatingClass = (rating: string) => {
     const classes: Record<string, string> = {
-      'P': 'bg-green-500',
-      'T13': 'bg-yellow-500',
-      'T16': 'bg-orange-500',
-      'T18': 'bg-red-500',
-      'C': 'bg-gray-500',
+      P: "bg-green-500",
+      T13: "bg-yellow-500",
+      T16: "bg-orange-500",
+      T18: "bg-red-500",
+      C: "bg-gray-500",
     };
-    return classes[rating] || 'bg-gray-500';
+    return classes[rating] || "bg-gray-500";
+  };
+
+  const handleEdit = (movie: any) => {
+    setSelectedMovie(movie);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = (movieId: string) => {
+    setMovies(movies.filter((m) => m.id !== movieId));
+    toast({
+      title: "Đã xóa phim",
+      description: "Phim đã được xóa khỏi hệ thống",
+    });
   };
 
   return (
@@ -58,7 +86,9 @@ const AdminMovies: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Quản Lý Phim</h1>
-          <p className="text-muted-foreground">Danh sách và quản lý phim đang chiếu</p>
+          <p className="text-muted-foreground">
+            Danh sách và quản lý phim đang chiếu
+          </p>
         </div>
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
@@ -104,11 +134,21 @@ const AdminMovies: React.FC = () => {
                 <Label>Nguồn gốc</Label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="origin" value="VN" className="text-primary" />
+                    <input
+                      type="radio"
+                      name="origin"
+                      value="VN"
+                      className="text-primary"
+                    />
                     <span>🇻🇳 Việt Nam</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="origin" value="INT" className="text-primary" />
+                    <input
+                      type="radio"
+                      name="origin"
+                      value="INT"
+                      className="text-primary"
+                    />
                     <span>🌍 Quốc tế</span>
                   </label>
                 </div>
@@ -119,8 +159,12 @@ const AdminMovies: React.FC = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddModal(false)}>Hủy</Button>
-              <Button className="bg-primary hover:bg-primary/90">Thêm Phim</Button>
+              <Button variant="outline" onClick={() => setShowAddModal(false)}>
+                Hủy
+              </Button>
+              <Button className="bg-primary hover:bg-primary/90">
+                Thêm Phim
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -159,7 +203,10 @@ const AdminMovies: React.FC = () => {
             <TableBody>
               {filteredMovies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell
+                    colSpan={7}
+                    className="text-center py-12 text-muted-foreground"
+                  >
                     Không tìm thấy phim nào
                   </TableCell>
                 </TableRow>
@@ -176,18 +223,28 @@ const AdminMovies: React.FC = () => {
                     <TableCell>
                       <div>
                         <p className="font-medium">{movie.title}</p>
-                        <p className="text-sm text-muted-foreground">{movie.genre.join(', ')}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {movie.genre.join(", ")}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell>{movie.duration} phút</TableCell>
                     <TableCell>
-                      <Badge className={cn('text-white', getAgeRatingClass(movie.ageRating))}>
+                      <Badge
+                        className={cn(
+                          "text-white",
+                          getAgeRatingClass(movie.ageRating),
+                        )}
+                      >
                         {movie.ageRating}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {movie.origin === 'VN' ? (
-                        <Badge variant="outline" className="border-red-500 text-red-600">
+                      {movie.origin === "VN" ? (
+                        <Badge
+                          variant="outline"
+                          className="border-red-500 text-red-600"
+                        >
                           <Flag className="w-3 h-3 mr-1" />
                           Việt Nam
                         </Badge>
@@ -196,8 +253,10 @@ const AdminMovies: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={movie.isNowShowing ? 'default' : 'secondary'}>
-                        {movie.isNowShowing ? 'Đang chiếu' : 'Sắp chiếu'}
+                      <Badge
+                        variant={movie.isNowShowing ? "default" : "secondary"}
+                      >
+                        {movie.isNowShowing ? "Đang chiếu" : "Sắp chiếu"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -205,10 +264,19 @@ const AdminMovies: React.FC = () => {
                         <Button variant="ghost" size="icon">
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(movie)}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(movie.id)}
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -220,6 +288,96 @@ const AdminMovies: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Movie Dialog */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Chỉnh Sửa Phim</DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin phim {selectedMovie?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-title">Tên phim</Label>
+              <Input id="edit-title" defaultValue={selectedMovie?.title} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-duration">Thời lượng (phút)</Label>
+                <Input
+                  id="edit-duration"
+                  type="number"
+                  defaultValue={selectedMovie?.duration}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-ageRating">Phân loại</Label>
+                <Select defaultValue={selectedMovie?.ageRating}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="P">P - Phổ biến</SelectItem>
+                    <SelectItem value="T13">T13 - Từ 13 tuổi</SelectItem>
+                    <SelectItem value="T16">T16 - Từ 16 tuổi</SelectItem>
+                    <SelectItem value="T18">T18 - Từ 18 tuổi</SelectItem>
+                    <SelectItem value="C">C - Cấm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-origin">Nguồn gốc</Label>
+              <Select defaultValue={selectedMovie?.origin}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="VN">Việt Nam</SelectItem>
+                  <SelectItem value="US">Mỹ</SelectItem>
+                  <SelectItem value="KR">Hàn Quốc</SelectItem>
+                  <SelectItem value="JP">Nhật Bản</SelectItem>
+                  <SelectItem value="OTHER">Khác</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-status">Trạng thái</Label>
+              <Select
+                defaultValue={
+                  selectedMovie?.isNowShowing ? "showing" : "upcoming"
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="showing">Đang chiếu</SelectItem>
+                  <SelectItem value="upcoming">Sắp chiếu</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={() => {
+                toast({
+                  title: "Đã cập nhật",
+                  description: "Thông tin phim đã được cập nhật",
+                });
+                setShowEditModal(false);
+              }}
+            >
+              Lưu Thay Đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

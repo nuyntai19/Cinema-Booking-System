@@ -25,10 +25,14 @@ import BookingFailedPage from "./pages/booking/BookingFailedPage";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminMovies from "./pages/admin/AdminMovies";
+import AdminUsers from "./pages/admin/AdminUsers";
 import AdminCinemas from "./pages/admin/AdminCinemas";
+import AdminPromotions from "./pages/admin/AdminPromotions";
+import AdminConcessions from "./pages/admin/AdminConcessions";
 import AdminScheduler from "./pages/admin/AdminScheduler";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminReviews from "./pages/admin/AdminReviews";
+import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/AdminSettings";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
@@ -71,10 +75,14 @@ const App = () => (
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="movies" element={<AdminMovies />} />
+                <Route path="users" element={<AdminUsers />} />
                 <Route path="cinemas" element={<AdminCinemas />} />
+                <Route path="promotions" element={<AdminPromotions />} />
+                <Route path="concessions" element={<AdminConcessions />} />
                 <Route path="scheduler" element={<AdminScheduler />} />
                 <Route path="transactions" element={<AdminTransactions />} />
                 <Route path="reviews" element={<AdminReviews />} />
+                <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>
 
