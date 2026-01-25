@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import NotificationDropdown from "@/components/NotificationDropdown";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const Header: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -86,6 +87,9 @@ const Header: React.FC = () => {
 
             {/* Notifications */}
             {isAuthenticated && <NotificationDropdown />}
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* User Menu */}
             {isAuthenticated ? (

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, BookingProvider } from "@/contexts/AppContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
 // Pages
 import HomePage from "./pages/HomePage";
@@ -43,63 +44,71 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <BookingProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Client Routes */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/bookings" element={<BookingHistoryPage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/schedule" element={<SchedulePage />} />
-              <Route path="/movies" element={<MoviesPage />} />
-              <Route path="/cinemas" element={<CinemasListPage />} />
-              <Route path="/promotions" element={<PromotionsPage />} />
-              <Route path="/movie/:id" element={<MovieDetailPage />} />
-              <Route path="/booking/seats" element={<SeatSelectionPage />} />
-              <Route
-                path="/booking/concessions"
-                element={<ConcessionsPage />}
-              />
-              <Route path="/booking/payment" element={<PaymentPage />} />
-              <Route path="/booking/success" element={<BookingSuccessPage />} />
-              <Route path="/booking/failed" element={<BookingFailedPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <BookingProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                {/* Client Routes */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/bookings" element={<BookingHistoryPage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/schedule" element={<SchedulePage />} />
+                <Route path="/movies" element={<MoviesPage />} />
+                <Route path="/cinemas" element={<CinemasListPage />} />
+                <Route path="/promotions" element={<PromotionsPage />} />
+                <Route path="/movie/:id" element={<MovieDetailPage />} />
+                <Route path="/booking/seats" element={<SeatSelectionPage />} />
+                <Route
+                  path="/booking/concessions"
+                  element={<ConcessionsPage />}
+                />
+                <Route path="/booking/payment" element={<PaymentPage />} />
+                <Route
+                  path="/booking/success"
+                  element={<BookingSuccessPage />}
+                />
+                <Route path="/booking/failed" element={<BookingFailedPage />} />
 
-              {/* Admin Routes */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="movies" element={<AdminMovies />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="cinemas" element={<AdminCinemas />} />
-                <Route path="promotions" element={<AdminPromotions />} />
-                <Route path="concessions" element={<AdminConcessions />} />
-                <Route path="scheduler" element={<AdminScheduler />} />
-                <Route path="transactions" element={<AdminTransactions />} />
-                <Route path="reviews" element={<AdminReviews />} />
-                <Route path="notifications" element={<AdminNotifications />} />
-                <Route path="settings" element={<AdminSettings />} />
-              </Route>
+                {/* Admin Routes */}
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="movies" element={<AdminMovies />} />
+                  <Route path="users" element={<AdminUsers />} />
+                  <Route path="cinemas" element={<AdminCinemas />} />
+                  <Route path="promotions" element={<AdminPromotions />} />
+                  <Route path="concessions" element={<AdminConcessions />} />
+                  <Route path="scheduler" element={<AdminScheduler />} />
+                  <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="reviews" element={<AdminReviews />} />
+                  <Route
+                    path="notifications"
+                    element={<AdminNotifications />}
+                  />
+                  <Route path="settings" element={<AdminSettings />} />
+                </Route>
 
-              {/* Staff Routes */}
-              <Route path="/staff" element={<StaffLayout />}>
-                <Route index element={<StaffScanner />} />
-                <Route path="scanner" element={<StaffScanner />} />
-                <Route path="pos" element={<StaffPOS />} />
-              </Route>
+                {/* Staff Routes */}
+                <Route path="/staff" element={<StaffLayout />}>
+                  <Route index element={<StaffScanner />} />
+                  <Route path="scanner" element={<StaffScanner />} />
+                  <Route path="pos" element={<StaffPOS />} />
+                </Route>
 
-              {/* 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </BookingProvider>
-    </AuthProvider>
+                {/* 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </BookingProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

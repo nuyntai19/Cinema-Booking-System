@@ -247,7 +247,7 @@ const MovieDetailPage: React.FC = () => {
         </div>
 
         <div className="container mx-auto px-4 -mt-32 relative z-10">
-          <div className="grid lg:grid-cols-[300px,1fr] gap-8">
+          <div className="grid lg:grid-cols-[300px,1fr] gap-4 md:gap-8">
             {/* Poster */}
             <div className="hidden lg:block">
               <img
@@ -279,11 +279,11 @@ const MovieDetailPage: React.FC = () => {
                     </Badge>
                   )}
                 </div>
-                <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">
+                <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground mb-2">
                   {movie.title}
                 </h1>
                 {movie.titleVi && movie.titleVi !== movie.title && (
-                  <p className="text-xl text-muted-foreground">
+                  <p className="text-lg md:text-xl text-muted-foreground">
                     {movie.titleVi}
                   </p>
                 )}

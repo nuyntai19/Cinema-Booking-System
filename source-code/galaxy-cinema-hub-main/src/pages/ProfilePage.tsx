@@ -99,62 +99,71 @@ const ProfilePage: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 md:py-8">
         {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
             Tài Khoản Của Tôi
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             Quản lý thông tin cá nhân và hạng thành viên
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-3 gap-4 md:gap-6">
           {/* Profile Info Card */}
-          <div className="md:col-span-2 space-y-6">
+          <div className="md:col-span-2 space-y-4 md:space-y-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Thông tin cá nhân</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+                <CardTitle className="text-lg md:text-xl">
+                  Thông tin cá nhân
+                </CardTitle>
                 {!isEditing ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setIsEditing(true)}
-                    className="gap-2"
+                    className="gap-1 md:gap-2 text-xs md:text-sm"
                   >
-                    <Edit2 className="w-4 h-4" />
-                    Chỉnh sửa
+                    <Edit2 className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden sm:inline">Chỉnh sửa</span>
+                    <span className="sm:hidden">Sửa</span>
                   </Button>
                 ) : (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 md:gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleCancel}
-                      className="gap-2"
+                      className="gap-1 text-xs md:text-sm"
                     >
-                      <X className="w-4 h-4" />
-                      Hủy
+                      <X className="w-3 h-3 md:w-4 md:h-4" />
+                      <span className="hidden sm:inline">Hủy</span>
                     </Button>
-                    <Button size="sm" onClick={handleSave} className="gap-2">
-                      <Save className="w-4 h-4" />
-                      Lưu
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      className="gap-1 text-xs md:text-sm"
+                    >
+                      <Save className="w-3 h-3 md:w-4 md:h-4" />
+                      <span className="hidden sm:inline">Lưu</span>
                     </Button>
                   </div>
                 )}
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4 pb-4 border-b">
-                  <Avatar className="w-20 h-20">
+              <CardContent className="space-y-3 md:space-y-4">
+                <div className="flex items-center gap-3 md:gap-4 pb-3 md:pb-4 border-b">
+                  <Avatar className="w-16 h-16 md:w-20 md:h-20">
                     <AvatarImage src={user?.avatar} />
-                    <AvatarFallback className="text-2xl">
+                    <AvatarFallback className="text-xl md:text-2xl">
                       {user?.name?.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="text-xl font-bold">{user?.name}</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <h3 className="text-lg md:text-xl font-bold">
+                      {user?.name}
+                    </h3>
+                    <p className="text-xs md:text-sm text-muted-foreground">
                       {user?.email}
                     </p>
                   </div>

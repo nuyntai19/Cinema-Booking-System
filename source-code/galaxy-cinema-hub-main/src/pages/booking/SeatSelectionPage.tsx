@@ -153,29 +153,31 @@ const SeatSelectionPage: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-6">
+      <main className="flex-1 container mx-auto px-2 md:px-4 py-4 md:py-6">
         {/* Movie Info & Timer */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 p-4 bg-card rounded-xl border border-border">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mb-4 md:mb-6 p-3 md:p-4 bg-card rounded-xl border border-border">
+          <div className="flex items-center gap-3 md:gap-4">
             <img
               src={movie.poster}
               alt={movie.title}
-              className="w-12 h-18 object-cover rounded-lg"
+              className="w-10 h-15 md:w-12 md:h-18 object-cover rounded-lg"
             />
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="font-bold text-lg">{movie.title}</h1>
+                <h1 className="font-bold text-base md:text-lg">
+                  {movie.title}
+                </h1>
                 <Badge
-                  className={`${getAgeRatingColor(movie.ageRating)} text-white`}
+                  className={`${getAgeRatingColor(movie.ageRating)} text-white text-xs`}
                 >
                   {movie.ageRating}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs md:text-sm text-muted-foreground">
                 {selectedShowtime.time} •{" "}
                 {new Date(selectedShowtime.date).toLocaleDateString("vi-VN")}
               </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 mt-1">
                 <Shield className="w-3 h-3" />
                 {formatAgeRating(movie.ageRating)}
               </p>
@@ -183,36 +185,39 @@ const SeatSelectionPage: React.FC = () => {
           </div>
           <div
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-lg font-bold",
+              "flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-mono text-base md:text-lg font-bold",
               timeLeft <= 60
                 ? "bg-destructive/10 text-destructive"
                 : "bg-primary/10 text-primary",
             )}
           >
-            <Clock className="w-5 h-5" />
+            <Clock className="w-4 h-4 md:w-5 md:h-5" />
             {formatTime(timeLeft)}
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[1fr,300px] gap-6">
+        <div className="grid lg:grid-cols-[1fr,300px] gap-4 md:gap-6">
           {/* Seat Map */}
-          <div className="bg-card rounded-xl border border-border p-6">
+          <div className="bg-card rounded-xl border border-border p-3 md:p-6">
             {/* Screen */}
-            <div className="relative mb-8">
-              <div className="w-4/5 mx-auto h-2 bg-gradient-to-b from-primary/50 to-transparent rounded-t-full" />
-              <div className="w-3/5 mx-auto py-2 text-center text-sm text-muted-foreground bg-gradient-to-b from-muted to-transparent rounded-b-lg">
+            <div className="relative mb-6 md:mb-8">
+              <div className="w-4/5 mx-auto h-1.5 md:h-2 bg-gradient-to-b from-primary/50 to-transparent rounded-t-full" />
+              <div className="w-3/5 mx-auto py-1.5 md:py-2 text-center text-xs md:text-sm text-muted-foreground bg-gradient-to-b from-muted to-transparent rounded-b-lg">
                 MÀN HÌNH
               </div>
             </div>
 
             {/* Seats */}
-            <div className="flex flex-col items-center gap-2 overflow-x-auto pb-4">
+            <div className="flex flex-col items-center gap-1.5 md:gap-2 overflow-x-auto pb-4">
               {seatMap.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex items-center gap-2">
-                  <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                <div
+                  key={rowIndex}
+                  className="flex items-center gap-1.5 md:gap-2"
+                >
+                  <span className="w-5 md:w-6 text-center text-xs md:text-sm font-medium text-muted-foreground">
                     {row[0]?.row}
                   </span>
-                  <div className="flex gap-1">
+                  <div className="flex gap-0.5 md:gap-1">
                     {row.map((seat) => (
                       <button
                         key={seat.id}
@@ -222,19 +227,22 @@ const SeatSelectionPage: React.FC = () => {
                         }
                         className={cn(
                           getSeatClass(seat),
-                          seat.type === "couple" ? "w-16" : "w-8",
+                          seat.type === "couple"
+                            ? "w-12 md:w-16"
+                            : "w-6 md:w-8",
+                          "text-[10px] md:text-xs",
                         )}
                         title={`${seat.id} - ${seat.price.toLocaleString("vi-VN")}đ`}
                       >
                         {seat.status === "sold" ? (
-                          <X className="w-3 h-3" />
+                          <X className="w-2 h-2 md:w-3 md:h-3" />
                         ) : (
                           seat.number
                         )}
                       </button>
                     ))}
                   </div>
-                  <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                  <span className="w-5 md:w-6 text-center text-xs md:text-sm font-medium text-muted-foreground">
                     {row[0]?.row}
                   </span>
                 </div>
@@ -242,12 +250,12 @@ const SeatSelectionPage: React.FC = () => {
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap justify-center gap-4 mt-6 pt-6 border-t border-border">
-              <div className="flex items-center gap-2">
-                <div className="seat seat-available w-6 h-6" />
-                <span className="text-sm">Trống</span>
+            <div className="flex flex-wrap justify-center gap-3 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-border">
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <div className="seat seat-available w-5 h-5 md:w-6 md:h-6" />
+                <span className="text-xs md:text-sm">Trống</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 md:gap-2">
                 <div className="seat seat-selected w-6 h-6" />
                 <span className="text-sm">Đang chọn</span>
               </div>

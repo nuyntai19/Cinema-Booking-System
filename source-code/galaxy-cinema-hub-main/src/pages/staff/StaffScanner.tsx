@@ -88,7 +88,7 @@ const StaffScanner: React.FC = () => {
     : null;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-4 md:space-y-6 p-4 md:p-6">
       {/* Scanner View */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
@@ -111,9 +111,11 @@ const StaffScanner: React.FC = () => {
 
             {/* Result Overlays */}
             {scanResult === "valid" && scannedTicket && (
-              <div className="absolute inset-0 bg-green-500/90 flex flex-col items-center justify-center animate-scale-in p-6">
-                <CheckCircle className="w-24 h-24 text-white mb-4" />
-                <p className="text-white text-2xl font-bold mb-2">VÉ HỢP LỆ</p>
+              <div className="absolute inset-0 bg-green-500/90 flex flex-col items-center justify-center animate-scale-in p-4 md:p-6">
+                <CheckCircle className="w-16 h-16 md:w-24 md:h-24 text-white mb-3 md:mb-4" />
+                <p className="text-white text-lg md:text-2xl font-bold mb-2">
+                  VÉ HỢP LỆ
+                </p>
 
                 <div className="bg-white/20 rounded-lg p-4 mt-3 space-y-2 text-white">
                   <div className="flex items-center gap-2 justify-center">
@@ -146,9 +148,9 @@ const StaffScanner: React.FC = () => {
             )}
 
             {scanResult === "warning" && scannedTicket && (
-              <div className="absolute inset-0 bg-yellow-500/90 flex flex-col items-center justify-center animate-scale-in p-6">
-                <AlertTriangle className="w-24 h-24 text-white mb-4" />
-                <p className="text-white text-2xl font-bold mb-2">
+              <div className="absolute inset-0 bg-yellow-500/90 flex flex-col items-center justify-center animate-scale-in p-4 md:p-6">
+                <AlertTriangle className="w-16 h-16 md:w-24 md:h-24 text-white mb-3 md:mb-4" />
+                <p className="text-white text-lg md:text-2xl font-bold mb-2">
                   KIỂM TRA CMND/CCCD
                 </p>
 
@@ -190,22 +192,22 @@ const StaffScanner: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex gap-4 mt-6">
+                <div className="flex gap-2 md:gap-4 mt-4 md:mt-6">
                   <Button
                     onClick={handleReject}
                     variant="destructive"
                     size="lg"
-                    className="min-w-[120px]"
+                    className="min-w-[100px] md:min-w-[120px] text-sm md:text-base"
                   >
-                    <XCircle className="w-4 h-4 mr-2" />
+                    <XCircle className="w-4 h-4 mr-1 md:mr-2" />
                     Từ Chối
                   </Button>
                   <Button
                     onClick={handleApprove}
-                    className="bg-green-600 hover:bg-green-700 min-w-[120px]"
+                    className="bg-green-600 hover:bg-green-700 min-w-[100px] md:min-w-[120px] text-sm md:text-base"
                     size="lg"
                   >
-                    <CheckCircle className="w-4 h-4 mr-2" />
+                    <CheckCircle className="w-4 h-4 mr-1 md:mr-2" />
                     Xác Nhận OK
                   </Button>
                 </div>
@@ -235,34 +237,34 @@ const StaffScanner: React.FC = () => {
       {/* Simulation Buttons */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
             Demo: Mô phỏng kết quả quét
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-3">
+        <CardContent className="grid grid-cols-3 gap-2 md:gap-3">
           <Button
             onClick={() => simulateScan("valid")}
             variant="outline"
-            className="flex flex-col gap-1 h-auto py-3 border-green-500 text-green-600 hover:bg-green-50"
+            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-green-500 text-green-600 hover:bg-green-50"
           >
-            <CheckCircle className="w-5 h-5" />
-            <span className="text-xs">Hợp lệ</span>
+            <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="text-[10px] md:text-xs">Hợp lệ</span>
           </Button>
           <Button
             onClick={() => simulateScan("warning")}
             variant="outline"
-            className="flex flex-col gap-1 h-auto py-3 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
+            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
           >
-            <AlertTriangle className="w-5 h-5" />
-            <span className="text-xs">Kiểm tra tuổi</span>
+            <AlertTriangle className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="text-[10px] md:text-xs">Kiểm tra tuổi</span>
           </Button>
           <Button
             onClick={() => simulateScan("invalid")}
             variant="outline"
-            className="flex flex-col gap-1 h-auto py-3 border-red-500 text-red-600 hover:bg-red-50"
+            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-red-500 text-red-600 hover:bg-red-50"
           >
-            <XCircle className="w-5 h-5" />
-            <span className="text-xs">Không hợp lệ</span>
+            <XCircle className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="text-[10px] md:text-xs">Không hợp lệ</span>
           </Button>
         </CardContent>
       </Card>
