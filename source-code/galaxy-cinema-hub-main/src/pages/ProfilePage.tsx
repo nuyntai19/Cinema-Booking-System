@@ -19,7 +19,14 @@ import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import MembershipBadge from "@/components/ui/MembershipBadge";
-import { systemConfig } from "@/data/mockData";
+import LoyaltyHistoryCard from "@/components/profile/LoyaltyHistoryCard";
+import UserVouchersCard from "@/components/profile/UserVouchersCard";
+import {
+  systemConfig,
+  loyaltyHistory,
+  userVouchers,
+  promotions,
+} from "@/data/mockData";
 import {
   determineMembershipTier,
   getMembershipDiscount,
@@ -330,6 +337,26 @@ const ProfilePage: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+          </div>
+
+          {/* Loyalty History & Vouchers */}
+          <div className="space-y-6">
+            {/* User Vouchers */}
+            <UserVouchersCard
+              vouchers={userVouchers.filter((v) => v.userId === user?.id)}
+              promotions={promotions}
+              onUseVoucher={(voucherId) => {
+                toast({
+                  title: "Sử dụng voucher",
+                  description: "Voucher đã được thêm vào giỏ hàng",
+                });
+              }}
+            />
+
+            {/* Loyalty History */}
+            <LoyaltyHistoryCard
+              history={loyaltyHistory.filter((h) => h.userId === user?.id)}
+            />
           </div>
         </div>
       </div>

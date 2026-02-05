@@ -8,6 +8,9 @@ import {
   Transaction,
   Review,
   SystemConfig,
+  LoyaltyHistory,
+  UserVoucher,
+  Promo,
 } from "@/types/cinema";
 
 export const demoUsers: User[] = [
@@ -432,3 +435,119 @@ export const systemConfig: SystemConfig = {
     },
   },
 };
+
+// Loyalty History - Lịch sử tích điểm
+export const loyaltyHistory: LoyaltyHistory[] = [
+  {
+    id: "lh-1",
+    userId: "client-1",
+    pointsChange: 25,
+    type: "PURCHASE",
+    description: "Mua vé xem phim MAI - 250.000đ",
+    bookingId: "booking-1",
+    createdAt: "2026-01-20T19:30:00",
+  },
+  {
+    id: "lh-2",
+    userId: "client-1",
+    pointsChange: 50,
+    type: "BIRTHDAY",
+    description: "Quà tặng sinh nhật - 50 điểm",
+    createdAt: "2026-01-15T00:00:00",
+  },
+  {
+    id: "lh-3",
+    userId: "client-1",
+    pointsChange: -20,
+    type: "REDEEM",
+    description: "Đổi voucher giảm giá 20%",
+    createdAt: "2026-01-10T14:20:00",
+  },
+  {
+    id: "lh-4",
+    userId: "client-1",
+    pointsChange: 30,
+    type: "PURCHASE",
+    description: "Mua vé xem phim Kung Fu Panda 4 - 300.000đ",
+    bookingId: "booking-2",
+    createdAt: "2026-01-05T16:45:00",
+  },
+  {
+    id: "lh-5",
+    userId: "client-1",
+    pointsChange: 100,
+    type: "EVENT",
+    description: "Sự kiện khuyến mại Tết 2026",
+    createdAt: "2026-01-01T00:00:00",
+  },
+];
+
+// Promotions - Khuyến mãi
+export const promotions: Promo[] = [
+  {
+    id: "promo-1",
+    code: "WELCOME2026",
+    discount: 20,
+    type: "percent",
+    minAmount: 100000,
+    maxDiscount: 50000,
+    validUntil: "2026-12-31",
+    description: "Giảm 20% cho đơn hàng đầu tiên",
+    startDate: "2026-01-01",
+    isAutoApply: false,
+  },
+  {
+    id: "promo-2",
+    code: "BIRTHDAY",
+    discount: 30,
+    type: "percent",
+    minAmount: 0,
+    maxDiscount: 100000,
+    validUntil: "2026-12-31",
+    description: "Giảm 30% cho khách hàng sinh nhật",
+    startDate: "2026-01-01",
+    isAutoApply: true, // Tự động áp dụng cho khách sinh nhật
+  },
+  {
+    id: "promo-3",
+    code: "MEMBER50K",
+    discount: 50000,
+    type: "fixed",
+    minAmount: 200000,
+    validUntil: "2026-06-30",
+    description: "Giảm 50k cho thành viên VIP",
+    startDate: "2026-01-01",
+    isAutoApply: false,
+  },
+];
+
+// User Vouchers - Kho voucher cá nhân
+export const userVouchers: UserVoucher[] = [
+  {
+    id: "uv-1",
+    userId: "client-1",
+    promotionId: "promo-2",
+    code: "BIRTHDAY-CLIENT1-2026",
+    status: "ACTIVE",
+    assignedAt: "2026-01-15T00:00:00",
+    expiresAt: "2026-02-15T23:59:59",
+  },
+  {
+    id: "uv-2",
+    userId: "client-1",
+    promotionId: "promo-1",
+    code: "WELCOME2026-CLIENT1",
+    status: "USED",
+    assignedAt: "2026-01-01T00:00:00",
+    usedAt: "2026-01-10T14:20:00",
+    expiresAt: "2026-12-31T23:59:59",
+  },
+  {
+    id: "uv-3",
+    userId: "client-1",
+    promotionId: "promo-3",
+    status: "ACTIVE",
+    assignedAt: "2026-01-20T00:00:00",
+    expiresAt: "2026-06-30T23:59:59",
+  },
+];

@@ -8,6 +8,8 @@ export type SeatType = "standard" | "vip" | "couple";
 
 export type SeatStatus = "available" | "selected" | "held" | "sold";
 
+export type TicketStatus = "holding" | "sold" | "used" | "refunded";
+
 export type BookingStatus =
   | "pending"
   | "success"
@@ -17,6 +19,10 @@ export type BookingStatus =
   | "expired";
 
 export type PaymentMethod = "momo" | "atm" | "visa";
+
+export type LoyaltyHistoryType = "PURCHASE" | "REDEEM" | "EVENT" | "BIRTHDAY";
+
+export type VoucherStatus = "ACTIVE" | "USED" | "EXPIRED";
 
 export interface User {
   id: string;
@@ -117,6 +123,18 @@ export interface Booking {
   loyaltyPointsEarned?: number; // Điểm tích lũy nhận được
 }
 
+export interface Ticket {
+  id: string;
+  bookingId: string;
+  seatId: string;
+  price: number;
+  ticketCode: string; // QR Unique code
+  status: TicketStatus; // HOLDING/SOLD/USED/REFUNDED
+  holdExpiresAt?: string; // Thời gian hết hạn giữ (cho status HOLDING)
+  createdAt: string;
+  usedAt?: string;
+}
+
 export interface ConcessionItem {
   id: string;
   name: string;
@@ -134,6 +152,30 @@ export interface Promo {
   minAmount: number;
   maxDiscount?: number;
   validUntil: string;
+  description?: string;
+  startDate?: string;
+  isAutoApply?: boolean; // True for Birthday/System events
+}
+
+export interface UserVoucher {
+  id: string;
+  userId: string;
+  promotionId: string;
+  code?: string; // Specific code for user if needed
+  status: VoucherStatus; // ACTIVE/USED/EXPIRED
+  assignedAt: string;
+  usedAt?: string;
+  expiresAt?: string;
+}
+
+export interface LoyaltyHistory {
+  id: string;
+  userId: string;
+  pointsChange: number; // + (Earn) or - (Redeem)
+  type: LoyaltyHistoryType; // PURCHASE/REDEEM/EVENT/BIRTHDAY
+  description: string;
+  bookingId?: string; // Liên kết với booking nếu là PURCHASE
+  createdAt: string;
 }
 
 export interface Transaction {
