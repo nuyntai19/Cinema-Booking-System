@@ -35,6 +35,7 @@ spl_autoload_register(function ($class) {
         __DIR__ . '/models/' . $class . '.php',
         __DIR__ . '/middleware/' . $class . '.php',
         __DIR__ . '/utils/' . $class . '.php',
+        __DIR__ . '/service/' . $class . '.php'
     ];
     
     foreach ($paths as $path) {
@@ -111,6 +112,17 @@ $router->post('/api/bookings', 'BookingController@create'); // Create booking & 
 $router->put('/api/bookings/:id/confirm', 'BookingController@confirm'); // Confirm payment
 $router->put('/api/bookings/:id/cancel', 'BookingController@cancel');
 $router->get('/api/bookings/user/:userId', 'BookingController@getUserBookings');
+
+// ============================================
+// TRANSACTION ROUTES
+// ============================================
+$router->post('/api/transactions', 'TransactionController@create');
+$router->get('/api/transactions/booking/:bookingId', 'TransactionController@getByBooking');
+$router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
+$router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
+$router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
+$router->post('/api/transactions/momo/create', 'TransactionController@createMoMoPayment');
+$router->post('/api/transactions/vnpay/create', 'TransactionController@createVNPayPayment');
 
 // ============================================
 // TICKET ROUTES
