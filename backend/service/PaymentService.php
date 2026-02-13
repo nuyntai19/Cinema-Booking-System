@@ -9,9 +9,9 @@ class PaymentService
     {
         $endpoint = 'https://test-payment.momo.vn/v2/gateway/api/create';
 
-        $partnerCode = MOMO_PARTNER_CODE;
-        $accessKey   = MOMO_ACCESS_KEY;
-        $secretKey   = MOMO_SECRET_KEY;
+        $partnerCode = self::requiredConfig('MOMO_PARTNER_CODE');
+        $accessKey   = self::requiredConfig('MOMO_ACCESS_KEY');
+        $secretKey   = self::requiredConfig('MOMO_SECRET_KEY');
 
         $requestId = uniqid();
         $requestType = 'payWithATM';
@@ -45,8 +45,15 @@ class PaymentService
         ];
 
         $response = self::postJson($endpoint, $payload);
+        if (!is_array($response)) {
+            throw new Exception('MoMo response is invalid', 502);
+        }
+        if (!empty($response['payUrl'])) {
+            return $response['payUrl'];
+        }
 
-        return $response['payUrl'] ?? null;
+        $message = $response['message'] ?? 'MoMo did not return payUrl';
+        throw new Exception('MoMo error: ' . $message, 502);
     }
 
     private static function postJson($url, $data)
@@ -60,16 +67,25 @@ class PaymentService
         ]);
 
         $result = curl_exec($ch);
+        if ($result === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            throw new Exception('Payment gateway request failed: ' . $error, 502);
+        }
         curl_close($ch);
 
         return json_decode($result, true);
     }
     public static function createVNPayPayment($amount, $orderId, $orderInfo, $returnUrl)
 {
+    $tmnCode = self::requiredConfig('VNP_TMNCODE');
+    $hashSecret = self::requiredConfig('VNP_HASH_SECRET');
+    $vnpUrl = self::requiredConfig('VNP_URL');
+
     $params = [
         'vnp_Version'   => '2.1.0',
         'vnp_Command'   => 'pay',
-        'vnp_TmnCode'   => VNP_TMNCODE,
+        'vnp_TmnCode'   => $tmnCode,
         'vnp_Amount'    => $amount * 100,
         'vnp_CurrCode'  => 'VND',
         'vnp_TxnRef'    => $orderId,
@@ -77,17 +93,34 @@ class PaymentService
         'vnp_OrderType' => 'other',
         'vnp_Locale'    => 'vn',
         'vnp_ReturnUrl' => $returnUrl,
-        'vnp_IpAddr'    => $_SERVER['REMOTE_ADDR'],
+        'vnp_IpAddr'    => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
         'vnp_CreateDate'=> date('YmdHis')
     ];
 
     ksort($params);
 
     $query = http_build_query($params);
-    $hash  = hash_hmac('sha512', $query, VNP_HASH_SECRET);
+    $hash  = hash_hmac('sha512', $query, $hashSecret);
 
-    return VNP_URL . '?' . $query . '&vnp_SecureHash=' . $hash;
+    return $vnpUrl . '?' . $query . '&vnp_SecureHash=' . $hash;
 }
 
-}
+    private static function requiredConfig($key)
+    {
+        if (defined($key)) {
+            return constant($key);
+        }
 
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        throw new Exception('Missing payment config: ' . $key, 500);
+    }
+
+}

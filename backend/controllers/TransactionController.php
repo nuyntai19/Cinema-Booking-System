@@ -32,7 +32,7 @@ class TransactionController extends BaseController {
             Response::notFound('Booking not found');
         }
 
-        self::authorizeBookingAccess($booking);
+        $this->authorizeBookingAccess($booking);
 
         try {
             $result = $this->transactionService->createTransactionForBooking($booking, $method, (float)$amount);
@@ -50,7 +50,7 @@ class TransactionController extends BaseController {
             Response::notFound('Booking not found');
         }
 
-        self::authorizeBookingAccess($booking);
+        $this->authorizeBookingAccess($booking);
 
         $transaction = $this->transactionService->getTransactionByBooking((int)$bookingId);
         if (!$transaction) {
@@ -115,7 +115,8 @@ class TransactionController extends BaseController {
     public function createVNPayPayment() {
         $this->createPayment('VNPay');
     }
-    private static function createPayment($gateway) {
+
+    private function createPayment($gateway) {
         AuthMiddleware::authenticate();
 
         $data = self::getRequestData();
@@ -130,15 +131,15 @@ class TransactionController extends BaseController {
             ]);
         }
 
-        $booking = self::transactionService->getBookingById((int)$bookingId);
+        $booking = $this->transactionService->getBookingById((int)$bookingId);
         if (!$booking) {
             Response::notFound('Booking not found');
         }
 
-        self::authorizeBookingAccess($booking);
+        $this->authorizeBookingAccess($booking);
 
         try {
-            $gatewayResponse = self::transactionService->createPaymentForBooking($gateway, $booking, (float)$amount);
+            $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking, (float)$amount);
             Response::success($gatewayResponse, $gateway . ' payment created');
         } catch (Exception $e) {
             Response::error($e->getMessage(), $e->getCode() ?: 400);
@@ -146,7 +147,7 @@ class TransactionController extends BaseController {
     }
 
 
-    private static function authorizeBookingAccess($booking) {
+    private function authorizeBookingAccess($booking) {
         $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
