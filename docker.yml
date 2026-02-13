@@ -15,13 +15,6 @@ services:
       - ./backend/database/seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql:ro
     command: --default-time-zone=+07:00
 
-  redis:
-    image: redis:7.0
-    container_name: galaxy_cinema_redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
   app:
     build:
       context: .
@@ -33,7 +26,6 @@ services:
       - ./:/app
     environment:
       DB_HOST: db
-      REDIS_HOST: redis
       DB_DRIVER: mysql
       DB_NAME: galaxy_cinema
       DB_USER: root
@@ -43,7 +35,6 @@ services:
       - "8000:8000"
     depends_on:
       - db
-      - redis
     command: php -S 0.0.0.0:8000 -t /app/backend /app/backend/index.php
 
   api-test:
@@ -59,7 +50,6 @@ services:
     depends_on:
       - app
       - db
-      - redis
     command: php /app/scripts/test_api.php
     restart: "no"
 

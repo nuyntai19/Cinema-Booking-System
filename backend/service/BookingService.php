@@ -25,19 +25,6 @@ class BookingService {
     }
 
     public function createBooking($userId, $showtimeId, $seatIds, $concessions, $userVoucherId) {
-        $expireTime = time() + config::$seat_hold_duration;
-        $jobs = [
-            'hold_seats' => [
-                'user_id' => (int)$userId,
-                'showtime_id' => (int)$showtimeId,
-                'seat_ids' => $seatIds,
-                'expire_time' => $expireTime,
-            ],  
-        ];
-        $redis = new Redis();
-        $redis->connect($_ENV['REDIS_HOST'], $_ENV['REDIS_PORT']);
-        $redis->zAdd('seat_holds', $expireTime, json_encode($jobs));
-        
         return $this->bookingModel->create(
             (int)$userId,
             (int)$showtimeId,

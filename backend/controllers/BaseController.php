@@ -9,7 +9,7 @@ class BaseController{
         }
         return $data;
     }
-    public static authorizeUserId($userId) {
+    public static function authorizeUserId($userId) {
         $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
