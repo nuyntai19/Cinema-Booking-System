@@ -5,7 +5,7 @@
 
 class PaymentService
 {
-    public function createMoMoPayment($amount, $orderId, $orderInfo, $returnUrl, $notifyUrl)
+    public static function createMoMoPayment($amount, $orderId, $orderInfo, $returnUrl, $notifyUrl)
     {
         $endpoint = 'https://test-payment.momo.vn/v2/gateway/api/create';
 
@@ -44,12 +44,12 @@ class PaymentService
             'signature'   => $signature
         ];
 
-        $response = $this->postJson($endpoint, $payload);
+        $response = self::postJson($endpoint, $payload);
 
         return $response['payUrl'] ?? null;
     }
 
-    private function postJson($url, $data)
+    private static function postJson($url, $data)
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -64,7 +64,7 @@ class PaymentService
 
         return json_decode($result, true);
     }
-    public function createVNPayPayment($amount, $orderId, $orderInfo, $returnUrl)
+    public static function createVNPayPayment($amount, $orderId, $orderInfo, $returnUrl)
 {
     $params = [
         'vnp_Version'   => '2.1.0',

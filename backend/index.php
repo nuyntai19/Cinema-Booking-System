@@ -20,6 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Load .env before configs
+require_once __DIR__ . '/config/Env.php';
+Env::load(__DIR__ . '/.env');
+
 // Autoloader
 require_once __DIR__ . '/config/Database.php';
 require_once __DIR__ . '/config/Config.php';

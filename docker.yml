@@ -1,0 +1,67 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: galaxy_cinema_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "12345678"
+      MYSQL_DATABASE: "galaxy_cinema"
+      TZ: "Asia/Ho_Chi_Minh"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/database/seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql:ro
+    command: --default-time-zone=+07:00
+
+  redis:
+    image: redis:7.0
+    container_name: galaxy_cinema_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: galaxy_cinema_app
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+      DB_DRIVER: mysql
+      DB_NAME: galaxy_cinema
+      DB_USER: root
+      DB_PASSWORD: "12345678"
+      DB_CHARSET: utf8mb4
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    command: php -S 0.0.0.0:8000 -t /app/backend /app/backend/index.php
+
+  api-test:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: galaxy_cinema_api_test
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      API_BASE_URL: http://app:8000
+    depends_on:
+      - app
+      - db
+      - redis
+    command: php /app/scripts/test_api.php
+    restart: "no"
+
+volumes:
+  mysql_data:

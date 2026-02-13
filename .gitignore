@@ -1,0 +1,27 @@
+# Env files
+.env
+backend/.env
+
+# Dependencies
+/vendor/
+/backend/vendor/
+/node_modules/
+
+# Build artifacts / cache
+*.log
+*.tmp
+*.cache
+.phpunit.result.cache
+coverage/
+
+# Runtime uploads
+/backend/uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
