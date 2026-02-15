@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Galaxy Cinema Backend - Entry Point
  * REST API for Cinema Booking System
@@ -36,7 +37,7 @@ spl_autoload_register(function ($class) {
         __DIR__ . '/middleware/' . $class . '.php',
         __DIR__ . '/utils/' . $class . '.php',
     ];
-    
+
     foreach ($paths as $path) {
         if (file_exists($path)) {
             require_once $path;
@@ -49,7 +50,7 @@ spl_autoload_register(function ($class) {
 $router = new Router();
 
 // Health check endpoint
-$router->get('/api/health', function() {
+$router->get('/api/health', function () {
     Response::success(['status' => 'OK', 'message' => 'Galaxy Cinema API is running']);
 });
 
@@ -115,9 +116,12 @@ $router->get('/api/bookings/user/:userId', 'BookingController@getUserBookings');
 // ============================================
 // TICKET ROUTES
 // ============================================
-$router->get('/api/tickets/:code', 'TicketController@getByCode'); // QR scan
-$router->put('/api/tickets/:id/use', 'TicketController@markAsUsed'); // Staff scan
-$router->put('/api/tickets/:id/refund', 'TicketController@refund');
+$router->get('/api/tickets/code/:code', 'TicketController@getByCode'); // QR scan
+$router->get('/api/tickets/booking/:bookingId', 'TicketController@getByBooking'); // Get tickets by booking
+$router->post('/api/tickets/check', 'TicketController@check'); // Staff scan at gate
+$router->put('/api/tickets/:id/use', 'TicketController@markAsUsed'); // Mark as used
+$router->post('/api/tickets/:id/refund', 'TicketController@refund'); // Refund ticket
+$router->post('/api/tickets/:id/send-email', 'TicketController@sendEmail'); // Send email
 
 // ============================================
 // LOYALTY & MEMBERSHIP ROUTES
@@ -142,6 +146,7 @@ $router->post('/api/vouchers/apply', 'VoucherController@applyVoucher');
 // CONCESSION ROUTES
 // ============================================
 $router->get('/api/concessions', 'ConcessionController@index');
+$router->get('/api/concessions/available', 'ConcessionController@getAvailable'); // Get available concessions
 $router->get('/api/concessions/:id', 'ConcessionController@show');
 $router->post('/api/concessions', 'ConcessionController@create'); // Admin
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin
