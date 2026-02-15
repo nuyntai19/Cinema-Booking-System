@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   User,
   Mail,
@@ -8,12 +8,22 @@ import {
   Edit2,
   Save,
   X,
+  Key,
+  Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/Header";
@@ -31,30 +41,116 @@ import {
   determineMembershipTier,
   getMembershipDiscount,
 } from "@/lib/validation";
+import { API_ENDPOINTS } from "@/lib/api";
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
     dob: user?.dob || "",
   });
+  
+  // Change password dialog state
+  const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  // Load user profile data on mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      if (refreshUser) {
+        await refreshUser();
+      }
+    };
+    loadUserProfile();
+  }, []);
+
+  // Sync formData when user data loads/changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        dob: user.dob || "",
+      });
+    }
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
-    // Simulate save
-    toast({
-      title: "Cập nhật thành công",
-      description: "Thông tin của bạn đã được cập nhật",
-    });
-    setIsEditing(false);
+  const handleSave = async () => {
+    if (!user?.id) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng đăng nhập lại",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    console.log('💾 Saving profile...', formData);
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Chưa đăng nhập");
+      }
+
+      // Call API to update profile
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${user.id}/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          full_name: formData.name,
+          phone: formData.phone,
+          dob: formData.dob,
+        }),
+      });
+
+      const data = await response.json();
+      console.log('📦 Profile update response:', data);
+
+      if (data.success) {
+        toast({
+          title: "Cập nhật thành công",
+          description: "Thông tin của bạn đã được cập nhật",
+        });
+        setIsEditing(false);
+        
+        // Refresh user data if available
+        if (refreshUser) {
+          await refreshUser();
+        }
+      } else {
+        throw new Error(data.message || "Cập nhật thất bại");
+      }
+    } catch (error) {
+      console.error('❌ Error updating profile:', error);
+      toast({
+        title: "Lỗi cập nhật",
+        description: error instanceof Error ? error.message : "Không thể cập nhật thông tin",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -65,6 +161,102 @@ const ProfilePage: React.FC = () => {
       dob: user?.dob || "",
     });
     setIsEditing(false);
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.id) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng đăng nhập lại",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate inputs
+    if (!passwordData.oldPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng điền đầy đủ thông tin",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: "Lỗi",
+        description: "Mật khẩu mới phải có ít nhất 6 ký tự",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Mật khẩu mới không khớp",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    console.log('🔐 Changing password...');
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Chưa đăng nhập");
+      }
+
+      const response = await fetch(API_ENDPOINTS.CHANGE_PASSWORD(parseInt(user.id)), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          old_password: passwordData.oldPassword,
+          new_password: passwordData.newPassword,
+        }),
+      });
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error('❌ Non-JSON response:', text.substring(0, 200));
+        throw new Error("Server trả về lỗi. Vui lòng kiểm tra lại hoặc liên hệ admin.");
+      }
+
+      const data = await response.json();
+      console.log('📦 Change password response:', data);
+
+      if (data.success) {
+        toast({
+          title: "Đổi mật khẩu thành công",
+          description: "Mật khẩu của bạn đã được cập nhật. Email thông báo đã được gửi đến hộp thư của bạn.",
+        });
+        setIsChangePasswordDialogOpen(false);
+        setPasswordData({
+          oldPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      } else {
+        throw new Error(data.message || "Đổi mật khẩu thất bại");
+      }
+    } catch (error) {
+      console.error('❌ Error changing password:', error);
+      toast({
+        title: "Lỗi đổi mật khẩu",
+        description: error instanceof Error ? error.message : "Không thể đổi mật khẩu",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const membershipTier = user?.membershipTier || "bronze";
@@ -142,6 +334,7 @@ const ProfilePage: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={handleCancel}
+                      disabled={isSaving}
                       className="gap-1 text-xs md:text-sm"
                     >
                       <X className="w-3 h-3 md:w-4 md:h-4" />
@@ -150,10 +343,11 @@ const ProfilePage: React.FC = () => {
                     <Button
                       size="sm"
                       onClick={handleSave}
+                      disabled={isSaving}
                       className="gap-1 text-xs md:text-sm"
                     >
                       <Save className="w-3 h-3 md:w-4 md:h-4" />
-                      <span className="hidden sm:inline">Lưu</span>
+                      <span className="hidden sm:inline">{isSaving ? "Đang lưu..." : "Lưu"}</span>
                     </Button>
                   </div>
                 )}
@@ -254,7 +448,13 @@ const ProfilePage: React.FC = () => {
                       Đổi mật khẩu định kỳ để bảo mật tài khoản
                     </p>
                   </div>
-                  <Button variant="outline">Đổi mật khẩu</Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsChangePasswordDialogOpen(true)}
+                  >
+                    <Key className="w-4 h-4 mr-2" />
+                    Đổi mật khẩu
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -360,6 +560,88 @@ const ProfilePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Change Password Dialog */}
+      <Dialog open={isChangePasswordDialogOpen} onOpenChange={setIsChangePasswordDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5" />
+              Đổi Mật Khẩu
+            </DialogTitle>
+            <DialogDescription>
+              Nhập mật khẩu cũ và mật khẩu mới để thay đổi
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="old-password">Mật khẩu cũ *</Label>
+              <Input
+                id="old-password"
+                type="password"
+                value={passwordData.oldPassword}
+                onChange={(e) =>
+                  setPasswordData({ ...passwordData, oldPassword: e.target.value })
+                }
+                placeholder="Nhập mật khẩu hiện tại"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Mật khẩu mới *</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) =>
+                  setPasswordData({ ...passwordData, newPassword: e.target.value })
+                }
+                placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Xác nhận mật khẩu mới *</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) =>
+                  setPasswordData({ ...passwordData, confirmPassword: e.target.value })
+                }
+                placeholder="Nhập lại mật khẩu mới"
+              />
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>ℹ️ Lưu ý:</strong> Sau khi đổi mật khẩu thành công, một email thông báo sẽ được gửi đến địa chỉ email của bạn.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsChangePasswordDialogOpen(false);
+                setPasswordData({
+                  oldPassword: "",
+                  newPassword: "",
+                  confirmPassword: "",
+                });
+              }}
+              disabled={isChangingPassword}
+            >
+              Hủy
+            </Button>
+            <Button onClick={handleChangePassword} disabled={isChangingPassword}>
+              {isChangingPassword ? "Đang xử lý..." : "Đổi mật khẩu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

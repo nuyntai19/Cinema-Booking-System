@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Users,
   UserPlus,
@@ -13,6 +13,9 @@ import {
   Calendar,
   Phone,
   Mail,
+  Loader2,
+  RefreshCw,
+  Trash,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,19 +55,29 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { API_ENDPOINTS } from "@/lib/api";
 
+// Interface matching backend response
 interface User {
   id: number;
   email: string;
-  fullName: string;
+  full_name: string;
   phone: string;
-  dob: string;
-  role: "Guest" | "Member" | "Staff" | "Manager" | "Admin";
-  membership: "Bronze" | "Silver" | "Gold" | null;
-  status: "Active" | "Banned";
-  totalSpending: number;
-  createdAt: string;
-  avatar?: string;
+  dob: string | null;
+  role_id: number;
+  role_name: string;
+  rank_name: string | null;
+  status: string;
+  current_points: number;
+  created_at: string;
+  avatar?: string | null;
+}
+
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
 }
 
 const AdminUsers: React.FC = () => {
@@ -75,172 +88,215 @@ const AdminUsers: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  
+  // API State
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    total_pages: 0,
+  });
+  const [roles, setRoles] = useState<Array<{ id: number; name: string }>>([]);
 
-  // Mock data
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: 1,
-      email: "admin@galaxy.vn",
-      fullName: "Nguyễn Văn Admin",
-      phone: "0901234567",
-      dob: "1990-01-15",
-      role: "Admin",
-      membership: null,
-      status: "Active",
-      totalSpending: 0,
-      createdAt: "2024-01-01",
-      avatar: "https://i.pravatar.cc/150?img=1",
-    },
-    {
-      id: 2,
-      email: "manager@galaxy.vn",
-      fullName: "Trần Thị Manager",
-      phone: "0912345678",
-      dob: "1992-05-20",
-      role: "Manager",
-      membership: null,
-      status: "Active",
-      totalSpending: 0,
-      createdAt: "2024-02-01",
-      avatar: "https://i.pravatar.cc/150?img=2",
-    },
-    {
-      id: 3,
-      email: "staff1@galaxy.vn",
-      fullName: "Lê Văn Staff",
-      phone: "0923456789",
-      dob: "1995-08-10",
-      role: "Staff",
-      membership: null,
-      status: "Active",
-      totalSpending: 0,
-      createdAt: "2024-03-01",
-      avatar: "https://i.pravatar.cc/150?img=3",
-    },
-    {
-      id: 4,
-      email: "customer1@gmail.com",
-      fullName: "Phạm Thị Hoa",
-      phone: "0934567890",
-      dob: "1998-12-25",
-      role: "Member",
-      membership: "Gold",
-      status: "Active",
-      totalSpending: 5500000,
-      createdAt: "2024-06-15",
-      avatar: "https://i.pravatar.cc/150?img=4",
-    },
-    {
-      id: 5,
-      email: "customer2@gmail.com",
-      fullName: "Hoàng Văn Nam",
-      phone: "0945678901",
-      dob: "2000-03-14",
-      role: "Member",
-      membership: "Silver",
-      status: "Active",
-      totalSpending: 2200000,
-      createdAt: "2024-07-20",
-      avatar: "https://i.pravatar.cc/150?img=5",
-    },
-    {
-      id: 6,
-      email: "customer3@gmail.com",
-      fullName: "Vũ Thị Lan",
-      phone: "0956789012",
-      dob: "2002-11-08",
-      role: "Member",
-      membership: "Bronze",
-      status: "Active",
-      totalSpending: 850000,
-      createdAt: "2024-09-10",
-      avatar: "https://i.pravatar.cc/150?img=6",
-    },
-    {
-      id: 7,
-      email: "banned@gmail.com",
-      fullName: "Người Dùng Vi Phạm",
-      phone: "0967890123",
-      dob: "1999-07-22",
-      role: "Member",
-      membership: null,
-      status: "Banned",
-      totalSpending: 0,
-      createdAt: "2024-08-05",
-      avatar: "https://i.pravatar.cc/150?img=7",
-    },
-  ]);
+  // Fetch users from API
+  const fetchUsers = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast({
+          title: "Lỗi xác thực",
+          description: "Vui lòng đăng nhập lại",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const queryParams = new URLSearchParams({
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString(),
+      });
+
+      if (searchQuery) {
+        queryParams.append("search", searchQuery);
+      }
+      if (filterRole !== "all") queryParams.append("role_id", filterRole);
+      if (filterStatus !== "all") queryParams.append("status", filterStatus);
+
+      const apiUrl = `${API_ENDPOINTS.USERS}?${queryParams.toString()}`;
+
+      const response = await fetch(
+        apiUrl,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        setUsers(data.data.users || []);
+        if (data.data.pagination) {
+          setPagination(data.data.pagination);
+        }
+      } else {
+        throw new Error(data.message || "Failed to fetch users");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching users:", error);
+      toast({
+        title: "Lỗi tải dữ liệu",
+        description: "Không thể tải danh sách người dùng",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pagination.page, pagination.limit, filterRole, filterStatus, searchQuery, toast]);
+
+  // Fetch roles for dropdown
+  const fetchRoles = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const rolesUrl = `${API_ENDPOINTS.USERS.replace('/users', '/roles')}`;
+      
+      const response = await fetch(rolesUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setRoles(data.data.roles || []);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching roles:", error);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchUsers();
+    fetchRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch when filters change (debounced)
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (!isLoading) {
+        fetchUsers();
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, filterRole, filterStatus, pagination.page]);
 
   const [formData, setFormData] = useState({
     email: "",
-    fullName: "",
+    full_name: "",
     phone: "",
     dob: "",
-    role: "Member" as User["role"],
+    role_id: 2, // Member default
     password: "",
   });
 
   // Statistics
-  const totalUsers = users.length;
+  const totalUsers = pagination.total;
   const activeUsers = users.filter((u) => u.status === "Active").length;
-  const bannedUsers = users.filter((u) => u.status === "Banned").length;
-  const goldMembers = users.filter((u) => u.membership === "Gold").length;
+  const bannedUsers = users.filter((u) => u.status === "Banned" || u.status === "Deleted").length;
+  const goldMembers = users.filter((u) => u.rank_name === "Gold").length;
 
-  // Filter users
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.phone.includes(searchQuery);
-
-    const matchesRole = filterRole === "all" || user.role === filterRole;
-    const matchesStatus =
-      filterStatus === "all" || user.status === filterStatus;
-
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
+  // Edit user handler
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
     setFormData({
       email: user.email,
-      fullName: user.fullName,
-      phone: user.phone,
-      dob: user.dob,
-      role: user.role,
+      full_name: user.full_name,
+      phone: user.phone || "",
+      dob: user.dob || "",
+      role_id: user.role_id,
       password: "",
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateUser = () => {
+  // Update user via API
+  const handleUpdateUser = async () => {
     if (!selectedUser) return;
 
-    setUsers(
-      users.map((u) =>
-        u.id === selectedUser.id
-          ? {
-              ...u,
-              fullName: formData.fullName,
-              phone: formData.phone,
-              dob: formData.dob,
-              role: formData.role,
-            }
-          : u,
-      ),
-    );
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${selectedUser.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role_id: formData.role_id,
+        }),
+      });
 
-    toast({
-      title: "Cập nhật thành công",
-      description: `Đã cập nhật thông tin người dùng ${formData.fullName}`,
-    });
+      const data = await response.json();
 
-    setIsEditDialogOpen(false);
-    setSelectedUser(null);
+      if (data.success) {
+        console.log('✅ User role updated successfully');
+        
+        // Update profile
+        console.log('📝 Updating user profile...', { full_name: formData.full_name, phone: formData.phone, dob: formData.dob });
+        const profileResponse = await fetch(`${API_ENDPOINTS.USERS}/${selectedUser.id}/profile`, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            full_name: formData.full_name,
+            phone: formData.phone,
+            dob: formData.dob || null,
+          }),
+        });
+
+        const profileData = await profileResponse.json();
+        console.log('📦 Profile update response:', profileData);
+
+        if (!profileData.success) {
+          console.warn('⚠️ Profile update failed:', profileData.message);
+        }
+
+        toast({
+          title: "Cập nhật thành công",
+          description: `Đã cập nhật thông tin người dùng ${formData.full_name}`,
+        });
+
+        setIsEditDialogOpen(false);
+        setSelectedUser(null);
+        fetchUsers(); // Reload
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi cập nhật",
+        description: error instanceof Error ? error.message : "Không thể cập nhật người dùng",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleCreateUser = () => {
-    if (!formData.email || !formData.fullName || !formData.password) {
+  // Create user via API
+  const handleCreateUser = async () => {
+    if (!formData.email || !formData.full_name || !formData.password) {
       toast({
         title: "Lỗi",
         description: "Vui lòng điền đầy đủ thông tin bắt buộc",
@@ -249,51 +305,119 @@ const AdminUsers: React.FC = () => {
       return;
     }
 
-    const newUser: User = {
-      id: users.length + 1,
-      email: formData.email,
-      fullName: formData.fullName,
-      phone: formData.phone,
-      dob: formData.dob,
-      role: formData.role,
-      membership: formData.role === "Member" ? "Bronze" : null,
-      status: "Active",
-      totalSpending: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(API_ENDPOINTS.USERS, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    setUsers([...users, newUser]);
+      const data = await response.json();
 
-    toast({
-      title: "Tạo thành công",
-      description: `Đã tạo tài khoản cho ${formData.fullName}`,
-    });
+      if (data.success) {
+        toast({
+          title: "Tạo thành công",
+          description: `Đã tạo tài khoản cho ${formData.full_name}`,
+        });
 
-    setIsCreateDialogOpen(false);
-    setFormData({
-      email: "",
-      fullName: "",
-      phone: "",
-      dob: "",
-      role: "Member",
-      password: "",
-    });
+        setIsCreateDialogOpen(false);
+        setFormData({
+          email: "",
+          full_name: "",
+          phone: "",
+          dob: "",
+          role_id: 2,
+          password: "",
+        });
+        fetchUsers(); // Reload
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi tạo người dùng",
+        description: error instanceof Error ? error.message : "Không thể tạo người dùng mới",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleToggleStatus = (user: User) => {
+  // Toggle status (Ban/Unban)
+  const handleToggleStatus = async (user: User) => {
     const newStatus = user.status === "Active" ? "Banned" : "Active";
 
-    setUsers(
-      users.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u)),
-    );
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${user.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-    toast({
-      title: newStatus === "Banned" ? "Đã khóa tài khoản" : "Đã mở khóa",
-      description: `${user.fullName} - ${user.email}`,
-    });
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: newStatus === "Banned" ? "Đã khóa tài khoản" : "Đã mở khóa",
+          description: `${user.full_name} - ${user.email}`,
+        });
+        fetchUsers(); // Reload
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error instanceof Error ? error.message : "Không thể thay đổi trạng thái",
+        variant: "destructive",
+      });
+    }
   };
 
-  const getRoleBadge = (role: string) => {
+  // Delete user via API
+  const handleDeleteUser = async (user: User) => {
+    if (!confirm(`Bạn có chắc muốn xóa người dùng ${user.full_name}?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${user.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: "Đã xóa",
+          description: `Đã xóa người dùng ${user.full_name}`,
+        });
+        fetchUsers(); // Reload
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi xóa",
+        description: error instanceof Error ? error.message : "Không thể xóa người dùng",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getRoleBadge = (role_name: string) => {
     const configs: Record<string, { color: string; icon: React.ReactNode }> = {
       Admin: { color: "bg-red-500", icon: <Shield className="w-3 h-3" /> },
       Manager: {
@@ -304,28 +428,35 @@ const AdminUsers: React.FC = () => {
       Member: { color: "bg-green-500", icon: <Users className="w-3 h-3" /> },
       Guest: { color: "bg-gray-500", icon: <Users className="w-3 h-3" /> },
     };
-    const config = configs[role] || configs.Guest;
+    const config = configs[role_name] || configs.Guest;
     return (
       <Badge className={`${config.color} text-white flex items-center gap-1`}>
         {config.icon}
-        {role}
+        {role_name}
       </Badge>
     );
   };
 
-  const getMembershipBadge = (membership: string | null) => {
-    if (!membership) return <span className="text-muted-foreground">-</span>;
+  const getMembershipBadge = (rank_name: string | null) => {
+    if (!rank_name) return <span className="text-muted-foreground">-</span>;
 
     const configs: Record<string, { color: string }> = {
       Gold: { color: "bg-yellow-500" },
       Silver: { color: "bg-gray-400" },
       Bronze: { color: "bg-orange-600" },
     };
-    const config = configs[membership];
+    const config = configs[rank_name];
+    
+    // Handle case when rank_name is not in configs
+    if (!config) {
+      console.warn(`⚠️ Unknown rank_name: ${rank_name}`);
+      return <span className="text-muted-foreground">{rank_name}</span>;
+    }
+    
     return (
       <Badge className={`${config.color} text-white flex items-center gap-1`}>
         <Trophy className="w-3 h-3" />
-        {membership}
+        {rank_name}
       </Badge>
     );
   };
@@ -354,10 +485,16 @@ const AdminUsers: React.FC = () => {
             Quản lý tài khoản, phân quyền và hạng thành viên
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <UserPlus className="w-4 h-4 mr-2" />
-          Thêm Người Dùng
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => fetchUsers()} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Thêm Người Dùng
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -432,11 +569,11 @@ const AdminUsers: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả vai trò</SelectItem>
-                <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Manager">Manager</SelectItem>
-                <SelectItem value="Staff">Staff</SelectItem>
-                <SelectItem value="Member">Member</SelectItem>
-                <SelectItem value="Guest">Guest</SelectItem>
+                {roles.map((role) => (
+                  <SelectItem key={role.id} value={role.id.toString()}>
+                    {role.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -458,111 +595,135 @@ const AdminUsers: React.FC = () => {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh Sách Người Dùng ({filteredUsers.length})</CardTitle>
+          <CardTitle>
+            Danh Sách Người Dùng ({pagination.total})
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Người Dùng</TableHead>
-                <TableHead>Liên Hệ</TableHead>
-                <TableHead>Tuổi</TableHead>
-                <TableHead>Vai Trò</TableHead>
-                <TableHead>Hạng TV</TableHead>
-                <TableHead>Tổng Chi Tiêu</TableHead>
-                <TableHead>Trạng Thái</TableHead>
-                <TableHead>Ngày Tạo</TableHead>
-                <TableHead className="text-right">Thao Tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={user.avatar} />
-                        <AvatarFallback>
-                          {user.fullName.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{user.fullName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          #{user.id}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Mail className="w-3 h-3" />
-                        {user.email}
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-3 h-3" />
-                        {user.phone}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      {calculateAge(user.dob)} tuổi
-                    </div>
-                  </TableCell>
-                  <TableCell>{getRoleBadge(user.role)}</TableCell>
-                  <TableCell>{getMembershipBadge(user.membership)}</TableCell>
-                  <TableCell className="font-medium">
-                    {user.totalSpending.toLocaleString("vi-VN")}đ
-                  </TableCell>
-                  <TableCell>
-                    {user.status === "Active" ? (
-                      <Badge className="bg-green-500 text-white">Active</Badge>
-                    ) : (
-                      <Badge className="bg-red-500 text-white">Banned</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(user.createdAt).toLocaleDateString("vi-VN")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Chỉnh sửa
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleToggleStatus(user)}
-                        >
-                          {user.status === "Active" ? (
-                            <>
-                              <Ban className="w-4 h-4 mr-2" />
-                              Khóa tài khoản
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              Mở khóa
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-2">Đang tải dữ liệu...</span>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Không tìm thấy người dùng nào
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Người Dùng</TableHead>
+                  <TableHead>Liên Hệ</TableHead>
+                  <TableHead>Tuổi</TableHead>
+                  <TableHead>Vai Trò</TableHead>
+                  <TableHead>Hạng TV</TableHead>
+                  <TableHead>Điểm Tích Lũy</TableHead>
+                  <TableHead>Trạng Thái</TableHead>
+                  <TableHead>Ngày Tạo</TableHead>
+                  <TableHead className="text-right">Thao Tác</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={user.avatar || undefined} />
+                          <AvatarFallback>
+                            {user.full_name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{user.full_name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            #{user.id}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="w-3 h-3" />
+                          {user.email}
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="w-3 h-3" />
+                          {user.phone || "-"}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {user.dob ? (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          {calculateAge(user.dob)} tuổi
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getRoleBadge(user.role_name)}</TableCell>
+                    <TableCell>{getMembershipBadge(user.rank_name)}</TableCell>
+                    <TableCell className="font-medium">
+                      {user.current_points?.toLocaleString("vi-VN") || 0} điểm
+                    </TableCell>
+                    <TableCell>
+                      {user.status === "Active" ? (
+                        <Badge className="bg-green-500 text-white">Active</Badge>
+                      ) : (
+                        <Badge className="bg-red-500 text-white">Banned</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(user.created_at).toLocaleDateString("vi-VN")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Chỉnh sửa
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleToggleStatus(user)}
+                          >
+                            {user.status === "Active" ? (
+                              <>
+                                <Ban className="w-4 h-4 mr-2" />
+                                Khóa tài khoản
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Mở khóa
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteUser(user)}
+                            className="text-red-600"
+                          >
+                            <Trash className="w-4 h-4 mr-2" />
+                            Xóa tài khoản
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -581,9 +742,9 @@ const AdminUsers: React.FC = () => {
               <Label htmlFor="edit-fullName">Họ và Tên *</Label>
               <Input
                 id="edit-fullName"
-                value={formData.fullName}
+                value={formData.full_name}
                 onChange={(e) =>
-                  setFormData({ ...formData, fullName: e.target.value })
+                  setFormData({ ...formData, full_name: e.target.value })
                 }
               />
             </div>
@@ -614,20 +775,22 @@ const AdminUsers: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="edit-role">Vai Trò</Label>
               <Select
-                value={formData.role}
+                value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role: value as User["role"] })
+                  setFormData({ ...formData, role_id: parseInt(value) })
                 }
               >
                 <SelectTrigger id="edit-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Staff">Staff</SelectItem>
-                  <SelectItem value="Member">Member</SelectItem>
-                  <SelectItem value="Guest">Guest</SelectItem>
+                  {roles
+                    .filter((role) => role.name.toLowerCase() !== "guest")
+                    .map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -687,9 +850,9 @@ const AdminUsers: React.FC = () => {
               <Input
                 id="create-fullName"
                 placeholder="Nguyễn Văn A"
-                value={formData.fullName}
+                value={formData.full_name}
                 onChange={(e) =>
-                  setFormData({ ...formData, fullName: e.target.value })
+                  setFormData({ ...formData, full_name: e.target.value })
                 }
               />
             </div>
@@ -721,20 +884,22 @@ const AdminUsers: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="create-role">Vai Trò</Label>
               <Select
-                value={formData.role}
+                value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role: value as User["role"] })
+                  setFormData({ ...formData, role_id: parseInt(value) })
                 }
               >
                 <SelectTrigger id="create-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Staff">Staff</SelectItem>
-                  <SelectItem value="Member">Member</SelectItem>
-                  <SelectItem value="Guest">Guest</SelectItem>
+                  {roles
+                    .filter((role) => role.name.toLowerCase() !== "guest")
+                    .map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -751,6 +916,64 @@ const AdminUsers: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Pagination */}
+      {pagination.total_pages > 1 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Hiển thị {(pagination.page - 1) * pagination.limit + 1} -{" "}
+                {Math.min(pagination.page * pagination.limit, pagination.total)} trong tổng số{" "}
+                {pagination.total} người dùng
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                  disabled={pagination.page === 1 || isLoading}
+                >
+                  Trang trước
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
+                    let pageNumber;
+                    if (pagination.total_pages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNumber = i + 1;
+                    } else if (pagination.page >= pagination.total_pages - 2) {
+                      pageNumber = pagination.total_pages - 4 + i;
+                    } else {
+                      pageNumber = pagination.page - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNumber}
+                        variant={pagination.page === pageNumber ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPagination({ ...pagination, page: pageNumber })}
+                        disabled={isLoading}
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                  disabled={pagination.page === pagination.total_pages || isLoading}
+                >
+                  Trang sau
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

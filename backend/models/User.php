@@ -1,0 +1,276 @@
+<?php
+require_once __DIR__ . '/../config/Database.php';
+
+/**
+ * User Model
+ * Phụ trách: THỊNH
+ */
+class User {
+    private $db;
+    private $table = 'users';
+    
+    public function __construct() {
+        $this->db = Database::getInstance()->getConnection();
+    }
+    
+    /**
+     * Tạo user mới
+     */
+    public function create($data) {
+        try {
+            $query = "INSERT INTO {$this->table} (email, password_hash, role_id, status, current_points) 
+                      VALUES (:email, :password_hash, :role_id, :status, 0)";
+            
+            $stmt = $this->db->prepare($query);
+            
+            $stmt->bindParam(':email', $data['email']);
+            $stmt->bindParam(':password_hash', $data['password_hash']);
+            $stmt->bindParam(':role_id', $data['role_id'], PDO::PARAM_INT);
+            $stmt->bindParam(':status', $data['status']);
+            
+            if ($stmt->execute()) {
+                return $this->db->lastInsertId();
+            }
+            
+            return false;
+            
+        } catch (PDOException $e) {
+            error_log("User Create Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Tìm user theo email
+     */
+    public function findByEmail($email) {
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE email = :email LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':email', $email);
+            $stmt->execute();
+            
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+            
+        } catch (PDOException $e) {
+            error_log("User FindByEmail Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Tìm user theo ID
+     */
+    public function findById($id) {
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE id = :id LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+            
+        } catch (PDOException $e) {
+            error_log("User FindById Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Update user
+     */
+    public function update($id, $data) {
+        try {
+            $fields = [];
+            $params = ['id' => $id];
+            
+            foreach ($data as $key => $value) {
+                if ($key !== 'id') {
+                    $fields[] = "$key = :$key";
+                    $params[$key] = $value;
+                }
+            }
+            
+            $query = "UPDATE {$this->table} SET " . implode(', ', $fields) . " WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            
+            return $stmt->execute($params);
+            
+        } catch (PDOException $e) {
+            error_log("User Update Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Soft delete user
+     */
+    public function delete($id) {
+        try {
+            $query = "UPDATE {$this->table} SET status = 'Banned' WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            
+            return $stmt->execute();
+            
+        } catch (PDOException $e) {
+            error_log("User Delete Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Lấy tất cả users với filter và pagination
+     */
+    public function getAll($filters = [], $page = 1, $limit = 20) {
+        try {
+            $offset = ($page - 1) * $limit;
+            
+            $query = "SELECT u.*, up.full_name, up.phone, r.name as role_name, m.rank_name
+                      FROM {$this->table} u 
+                      LEFT JOIN user_profiles up ON u.id = up.user_id 
+                      LEFT JOIN roles r ON u.role_id = r.id
+                      LEFT JOIN memberships m ON up.membership_id = m.id
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            if (!empty($filters['role_id'])) {
+                $query .= " AND u.role_id = :role_id";
+                $params['role_id'] = $filters['role_id'];
+            }
+            
+            if (!empty($filters['status'])) {
+                $query .= " AND u.status = :status";
+                $params['status'] = $filters['status'];
+            }
+            
+            if (!empty($filters['search'])) {
+                $searchValue = '%' . $filters['search'] . '%';
+                $query .= " AND (u.email LIKE :search_email OR COALESCE(up.full_name, '') LIKE :search_name OR COALESCE(up.phone, '') LIKE :search_phone)";
+                $params['search_email'] = $searchValue;
+                $params['search_name'] = $searchValue;
+                $params['search_phone'] = $searchValue;
+            }
+            
+            // Sorting
+            $sortBy = $filters['sort_by'] ?? 'created_at';
+            $sortOrder = strtoupper($filters['sort_order'] ?? 'DESC');
+            $sortOrder = in_array($sortOrder, ['ASC', 'DESC']) ? $sortOrder : 'DESC';
+            
+            $allowedSortFields = ['created_at', 'email', 'current_points', 'status'];
+            if (!in_array($sortBy, $allowedSortFields)) {
+                $sortBy = 'created_at';
+            }
+            
+            $query .= " ORDER BY u.$sortBy $sortOrder LIMIT :limit OFFSET :offset";
+            
+            $stmt = $this->db->prepare($query);
+            
+            foreach ($params as $key => $value) {
+                $stmt->bindValue(":$key", $value);
+            }
+            
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            
+            $stmt->execute();
+            
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+        } catch (PDOException $e) {
+            error_log("User GetAll Error: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Đếm tổng số users
+     */
+    public function count($filters = []) {
+        try {
+            $query = "SELECT COUNT(*) as total 
+                      FROM {$this->table} u 
+                      LEFT JOIN user_profiles up ON u.id = up.user_id 
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            if (!empty($filters['role_id'])) {
+                $query .= " AND u.role_id = :role_id";
+                $params['role_id'] = $filters['role_id'];
+            }
+            
+            if (!empty($filters['status'])) {
+                $query .= " AND u.status = :status";
+                $params['status'] = $filters['status'];
+            }
+            
+            if (!empty($filters['search'])) {
+                $searchValue = '%' . $filters['search'] . '%';
+                $query .= " AND (u.email LIKE :search_email OR COALESCE(up.full_name, '') LIKE :search_name OR COALESCE(up.phone, '') LIKE :search_phone)";
+                $params['search_email'] = $searchValue;
+                $params['search_name'] = $searchValue;
+                $params['search_phone'] = $searchValue;
+            }
+            
+            $stmt = $this->db->prepare($query);
+            
+            foreach ($params as $key => $value) {
+                $stmt->bindValue(":$key", $value);
+            }
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            return (int)$result['total'];
+            
+        } catch (PDOException $e) {
+            error_log("User Count Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+    
+    /**
+     * Update role của user
+     */
+    public function updateRole($id, $roleId) {
+        try {
+            $query = "UPDATE {$this->table} SET role_id = :role_id WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':role_id', $roleId, PDO::PARAM_INT);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            
+            return $stmt->execute();
+            
+        } catch (PDOException $e) {
+            error_log("User UpdateRole Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Change password
+     */
+    public function changePassword($id, $newPasswordHash) {
+        try {
+            $query = "UPDATE {$this->table} SET password_hash = :password_hash WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':password_hash', $newPasswordHash);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            
+            return $stmt->execute();
+            
+        } catch (PDOException $e) {
+            error_log("User ChangePassword Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Verify password
+     */
+    public function verifyPassword($password, $hash) {
+        return password_verify($password, $hash);
+    }
+}

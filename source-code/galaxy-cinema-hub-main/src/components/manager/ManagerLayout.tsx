@@ -11,7 +11,6 @@ import {
   CreditCard,
   Star,
   Bell,
-  Settings,
   LogOut,
   Menu,
   ChevronLeft,
@@ -21,42 +20,41 @@ import { useAuth } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
-const AdminLayout: React.FC = () => {
+const ManagerLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  // Check authentication and redirect if not logged in or not admin
+  // Check authentication and redirect if not logged in or not manager
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true });
       return;
     }
     
-    // Check if user is admin (role = 'admin')
-    if (user && user.role !== 'admin') {
+    // Check if user is manager or admin
+    if (user && user.role !== 'manager' && user.role !== 'admin') {
       navigate('/', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
   // Don't render anything while checking authentication
-  if (!isAuthenticated || !user || user.role !== 'admin') {
+  if (!isAuthenticated || !user) {
     return null;
   }
 
   const navItems = [
-    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-    { label: "Quản lý Phim", path: "/admin/movies", icon: Film },
-    { label: "Người Dùng", path: "/admin/users", icon: Users },
-    { label: "Quản lý Rạp", path: "/admin/cinemas", icon: Building2 },
-    { label: "Khuyến Mãi", path: "/admin/promotions", icon: Ticket },
-    { label: "Bắp Nước", path: "/admin/concessions", icon: Coffee },
-    { label: "Lịch Chiếu", path: "/admin/scheduler", icon: Calendar },
-    { label: "Giao Dịch", path: "/admin/transactions", icon: CreditCard },
-    { label: "Đánh Giá", path: "/admin/reviews", icon: Star },
-    { label: "Thông Báo", path: "/admin/notifications", icon: Bell },
-    { label: "Cấu Hình", path: "/admin/settings", icon: Settings },
+    { label: "Dashboard", path: "/manager", icon: LayoutDashboard },
+    { label: "Quản lý Phim", path: "/manager/movies", icon: Film },
+    { label: "Quản lý Rạp", path: "/manager/cinemas", icon: Building2 },
+    { label: "Lịch Chiếu", path: "/manager/scheduler", icon: Calendar },
+    { label: "Bắp Nước", path: "/manager/concessions", icon: Coffee },
+    { label: "Khuyến Mãi", path: "/manager/promotions", icon: Ticket },
+    { label: "Giao Dịch", path: "/manager/transactions", icon: CreditCard },
+    { label: "Đánh Giá", path: "/manager/reviews", icon: Star },
+    { label: "Thông Báo", path: "/manager/notifications", icon: Bell },
+    { label: "Nhân Viên", path: "/manager/staff", icon: Users },
   ];
 
   const handleLogout = () => {
@@ -75,11 +73,11 @@ const AdminLayout: React.FC = () => {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
           {!collapsed && (
-            <Link to="/admin" className="flex items-center gap-2">
+            <Link to="/manager" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <Film className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="font-bold text-lg">Admin</span>
+              <span className="font-bold text-lg">Manager</span>
             </Link>
           )}
           <Button
@@ -164,4 +162,4 @@ const AdminLayout: React.FC = () => {
   );
 };
 
-export default AdminLayout;
+export default ManagerLayout;

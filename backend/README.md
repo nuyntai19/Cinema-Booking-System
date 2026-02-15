@@ -109,6 +109,39 @@ backend/
 ✅ **Database** - Singleton connection
 ✅ **Config** - Centralized settings
 ✅ **CORS** - Cross-origin support
+✅ **Email Service** - Gmail SMTP support
+
+## 📧 Email Setup (Gửi Email Xác Nhận Thật)
+
+Để gửi email xác nhận thật qua Gmail:
+
+### Quick Start:
+
+1. **Đọc hướng dẫn chi tiết**: Xem file [`GMAIL_SMTP_SETUP.md`](GMAIL_SMTP_SETUP.md)
+
+2. **Bật 2FA cho Gmail**: https://myaccount.google.com/security
+
+3. **Tạo App Password**: https://myaccount.google.com/apppasswords
+
+4. **Cấu hình trong `config/Config.php`**:
+   ```php
+   public static $smtp_enabled = true;
+   public static $smtp_username = 'youremail@gmail.com';
+   public static $smtp_password = 'xxxx xxxx xxxx xxxx'; // App Password
+   ```
+
+5. **Test**: Đăng ký tài khoản mới và kiểm tra email!
+
+### Disable Email (Chỉ Log):
+
+Nếu chưa muốn gửi email thật:
+```php
+public static $smtp_enabled = false;
+```
+
+Email sẽ chỉ hiển thị trong PHP server log.
+
+---
 
 ## Bước tiếp theo:
 
@@ -117,5 +150,7 @@ backend/
 3. ✅ Tạo Models (User, Movie, Booking, etc.)
 4. ✅ Test API endpoints
 5. ✅ Connect frontend React với backend PHP
+6. ✅ Setup Email Service với Gmail SMTP
 
 Muốn tạo tiếp phần nào? (Database schema, Controllers, hoặc Models?)
+

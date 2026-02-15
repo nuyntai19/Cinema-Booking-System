@@ -1,12 +1,32 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { QrCode, ShoppingCart, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AppContext";
 
 const StaffLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuth();
+
+  // Check authentication and redirect if not logged in or not staff
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    
+    // Check if user is staff, manager, or admin
+    if (user && user.role !== 'staff' && user.role !== 'manager' && user.role !== 'admin') {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Don't render anything while checking authentication
+  if (!isAuthenticated || !user) {
+    return null;
+  }
 
   const navItems = [
     { path: "/staff/scanner", label: "Quét Vé", icon: QrCode },
@@ -14,8 +34,8 @@ const StaffLayout: React.FC = () => {
   ];
 
   const handleLogout = () => {
-    // Logout logic here
-    navigate("/login");
+    logout();
+    // No need to navigate manually, logout() will redirect to home
   };
 
   return (
@@ -31,7 +51,7 @@ const StaffLayout: React.FC = () => {
               <div>
                 <h1 className="text-xl font-bold">Galaxy Cinema</h1>
                 <p className="text-sm text-white/70">
-                  Nhân Viên: staff@cinema.com
+                  Nhân Viên: {user?.email || 'staff@cinema.com'}
                 </p>
               </div>
             </div>

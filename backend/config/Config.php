@@ -35,6 +35,16 @@ class Config {
     public static $rate_limit_requests = 100;
     public static $rate_limit_window = 60; // seconds
     
+    // SMTP Email Settings (Gmail)
+    public static $smtp_enabled = true; // Set false để disable SMTP và dùng log
+    public static $smtp_host = 'smtp.gmail.com';
+    public static $smtp_port = 587; // 587 for TLS, 465 for SSL
+    public static $smtp_encryption = 'tls'; // 'tls' hoặc 'ssl'
+    public static $smtp_username = ''; // Email của bạn, ví dụ: 'yourname@gmail.com'
+    public static $smtp_password = ''; // App Password từ Google (16 ký tự)
+    public static $smtp_from_email = 'noreply@galaxycinema.vn';
+    public static $smtp_from_name = 'Galaxy Cinema';
+    
     public static function init() {
         date_default_timezone_set(self::$timezone);
         

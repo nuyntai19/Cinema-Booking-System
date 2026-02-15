@@ -4,6 +4,11 @@
  */
 class Response {
     public static function success($data = [], $message = 'Success', $code = 200) {
+        // Clean any unexpected output
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+        
         http_response_code($code);
         echo json_encode([
             'success' => true,
@@ -14,6 +19,11 @@ class Response {
     }
     
     public static function error($message = 'Error', $code = 400, $errors = []) {
+        // Clean any unexpected output
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+        
         http_response_code($code);
         $response = [
             'success' => false,
