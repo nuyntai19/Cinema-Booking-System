@@ -388,4 +388,99 @@ class EmailService {
         
         return $this->sendEmail($toEmail, $subject, $message);
     }
+    
+    /**
+     * Gửi mã reset password qua email
+     */
+    public function sendPasswordResetCode($toEmail, $code, $userName) {
+        $subject = 'Mã xác nhận đặt lại mật khẩu - Galaxy Cinema';
+        
+        $message = $this->getPasswordResetEmailTemplate($userName, $code);
+        
+        return $this->sendEmail($toEmail, $subject, $message);
+    }
+    
+    /**
+     * Template email reset password
+     */
+    private function getPasswordResetEmailTemplate($userName, $code) {
+        return "
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .header p { margin: 10px 0 0 0; opacity: 0.95; }
+        .content { padding: 40px 30px; }
+        .code-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 10px; text-align: center; margin: 25px 0; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3); }
+        .code { font-size: 36px; font-weight: bold; letter-spacing: 8px; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .warning-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 13px; }
+        ul { padding-left: 20px; line-height: 1.8; }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1>🔒 ĐẶT LẠI MẬT KHẨU</h1>
+            <p>Galaxy Cinema</p>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{$userName}</strong>,</p>
+            
+            <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại Galaxy Cinema.</p>
+            
+            <div class='code-box'>
+                <p style='margin: 0; font-size: 14px; opacity: 0.9;'>MÃ XÁC NHẬN CỦA BẠN</p>
+                <div class='code'>{$code}</div>
+                <p style='margin: 10px 0 0 0; font-size: 13px; opacity: 0.9;'>⏰ Mã có hiệu lực trong <strong>15 phút</strong></p>
+            </div>
+            
+            <h3>📋 Hướng dẫn đặt lại mật khẩu:</h3>
+            <ol style='line-height: 1.8;'>
+                <li>Nhập mã xác nhận <strong>{$code}</strong> vào trang đặt lại mật khẩu</li>
+                <li>Nhập mật khẩu mới của bạn (ít nhất 6 ký tự)</li>
+                <li>Xác nhận và hoàn tất</li>
+            </ol>
+            
+            <div class='warning-box'>
+                <strong>⚠️ Bạn không yêu cầu đặt lại mật khẩu?</strong><br><br>
+                Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này. Mật khẩu của bạn sẽ không thay đổi.<br>
+                Để bảo vệ tài khoản, vui lòng liên hệ với chúng tôi ngay:
+                <br><br>
+                <strong>📞 Hotline:</strong> 1900 2224<br>
+                <strong>✉️ Email:</strong> support@galaxycinema.vn<br>
+                <strong>🕐 Thời gian hỗ trợ:</strong> 8:00 - 22:00 hàng ngày
+            </div>
+            
+            <h3>💡 Lời khuyên bảo mật:</h3>
+            <ul style='line-height: 1.8;'>
+                <li>Không chia sẻ mã xác nhận với bất kỳ ai</li>
+                <li>Sử dụng mật khẩu mạnh và khác biệt</li>
+                <li>Bật xác thực 2 bước nếu có thể</li>
+                <li>Thay đổi mật khẩu định kỳ</li>
+            </ul>
+            
+            <p style='margin-top: 30px;'>
+                Cảm ơn bạn đã tin tưởng Galaxy Cinema!<br>
+                <strong>Đội ngũ Galaxy Cinema</strong>
+            </p>
+        </div>
+        <div class='footer'>
+            <p>© 2026 Galaxy Cinema. All rights reserved.</p>
+            <p>Hotline: 1900 2224 | Email: support@galaxycinema.vn</p>
+            <p style='margin-top: 10px; color: #999; font-size: 11px;'>
+                Email này được gửi tự động. Vui lòng không trả lời email này.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        ";
+    }
 }

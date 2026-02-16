@@ -9,6 +9,7 @@ class Response {
             ob_clean();
         }
         
+        header('Content-Type: application/json; charset=utf-8');
         http_response_code($code);
         echo json_encode([
             'success' => true,
@@ -24,6 +25,7 @@ class Response {
             ob_clean();
         }
         
+        header('Content-Type: application/json; charset=utf-8');
         http_response_code($code);
         $response = [
             'success' => false,

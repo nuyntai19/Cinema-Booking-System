@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Clock,
@@ -9,6 +9,7 @@ import {
   MapPin,
   ChevronRight,
   Send,
+  Loader2,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -16,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { movies, cinemas, generateShowtimes } from "@/data/mockData";
+import { cinemas, generateShowtimes } from "@/data/mockData";
+import { API_ENDPOINTS, API_BASE_URL, apiCall, getImageUrl } from "@/lib/api";
+import { Movie, AgeRating, Showtime } from "@/types/cinema";
 import { useBooking, useAuth } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -35,6 +38,58 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+interface BackendMovie {
+  id: number;
+  title: string;
+  description: string;
+  duration: number;
+  release_date: string;
+  poster_url: string;
+  trailer_url: string | null;
+  age_rating: string;
+  origin: string;
+  status: string;
+  genres: string | null;
+  avg_rating: string | null;
+  review_count: number;
+}
+
+interface BackendReview {
+  id: number;
+  user_id: number;
+  movie_id: number;
+  rating: number;
+  comment: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  email: string;
+  full_name: string | null;
+  avatar: string | null;
+}
+
+interface ReviewStats {
+  total_reviews: number;
+  average_rating: number;
+  rating_distribution: {
+    "5": number;
+    "4": number;
+    "3": number;
+    "2": number;
+    "1": number;
+  };
+}
+
+interface Review {
+  id: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  helpful: number;
+}
+
 const MovieDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -43,49 +98,121 @@ const MovieDetailPage: React.FC = () => {
   const { setSelectedMovie, setSelectedCinema, setSelectedShowtime } =
     useBooking();
 
-  const movie = movies.find((m) => m.id === id);
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();
     return today.toISOString().split("T")[0];
   });
   const [showAgeModal, setShowAgeModal] = useState(false);
-  const [pendingShowtime, setPendingShowtime] = useState<any>(null);
+  const [pendingShowtime, setPendingShowtime] = useState<{
+    cinemaId: string;
+    showtime: Showtime;
+  } | null>(null);
 
   // Review states
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
-  const [reviews, setReviews] = useState([
-    {
-      id: "1",
-      userName: "Nguyễn Văn A",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user1",
-      rating: 5,
-      comment:
-        "Phim rất hay, diễn xuất tốt. Câu chuyện cảm động và ý nghĩa. Đáng xem!",
-      createdAt: "2026-01-20T10:30:00",
-      helpful: 24,
-    },
-    {
-      id: "2",
-      userName: "Trần Thị B",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user2",
-      rating: 4,
-      comment:
-        "Nội dung hay, hình ảnh đẹp. Tuy nhiên có một số phần hơi kéo dài.",
-      createdAt: "2026-01-19T15:20:00",
-      helpful: 18,
-    },
-    {
-      id: "3",
-      userName: "Lê Văn C",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user3",
-      rating: 5,
-      comment: "Xuất sắc! Âm nhạc, diễn xuất, kịch bản đều rất tốt.",
-      createdAt: "2026-01-18T09:15:00",
-      helpful: 12,
-    },
-  ]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  useEffect(() => {
+    const fetchMovie = async () => {
+      if (!id) return;
+
+      try {
+        setLoading(true);
+        const response = await apiCall<{
+          success: boolean;
+          data: { movie: BackendMovie };
+        }>(API_ENDPOINTS.MOVIE_DETAIL(parseInt(id)));
+
+        if (response.success && response.data?.movie) {
+          const m = response.data.movie;
+          const mappedMovie: Movie = {
+            id: m.id.toString(),
+            title: m.title,
+            titleVi: m.title,
+            poster: getImageUrl(m.poster_url),
+            duration: m.duration,
+            ageRating: m.age_rating as AgeRating,
+            origin: m.origin === "Vietnam" ? "VN" : "INT",
+            genre: m.genres ? m.genres.split(",").map((g) => g.trim()) : [],
+            director: "",
+            cast: [],
+            releaseDate: m.release_date,
+            description: m.description || "",
+            trailerUrl: m.trailer_url || undefined,
+            rating: m.avg_rating ? parseFloat(m.avg_rating) : 0,
+            isNowShowing: m.status === "Now Showing",
+          };
+          setMovie(mappedMovie);
+        }
+      } catch (error) {
+        console.error("Error fetching movie:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMovie();
+  }, [id]);
+
+  // Fetch reviews
+  useEffect(() => {
+    const fetchReviews = async () => {
+      if (!id) return;
+
+      try {
+        setLoadingReviews(true);
+        const response = await apiCall<{
+          success: boolean;
+          data: {
+            movie_id: number;
+            reviews: BackendReview[];
+            rating_stats: ReviewStats;
+          };
+        }>(API_ENDPOINTS.MOVIE_REVIEWS(parseInt(id)));
+
+        if (response.success && response.data) {
+          // Map backend reviews to frontend format
+          const mappedReviews = response.data.reviews.map((r) => ({
+            id: r.id.toString(),
+            userName: r.full_name || r.email.split("@")[0],
+            userAvatar:
+              r.avatar ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.email}`,
+            rating: r.rating,
+            comment: r.comment,
+            createdAt: r.created_at,
+            helpful: 0,
+          }));
+          setReviews(mappedReviews);
+          setReviewStats(response.data.rating_stats);
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+      } finally {
+        setLoadingReviews(false);
+      }
+    };
+
+    fetchReviews();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (!movie) {
     return (
@@ -116,7 +243,7 @@ const MovieDetailPage: React.FC = () => {
     };
   });
 
-  const handleSelectShowtime = (cinemaId: string, showtime: any) => {
+  const handleSelectShowtime = (cinemaId: string, showtime: Showtime) => {
     // Check age restriction
     if (movie.ageRating === "T18") {
       setPendingShowtime({ cinemaId, showtime });
@@ -127,7 +254,7 @@ const MovieDetailPage: React.FC = () => {
     proceedToBooking(cinemaId, showtime);
   };
 
-  const proceedToBooking = (cinemaId: string, showtime: any) => {
+  const proceedToBooking = (cinemaId: string, showtime: Showtime) => {
     setSelectedMovie(movie.id);
     setSelectedCinema(cinemaId);
     setSelectedShowtime(showtime);
@@ -141,7 +268,7 @@ const MovieDetailPage: React.FC = () => {
     setShowAgeModal(false);
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!isAuthenticated) {
       toast({
         title: "Vui lòng đăng nhập",
@@ -170,24 +297,53 @@ const MovieDetailPage: React.FC = () => {
       return;
     }
 
-    const newReview = {
-      id: Date.now().toString(),
-      userName: user?.email || "Người dùng",
-      userAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`,
-      rating,
-      comment: reviewText,
-      createdAt: new Date().toISOString(),
-      helpful: 0,
-    };
+    try {
+      const response = await apiCall<{
+        success: boolean;
+        message: string;
+        data?: { review_id: number };
+      }>(`${API_BASE_URL}/api/reviews/index.php`, {
+        method: "POST",
+        body: JSON.stringify({
+          movie_id: parseInt(id!),
+          rating: rating,
+          comment: reviewText.trim(),
+        }),
+      });
 
-    setReviews([newReview, ...reviews]);
-    setRating(0);
-    setReviewText("");
+      if (response.success) {
+        toast({
+          title: "Gửi đánh giá thành công",
+          description: "Đánh giá của bạn đang được xem xét. Cảm ơn bạn!",
+        });
 
-    toast({
-      title: "Đánh giá thành công",
-      description: "Cảm ơn bạn đã chia sẻ đánh giá!",
-    });
+        // Reset form
+        setRating(0);
+        setReviewText("");
+
+        // Refresh reviews list after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        toast({
+          title: "Không thể gửi đánh giá",
+          description: response.message || "Đã có lỗi xảy ra",
+          variant: "destructive",
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Error submitting review:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Không thể gửi đánh giá. Vui lòng thử lại sau.";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -453,51 +609,55 @@ const MovieDetailPage: React.FC = () => {
             <h2 className="text-2xl font-bold mb-6">Đánh Giá Phim</h2>
 
             {/* Review Statistics */}
-            <div className="bg-card rounded-xl border border-border p-6 mb-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                <div className="text-center">
-                  <div className="text-5xl font-bold text-primary mb-2">
-                    {(
-                      reviews.reduce((sum, r) => sum + r.rating, 0) /
-                      reviews.length
-                    ).toFixed(1)}
+            {loadingReviews ? (
+              <div className="bg-card rounded-xl border border-border p-6 mb-6 flex justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : reviewStats &&
+              reviewStats.average_rating &&
+              reviews.length > 0 ? (
+              <div className="bg-card rounded-xl border border-border p-6 mb-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                  <div className="text-center">
+                    <div className="text-5xl font-bold text-primary mb-2">
+                      {reviewStats.average_rating.toFixed(1)}
+                    </div>
+                    <div className="flex justify-center mb-2">
+                      {renderStars(Math.round(reviewStats.average_rating))}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {reviewStats.total_reviews} đánh giá
+                    </p>
                   </div>
-                  <div className="flex justify-center mb-2">
-                    {renderStars(
-                      Math.round(
-                        reviews.reduce((sum, r) => sum + r.rating, 0) /
-                          reviews.length,
-                      ),
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {reviews.length} đánh giá
-                  </p>
-                </div>
-                <div className="flex-1 space-y-2 w-full">
-                  {[5, 4, 3, 2, 1].map((star) => {
-                    const count = reviews.filter(
-                      (r) => r.rating === star,
-                    ).length;
-                    const percentage = (count / reviews.length) * 100;
-                    return (
-                      <div key={star} className="flex items-center gap-2">
-                        <span className="text-sm w-8">{star} ⭐</span>
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-yellow-400"
-                            style={{ width: `${percentage}%` }}
-                          />
+                  <div className="flex-1 space-y-2 w-full">
+                    {[5, 4, 3, 2, 1].map((star) => {
+                      const count =
+                        reviewStats.rating_distribution[
+                          star.toString() as keyof typeof reviewStats.rating_distribution
+                        ] || 0;
+                      const percentage =
+                        reviewStats.total_reviews > 0
+                          ? (count / reviewStats.total_reviews) * 100
+                          : 0;
+                      return (
+                        <div key={star} className="flex items-center gap-2">
+                          <span className="text-sm w-8">{star} ⭐</span>
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-yellow-400"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground w-8">
+                            {count}
+                          </span>
                         </div>
-                        <span className="text-sm text-muted-foreground w-8">
-                          {count}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Write Review Form */}
             {isAuthenticated ? (
@@ -545,44 +705,54 @@ const MovieDetailPage: React.FC = () => {
 
             {/* Reviews List */}
             <div className="space-y-4">
-              {reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="bg-card rounded-xl border border-border p-6"
-                >
-                  <div className="flex items-start gap-4">
-                    <Avatar>
-                      <AvatarImage src={review.userAvatar} />
-                      <AvatarFallback>
-                        {review.userName.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="font-semibold">{review.userName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDateTime(review.createdAt)}
-                          </p>
+              {loadingReviews ? (
+                <div className="text-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                </div>
+              ) : reviews.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Chưa có đánh giá nào. Hãy là người đầu tiên đánh giá phim này!
+                </div>
+              ) : (
+                reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="bg-card rounded-xl border border-border p-6"
+                  >
+                    <div className="flex items-start gap-4">
+                      <Avatar>
+                        <AvatarImage src={review.userAvatar} />
+                        <AvatarFallback>
+                          {review.userName.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="font-semibold">{review.userName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(review.createdAt)}
+                            </p>
+                          </div>
+                          {renderStars(review.rating)}
                         </div>
-                        {renderStars(review.rating)}
-                      </div>
-                      <p className="text-sm text-foreground mb-3">
-                        {review.comment}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-8 text-muted-foreground hover:text-foreground"
-                        >
-                          👍 Hữu ích ({review.helpful})
-                        </Button>
+                        <p className="text-sm text-foreground mb-3">
+                          {review.comment}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-8 text-muted-foreground hover:text-foreground"
+                          >
+                            👍 Hữu ích ({review.helpful})
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
         </div>
