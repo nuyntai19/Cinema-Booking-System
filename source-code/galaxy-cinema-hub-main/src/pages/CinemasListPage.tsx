@@ -1,22 +1,77 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Phone, Navigation, Clock, Star } from "lucide-react";
+import { MapPin, Phone, Navigation, Clock, Star, Loader } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cinemas } from "@/data/mockData";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { useToast } from "@/hooks/use-toast";
+
+interface Cinema {
+  id: number;
+  name: string;
+  address: string;
+  hotline?: string;
+  status?: string;
+  manager_name?: string;
+  manager_email?: string;
+  total_halls?: number;
+  total_seats?: number;
+  halls?: { id: number; name: string; total_seats: number }[];
+}
 
 const CinemasPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedCity, setSelectedCity] = useState<string>("hcm");
+  const { toast } = useToast();
+  const [cinemas, setCinemas] = useState<Cinema[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCity, setSelectedCity] = useState<string>("all");
 
   const cities = [
+    { id: "all", name: "Tất cả khu vực" },
     { id: "hcm", name: "TP. Hồ Chí Minh" },
     { id: "hanoi", name: "Hà Nội" },
     { id: "danang", name: "Đà Nẵng" },
   ];
+
+  useEffect(() => {
+    const fetchCinemas = async () => {
+      try {
+        setLoading(true);
+        const response = await apiCall<{ success: boolean; data: { cinemas: Cinema[] } }>(
+          API_ENDPOINTS.CINEMAS
+        );
+        setCinemas(response.data?.cinemas || []);
+      } catch (error) {
+        console.error("Failed to fetch cinemas:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải danh sách rạp. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCinemas();
+  }, [toast]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Đang tải danh sách rạp...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -90,10 +145,10 @@ const CinemasPage: React.FC = () => {
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Phone className="w-4 h-4 flex-shrink-0" />
                       <a
-                        href={`tel:${cinema.hotline}`}
+                        href={`tel:${cinema.hotline || '1900 2224'}`}
                         className="hover:text-primary"
                       >
-                        {cinema.hotline}
+                        {cinema.hotline || '1900 2224'}
                       </a>
                     </div>
 
@@ -104,13 +159,15 @@ const CinemasPage: React.FC = () => {
                   </div>
 
                   {/* Features */}
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {cinema.features.map((feature) => (
-                      <Badge key={feature} variant="secondary">
-                        {feature}
-                      </Badge>
-                    ))}
-                  </div>
+                  {/* Features removed - not in API response */}
+
+                  {/* Manager Info */}
+                  {cinema.manager_name && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+                      <span className="font-medium">Quản lý:</span>
+                      <span>{cinema.manager_name}</span>
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-4">
@@ -143,13 +200,19 @@ const CinemasPage: React.FC = () => {
         {/* Map Section */}
         <div className="mt-12">
           <Card>
-            <CardContent className="p-6">
-              <h2 className="text-xl font-bold mb-4">Bản đồ hệ thống rạp</h2>
-              <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <MapPin className="w-12 h-12 mx-auto mb-2" />
-                  <p>Bản đồ sẽ được hiển thị tại đây</p>
-                </div>
+            <CardContent className="p-0 overflow-hidden">
+              <h2 className="text-xl font-bold p-6 border-b">Bản đồ hệ thống rạp</h2>
+              <div className="aspect-video w-full">
+                <iframe
+                  title="Galaxy Cinema Locations"
+                  src="https://www.google.com/maps/embed?pb=!1m16!1m12!1m12!1m3!1d125414.5901594916!2d106.62966212879025!3d10.795537877292212!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sgalaxy%20cinema!5e0!3m2!1svi!2svn!4v1708346734567!5m2!1svi!2svn"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                ></iframe>
               </div>
             </CardContent>
           </Card>

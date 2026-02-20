@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, Edit, Trash2, MapPin, Phone, Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
+
 
 interface Cinema {
   id: string;
@@ -36,47 +46,67 @@ interface Cinema {
   manager: string;
 }
 
+interface BackendCinema {
+  id: number;
+  name: string;
+  address: string;
+  hotline?: string;
+  status?: string;
+  manager_name?: string;
+  total_halls?: number;
+  total_seats?: number;
+  halls?: { id: number; name: string; total_seats: number }[];
+}
+
 const AdminCinemas: React.FC = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCinema, setSelectedCinema] = useState<Cinema | null>(null);
-  const [cinemas, setCinemas] = useState<Cinema[]>([
-    {
-      id: "1",
-      name: "Galaxy Nguyễn Du",
-      address: "116 Nguyễn Du, Quận 1, TP.HCM",
-      hotline: "1900 2224",
-      totalRooms: 8,
-      totalSeats: 960,
-      features: ["IMAX", "4DX", "Standard"],
-      status: "active",
-      manager: "Nguyễn Văn A",
-    },
-    {
-      id: "2",
-      name: "Galaxy Tân Bình",
-      address: "246 Nguyễn Hồng Đào, Tân Bình, TP.HCM",
-      hotline: "1900 2224",
-      totalRooms: 6,
-      totalSeats: 720,
-      features: ["Standard", "VIP"],
-      status: "active",
-      manager: "Trần Thị B",
-    },
-    {
-      id: "3",
-      name: "Galaxy Quang Trung",
-      address: "304A Quang Trung, Gò Vấp, TP.HCM",
-      hotline: "1900 2224",
-      totalRooms: 5,
-      totalSeats: 600,
-      features: ["IMAX", "Standard"],
-      status: "maintenance",
-      manager: "Lê Văn C",
-    },
-  ]);
+  const [cinemas, setCinemas] = useState<Cinema[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchCategory, setSearchCategory] = useState<"name" | "address" | "manager">("name");
+
+  // Hall Management State
+  const [isHallsDialogOpen, setIsHallsDialogOpen] = useState(false);
+  const [halls, setHalls] = useState<BackendCinema["halls"]>([]);
+
+  const fetchCinemas = async () => {
+    try {
+      setLoading(true);
+      const response = await apiCall<{ success: boolean; data: { cinemas: BackendCinema[] } }>(
+        API_ENDPOINTS.CINEMAS
+      );
+      const backendCinemas = response.data?.cinemas || [];
+      const mapped: Cinema[] = backendCinemas.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        address: c.address,
+        hotline: c.hotline || "1900 2224",
+        totalRooms: Number(c.total_halls || c.halls?.length || 0),
+        totalSeats: Number(c.total_seats || c.halls?.reduce((sum, h) => sum + h.total_seats, 0) || 0),
+        features: c.halls?.map((h) => h.name) || [],
+        status: (c.status as "active" | "maintenance" | "closed") || "active",
+        manager: c.manager_name || "Chưa gán",
+      }));
+      setCinemas(mapped);
+    } catch (error) {
+      console.error("Failed to fetch cinemas:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách rạp",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCinemas();
+  }, []);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -85,19 +115,74 @@ const AdminCinemas: React.FC = () => {
     manager: "",
   });
 
-  const filteredCinemas = cinemas.filter(
-    (cinema) =>
-      cinema.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cinema.address.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredCinemas = cinemas.filter((cinema) => {
+    const value = searchQuery.toLowerCase();
+    switch (searchCategory) {
+      case "address":
+        return cinema.address.toLowerCase().includes(value);
+      case "manager":
+        return cinema.manager.toLowerCase().includes(value);
+      default:
+        return cinema.name.toLowerCase().includes(value);
+    }
+  });
 
-  const handleAdd = () => {
-    toast({
-      title: "Thêm rạp thành công",
-      description: `Đã thêm rạp ${formData.name}`,
-    });
-    setIsAddDialogOpen(false);
-    setFormData({ name: "", address: "", hotline: "", manager: "" });
+  const validateForm = () => {
+    if (!formData.name.trim()) {
+      toast({
+        title: "Lỗi",
+        description: "Tên rạp không được để trống",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (!formData.address.trim()) {
+      toast({
+        title: "Lỗi",
+        description: "Địa chỉ không được để trống",
+        variant: "destructive",
+      });
+      return false;
+    }
+    // Validate Hotline: Only digits and spaces allowed
+    if (formData.hotline && !/^[0-9\s]+$/.test(formData.hotline)) {
+      toast({
+        title: "Lỗi",
+        description: "Hotline chỉ được chứa số và khoảng trắng",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const handleAdd = async () => {
+    if (!validateForm()) return;
+
+    try {
+      await apiCall(API_ENDPOINTS.CINEMAS, {
+        method: "POST",
+        body: JSON.stringify({
+          name: formData.name,
+          address: formData.address,
+          hotline: formData.hotline,
+        }),
+      });
+      toast({
+        title: "Thêm rạp thành công",
+        description: `Đã thêm rạp ${formData.name}`,
+      });
+      setIsAddDialogOpen(false);
+      setFormData({ name: "", address: "", hotline: "", manager: "" });
+      // Refresh the list
+      await fetchCinemas();
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: "Không thể thêm rạp",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleEdit = (cinema: Cinema) => {
@@ -111,28 +196,102 @@ const AdminCinemas: React.FC = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (selectedCinema) {
-      setCinemas(
-        cinemas.map((c) =>
-          c.id === selectedCinema.id ? { ...c, ...formData } : c,
-        ),
-      );
-      toast({
-        title: "Cập nhật thành công",
-        description: `Đã cập nhật rạp ${formData.name}`,
-      });
-      setIsEditDialogOpen(false);
-      setFormData({ name: "", address: "", hotline: "", manager: "" });
+      if (!validateForm()) return;
+
+      try {
+        await apiCall(`${API_ENDPOINTS.CINEMAS}/${selectedCinema.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: formData.name,
+            address: formData.address,
+            hotline: formData.hotline,
+          }),
+        });
+        toast({
+          title: "Cập nhật thành công",
+          description: `Đã cập nhật rạp ${formData.name}`,
+        });
+        setIsEditDialogOpen(false);
+        setFormData({ name: "", address: "", hotline: "", manager: "" });
+        // Re-fetch from server to ensure UI shows the actual saved data
+        await fetchCinemas();
+      } catch (error) {
+        toast({
+          title: "Lỗi",
+          description: "Không thể cập nhật rạp",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    setCinemas(cinemas.filter((c) => c.id !== id));
-    toast({
-      title: "Xóa rạp thành công",
-      description: `Đã xóa rạp ${name}`,
-    });
+  const handleDelete = async (id: string, name: string) => {
+    try {
+      await apiCall(`${API_ENDPOINTS.CINEMAS}/${id}`, {
+        method: "DELETE",
+      });
+      setCinemas(cinemas.filter((c) => c.id !== id));
+      toast({
+        title: "Xóa rạp thành công",
+        description: `Đã xóa rạp ${name}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: "Không thể xóa rạp",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleManageHalls = async (cinema: Cinema) => {
+    setSelectedCinema(cinema);
+    try {
+      const response = await apiCall<{ data: { halls: any[] } }>(
+        API_ENDPOINTS.CINEMA_HALLS(Number(cinema.id))
+      );
+      setHalls(response.data.halls);
+      setIsHallsDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách phòng chiếu",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenConfig = (hall: any) => {
+    navigate(`/admin/seats?hallId=${hall.id}&cinemaId=${selectedCinema?.id}`);
+  };
+
+  const handleCreateHall = async () => {
+    const name = prompt("Nhập tên phòng chiếu (VD: Phòng 5, IMAX...):");
+    if (!name || !selectedCinema) return;
+
+    try {
+      await apiCall(API_ENDPOINTS.HALLS, {
+        method: "POST",
+        body: JSON.stringify({ cinema_id: selectedCinema.id, name }),
+      });
+      handleManageHalls(selectedCinema);
+      toast({ title: "Thành công", description: "Đã thêm phòng chiếu" });
+    } catch (error) {
+      toast({ title: "Lỗi", description: "Không thể thêm phòng", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteHall = async (hallId: number) => {
+    if (!confirm("Bạn có chắc muốn xóa phòng chiếu này?")) return;
+    try {
+      await apiCall(API_ENDPOINTS.HALL_DETAIL(hallId), { method: "DELETE" });
+      if (selectedCinema) handleManageHalls(selectedCinema);
+      toast({ title: "Thành công", description: "Đã xóa phòng" });
+    } catch (error) {
+      toast({ title: "Lỗi", description: "Không thể xóa phòng. Có thể phòng đã có suất chiếu.", variant: "destructive" });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -307,14 +466,29 @@ const AdminCinemas: React.FC = () => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Danh Sách Rạp</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Tìm kiếm rạp..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex items-center gap-2">
+              <Select
+                value={searchCategory}
+                onValueChange={(value: any) => setSearchCategory(value)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Tìm theo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Tên rạp</SelectItem>
+                  <SelectItem value="address">Địa chỉ</SelectItem>
+                  <SelectItem value="manager">Quản lý</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Tìm kiếm..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -462,6 +636,65 @@ const AdminCinemas: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hall Management Dialog */}
+      <Dialog open={isHallsDialogOpen} onOpenChange={setIsHallsDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Quản lý Phòng Chiếu - {selectedCinema?.name}</DialogTitle>
+            <DialogDescription> Thêm, xóa phòng và thiết lập sơ đồ ghế </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={handleCreateHall} className="gap-2">
+                <Plus className="w-4 h-4" /> Thêm Phòng
+              </Button>
+            </div>
+
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tên Phòng</TableHead>
+                    <TableHead>Tổng số ghế</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead className="text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {halls?.map((hall) => (
+                    <TableRow key={hall.id}>
+                      <TableCell className="font-medium">{hall.name}</TableCell>
+                      <TableCell>{hall.total_seats} ghế</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">Sẵn sàng</Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/admin/seats/${hall.id}`)}>
+                          Thiết lập sơ đồ
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteHall(hall.id)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!halls || halls.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                        Chưa có phòng chiếu nào
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
     </div>
   );
 };

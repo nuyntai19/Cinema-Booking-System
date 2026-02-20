@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cinemas, generateShowtimes } from "@/data/mockData";
+
 import { API_ENDPOINTS, API_BASE_URL, apiCall, getImageUrl } from "@/lib/api";
 import { Movie, AgeRating, Showtime } from "@/types/cinema";
 import { useBooking, useAuth } from "@/contexts/AppContext";
@@ -90,6 +90,25 @@ interface Review {
   helpful: number;
 }
 
+interface APICinema {
+  id: number;
+  name: string;
+  address: string;
+  hotline?: string;
+}
+
+interface APIShowtime {
+  id: number;
+  movie_title: string;
+  movie_id: number;
+  cinema_id: number;
+  cinema_name: string;
+  hall_name: string;
+  start_time: string;
+  total_seats: number;
+  base_price?: number;
+}
+
 const MovieDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -109,6 +128,11 @@ const MovieDetailPage: React.FC = () => {
     cinemaId: string;
     showtime: Showtime;
   } | null>(null);
+
+  // Cinema & showtime states (from API)
+  const [apiCinemas, setApiCinemas] = useState<APICinema[]>([]);
+  const [showtimesByCinema, setShowtimesByCinema] = useState<Record<string, Showtime[]>>({});
+  const [loadingShowtimes, setLoadingShowtimes] = useState(false);
 
   // Review states
   const [rating, setRating] = useState(0);
@@ -159,6 +183,67 @@ const MovieDetailPage: React.FC = () => {
 
     fetchMovie();
   }, [id]);
+
+  // Fetch cinemas and showtimes from API
+  useEffect(() => {
+    const fetchCinemasAndShowtimes = async () => {
+      if (!id) return;
+
+      try {
+        setLoadingShowtimes(true);
+
+        // Fetch cinemas
+        const cinemasRes = await apiCall<{ success: boolean; data: { cinemas: APICinema[] } }>(
+          API_ENDPOINTS.CINEMAS
+        );
+        const cinemaList = cinemasRes.data?.cinemas || [];
+        setApiCinemas(cinemaList);
+
+        // Fetch showtimes filtered by movie_id and date
+        const params = new URLSearchParams();
+        params.append("movie_id", id);
+        params.append("date", selectedDate);
+        params.append("limit", "100");
+        const showtimesRes = await apiCall<{ success: boolean; data: { showtimes: APIShowtime[] } }>(
+          `${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`
+        );
+        const rawShowtimes = showtimesRes.data?.showtimes || [];
+
+        // Group showtimes by cinema_id
+        const grouped: Record<string, Showtime[]> = {};
+        rawShowtimes.forEach((s) => {
+          const cinemaKey = String(s.cinema_id);
+          const startDate = new Date(s.start_time);
+          const mapped: Showtime = {
+            id: String(s.id),
+            movieId: String(s.movie_id),
+            cinemaId: cinemaKey,
+            roomId: s.hall_name,
+            date: startDate.toISOString().split("T")[0],
+            time: startDate.toTimeString().slice(0, 5),
+            price: {
+              standard: s.base_price || 90000,
+              vip: (s.base_price || 90000) * 1.5,
+              couple: (s.base_price || 90000) * 2,
+            },
+            availableSeats: s.total_seats || 0,
+            totalSeats: s.total_seats || 0,
+          };
+          if (!grouped[cinemaKey]) {
+            grouped[cinemaKey] = [];
+          }
+          grouped[cinemaKey].push(mapped);
+        });
+        setShowtimesByCinema(grouped);
+      } catch (error) {
+        console.error("Error fetching cinemas/showtimes:", error);
+      } finally {
+        setLoadingShowtimes(false);
+      }
+    };
+
+    fetchCinemasAndShowtimes();
+  }, [id, selectedDate]);
 
   // Fetch reviews
   useEffect(() => {
@@ -544,63 +629,67 @@ const MovieDetailPage: React.FC = () => {
               </div>
 
               {/* Cinema List */}
-              <Accordion
-                type="multiple"
-                defaultValue={cinemas.map((c) => c.id)}
-                className="space-y-3"
-              >
-                {cinemas.map((cinema) => {
-                  const showtimes = generateShowtimes(
-                    movie.id,
-                    cinema.id,
-                  ).filter((s) => s.date === selectedDate);
+              {loadingShowtimes ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <Accordion
+                  type="multiple"
+                  defaultValue={apiCinemas.map((c) => String(c.id))}
+                  className="space-y-3"
+                >
+                  {apiCinemas.map((cinema) => {
+                    const cinemaKey = String(cinema.id);
+                    const cinemaShowtimes = showtimesByCinema[cinemaKey] || [];
 
-                  return (
-                    <AccordionItem
-                      key={cinema.id}
-                      value={cinema.id}
-                      className="bg-card rounded-xl border border-border overflow-hidden"
-                    >
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50">
-                        <div className="flex items-center gap-3 text-left">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <MapPin className="w-5 h-5 text-primary" />
+                    return (
+                      <AccordionItem
+                        key={cinemaKey}
+                        value={cinemaKey}
+                        className="bg-card rounded-xl border border-border overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50">
+                          <div className="flex items-center gap-3 text-left">
+                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <MapPin className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-semibold">{cinema.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {cinema.address}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold">{cinema.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {cinema.address}
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          {cinemaShowtimes.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {cinemaShowtimes.map((showtime) => (
+                                <Button
+                                  key={showtime.id}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleSelectShowtime(cinemaKey, showtime)
+                                  }
+                                  className="hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                                >
+                                  {showtime.time}
+                                </Button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-muted-foreground text-sm">
+                              Không có suất chiếu cho ngày đã chọn
                             </p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        {showtimes.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {showtimes.map((showtime) => (
-                              <Button
-                                key={showtime.id}
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleSelectShowtime(cinema.id, showtime)
-                                }
-                                className="hover:bg-primary hover:text-primary-foreground hover:border-primary"
-                              >
-                                {showtime.time}
-                              </Button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">
-                            Không có suất chiếu cho ngày đã chọn
-                          </p>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              )}
             </section>
           )}
 
@@ -633,7 +722,7 @@ const MovieDetailPage: React.FC = () => {
                     {[5, 4, 3, 2, 1].map((star) => {
                       const count =
                         reviewStats.rating_distribution[
-                          star.toString() as keyof typeof reviewStats.rating_distribution
+                        star.toString() as keyof typeof reviewStats.rating_distribution
                         ] || 0;
                       const percentage =
                         reviewStats.total_reviews > 0

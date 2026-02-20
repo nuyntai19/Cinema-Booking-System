@@ -11,6 +11,7 @@ ini_set('log_errors', 1);     // Log errors instead
 
 // Start output buffering to catch any unexpected output
 ob_start();
+file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -39,7 +40,7 @@ spl_autoload_register(function ($class) {
         __DIR__ . '/middleware/' . $class . '.php',
         __DIR__ . '/utils/' . $class . '.php',
     ];
-    
+
     foreach ($paths as $path) {
         if (file_exists($path)) {
             require_once $path;
@@ -52,9 +53,18 @@ spl_autoload_register(function ($class) {
 $router = new Router();
 
 // Health check endpoint
-$router->get('/api/health', function() {
+$router->get('/api/health', function () {
     Response::success(['status' => 'OK', 'message' => 'Galaxy Cinema API is running']);
 });
+
+// ============================================
+// HALL ROUTES
+// ============================================
+$router->post('/api/halls', 'HallController@create'); // Admin
+$router->get('/api/halls/:id', 'HallController@show'); // Admin
+$router->put('/api/halls/:id', 'HallController@update'); // Admin
+$router->delete('/api/halls/:id', 'HallController@delete'); // Admin
+$router->post('/api/halls/:id/layout', 'HallController@saveLayout'); // Admin
 
 // ============================================
 // AUTH ROUTES
@@ -107,6 +117,8 @@ $router->post('/api/cinemas', 'CinemaController@create'); // Admin
 $router->put('/api/cinemas/:id', 'CinemaController@update'); // Admin
 $router->delete('/api/cinemas/:id', 'CinemaController@delete'); // Admin
 $router->get('/api/cinemas/:id/halls', 'CinemaController@getHalls');
+$router->get('/api/cinemas/:id/showtimes', 'CinemaController@getShowtimes');
+
 
 // ============================================
 // SHOWTIME ROUTES
@@ -117,6 +129,7 @@ $router->post('/api/showtimes', 'ShowtimeController@create'); // Manager
 $router->put('/api/showtimes/:id', 'ShowtimeController@update'); // Manager
 $router->delete('/api/showtimes/:id', 'ShowtimeController@delete'); // Manager
 $router->get('/api/showtimes/:id/seats', 'ShowtimeController@getAvailableSeats');
+$router->get('/api/showtimes/:id/seat-map', 'ShowtimeController@getSeatMap');
 
 // ============================================
 // BOOKING ROUTES

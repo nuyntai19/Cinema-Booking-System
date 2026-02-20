@@ -6,7 +6,7 @@ export type MembershipTier = "bronze" | "silver" | "gold" | "platinum";
 
 export type SeatType = "standard" | "vip" | "couple";
 
-export type SeatStatus = "available" | "selected" | "held" | "sold";
+export type SeatStatus = "available" | "selected" | "held" | "sold" | "maintenance";
 
 export type TicketStatus = "holding" | "sold" | "used" | "refunded";
 
@@ -93,7 +93,12 @@ export interface Showtime {
   roomId: string;
   date: string;
   time: string;
-  endTime?: string; // Thời gian kết thúc suất chiếu
+  endTime?: string;
+  start_time?: string; // For API compatibility
+  hall?: string; // For UI display
+  cinema?: string; // For UI display
+  hall_name?: string; // For API compatibility
+  cinema_name?: string; // For API compatibility
   price: {
     standard: number;
     vip: number;

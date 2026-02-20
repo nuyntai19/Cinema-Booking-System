@@ -38,6 +38,7 @@ import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminReviews from "./pages/admin/AdminReviews";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminSeatManagement from "./pages/admin/AdminSeatManagement";
 import ManagerLayout from "./components/manager/ManagerLayout";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import StaffLayout from "./components/staff/StaffLayout";
@@ -103,6 +104,7 @@ const App = () => (
                     element={<AdminNotifications />}
                   />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="seats" element={<AdminSeatManagement />} />
                 </Route>
 
                 {/* Manager Routes */}

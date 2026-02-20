@@ -9,9 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { movies, cinemas, generateShowtimes } from "@/data/mockData";
+
 import { useBooking } from "@/contexts/AppContext";
-import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api";
+import { API_ENDPOINTS, API_BASE_URL, apiCall } from "@/lib/api";
+import { Showtime } from "@/types/cinema";
 
 interface Genre {
   id: number;
@@ -42,6 +43,27 @@ const QuickBookingBar: React.FC = () => {
   const [moviesFromAPI, setMoviesFromAPI] = useState<MovieFromAPI[]>([]);
   const [loadingGenres, setLoadingGenres] = useState(false);
   const [loadingMovies, setLoadingMovies] = useState(false);
+
+  // Cinema & showtime states (from API)
+  interface APICinema {
+    id: number;
+    name: string;
+    address: string;
+  }
+  interface APIShowtime {
+    id: number;
+    movie_id: number;
+    cinema_id: number;
+    cinema_name: string;
+    hall_name: string;
+    start_time: string;
+    total_seats: number;
+    base_price?: number;
+  }
+  const [apiCinemas, setApiCinemas] = useState<APICinema[]>([]);
+  const [apiShowtimes, setApiShowtimes] = useState<Showtime[]>([]);
+  const [loadingCinemas, setLoadingCinemas] = useState(false);
+  const [loadingShowtimes, setLoadingShowtimes] = useState(false);
 
   // Fetch genres from API
   useEffect(() => {
@@ -90,10 +112,73 @@ const QuickBookingBar: React.FC = () => {
     fetchMovies();
   }, [genreId]);
 
-  const nowShowingMovies =
-    moviesFromAPI.length > 0
-      ? moviesFromAPI
-      : movies.filter((m) => m.isNowShowing);
+  // Fetch cinemas from API
+  useEffect(() => {
+    const fetchCinemas = async () => {
+      setLoadingCinemas(true);
+      try {
+        const response = await apiCall<{ success: boolean; data: { cinemas: APICinema[] } }>(
+          API_ENDPOINTS.CINEMAS
+        );
+        setApiCinemas(response.data?.cinemas || []);
+      } catch (error) {
+        console.error("Error fetching cinemas:", error);
+      } finally {
+        setLoadingCinemas(false);
+      }
+    };
+    fetchCinemas();
+  }, []);
+
+  // Fetch showtimes from API when movie, cinema, and date are selected
+  useEffect(() => {
+    const fetchShowtimes = async () => {
+      if (!movieId || !cinemaId || !date) {
+        setApiShowtimes([]);
+        return;
+      }
+      setLoadingShowtimes(true);
+      try {
+        const params = new URLSearchParams();
+        params.append("movie_id", movieId);
+        params.append("cinema_id", cinemaId);
+        params.append("date", date);
+        params.append("limit", "50");
+        const response = await apiCall<{ success: boolean; data: { showtimes: APIShowtime[] } }>(
+          `${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`
+        );
+        const rawShowtimes = response.data?.showtimes || [];
+        const mapped: Showtime[] = rawShowtimes.map((s) => {
+          const startDate = new Date(s.start_time);
+          return {
+            id: String(s.id),
+            movieId: String(s.movie_id),
+            cinemaId: String(s.cinema_id),
+            roomId: s.hall_name,
+            date: startDate.toISOString().split("T")[0],
+            time: startDate.toTimeString().slice(0, 5),
+            price: {
+              standard: s.base_price || 90000,
+              vip: (s.base_price || 90000) * 1.5,
+              couple: (s.base_price || 90000) * 2,
+            },
+            availableSeats: s.total_seats || 0,
+            totalSeats: s.total_seats || 0,
+          };
+        });
+        setApiShowtimes(mapped);
+      } catch (error) {
+        console.error("Error fetching showtimes:", error);
+        setApiShowtimes([]);
+      } finally {
+        setLoadingShowtimes(false);
+      }
+    };
+    fetchShowtimes();
+  }, [movieId, cinemaId, date]);
+
+  // Available times from API showtimes
+  const availableTimes = [...new Set(apiShowtimes.map((s) => s.time))];
 
   // Generate dates for next 7 days
   const dates = Array.from({ length: 7 }, (_, i) => {
@@ -107,24 +192,17 @@ const QuickBookingBar: React.FC = () => {
           : i === 1
             ? "Ngày mai"
             : d.toLocaleDateString("vi-VN", {
-                weekday: "short",
-                day: "2-digit",
-                month: "2-digit",
-              }),
+              weekday: "short",
+              day: "2-digit",
+              month: "2-digit",
+            }),
     };
   });
-
-  // Generate showtimes based on selection
-  const showtimes =
-    movieId && cinemaId ? generateShowtimes(movieId, cinemaId) : [];
-  const availableTimes = date
-    ? [...new Set(showtimes.filter((s) => s.date === date).map((s) => s.time))]
-    : [];
 
   const handleBooking = () => {
     if (!movieId || !cinemaId || !date || !time) return;
 
-    const showtime = showtimes.find((s) => s.date === date && s.time === time);
+    const showtime = apiShowtimes.find((s) => s.time === time);
     if (showtime) {
       setSelectedMovie(movieId);
       setSelectedCinema(cinemaId);
@@ -172,49 +250,27 @@ const QuickBookingBar: React.FC = () => {
               />
             </SelectTrigger>
             <SelectContent>
-              {moviesFromAPI.length > 0
-                ? moviesFromAPI.map((movie) => (
-                    <SelectItem key={movie.id} value={movie.id.toString()}>
-                      <span className="flex items-center gap-2">
-                        {movie.age_rating && (
-                          <span
-                            className={`age-badge text-[10px] px-1.5 py-0 ${
-                              movie.age_rating === "P"
-                                ? "age-p"
-                                : movie.age_rating === "T13"
-                                  ? "age-t13"
-                                  : movie.age_rating === "T16"
-                                    ? "age-t16"
-                                    : "age-t18"
-                            }`}
-                          >
-                            {movie.age_rating}
-                          </span>
-                        )}
-                        {movie.title}
-                      </span>
-                    </SelectItem>
-                  ))
-                : nowShowingMovies.map((movie) => (
-                    <SelectItem key={movie.id} value={movie.id}>
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={`age-badge text-[10px] px-1.5 py-0 ${
-                            movie.ageRating === "P"
-                              ? "age-p"
-                              : movie.ageRating === "T13"
-                                ? "age-t13"
-                                : movie.ageRating === "T16"
-                                  ? "age-t16"
-                                  : "age-t18"
+              {moviesFromAPI.map((movie) => (
+                <SelectItem key={movie.id} value={movie.id.toString()}>
+                  <span className="flex items-center gap-2">
+                    {movie.age_rating && (
+                      <span
+                        className={`age-badge text-[10px] px-1.5 py-0 ${movie.age_rating === "P"
+                          ? "age-p"
+                          : movie.age_rating === "T13"
+                            ? "age-t13"
+                            : movie.age_rating === "T16"
+                              ? "age-t16"
+                              : "age-t18"
                           }`}
-                        >
-                          {movie.ageRating}
-                        </span>
-                        {movie.title}
+                      >
+                        {movie.age_rating}
                       </span>
-                    </SelectItem>
-                  ))}
+                    )}
+                    {movie.title}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -224,14 +280,14 @@ const QuickBookingBar: React.FC = () => {
           <Select
             value={cinemaId}
             onValueChange={setCinemaId}
-            disabled={!movieId}
+            disabled={!movieId || loadingCinemas}
           >
             <SelectTrigger className="h-12 bg-background">
-              <SelectValue placeholder="Chọn rạp" />
+              <SelectValue placeholder={loadingCinemas ? "Đang tải..." : "Chọn rạp"} />
             </SelectTrigger>
             <SelectContent>
-              {cinemas.map((cinema) => (
-                <SelectItem key={cinema.id} value={cinema.id}>
+              {apiCinemas.map((cinema) => (
+                <SelectItem key={cinema.id} value={cinema.id.toString()}>
                   {cinema.name}
                 </SelectItem>
               ))}

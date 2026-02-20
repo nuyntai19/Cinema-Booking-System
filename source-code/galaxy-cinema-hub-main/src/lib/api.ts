@@ -36,10 +36,17 @@ export const API_ENDPOINTS = {
   CINEMAS: `${API_BASE_URL}/api/cinemas`,
   CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/api/cinemas/${id}`,
   CINEMA_HALLS: (id: number) => `${API_BASE_URL}/api/cinemas/${id}/halls`,
+  CINEMA_SHOWTIMES: (id: number) => `${API_BASE_URL}/api/cinemas/${id}/showtimes`,
+
+  // Halls
+  HALLS: `${API_BASE_URL}/api/halls`,
+  HALL_DETAIL: (id: number) => `${API_BASE_URL}/api/halls/${id}`,
+  HALL_LAYOUT: (id: number) => `${API_BASE_URL}/api/halls/${id}/layout`,
 
   // Showtimes
   SHOWTIMES: `${API_BASE_URL}/api/showtimes`,
   SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seats`,
+  SHOWTIME_SEAT_MAP: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
 
   // Bookings
   BOOKINGS: `${API_BASE_URL}/api/bookings`,
