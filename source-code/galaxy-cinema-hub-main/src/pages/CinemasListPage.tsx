@@ -14,6 +14,8 @@ interface Cinema {
   id: number;
   name: string;
   address: string;
+  lat?: number;
+  lng?: number;
   hotline?: string;
   status?: string;
   manager_name?: string;

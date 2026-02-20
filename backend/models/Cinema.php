@@ -100,12 +100,21 @@ class Cinema
     public function create($data)
     {
         try {
-            $sql = "INSERT INTO {$this->table} (name, address, hotline, status, manager_id) 
-                    VALUES (:name, :address, :hotline, :status, :manager_id)";
+            $sql = "INSERT INTO {$this->table} (name, address, street, district, city, lat, lng, hotline, status, manager_id) 
+                    VALUES (:name, :address, :street, :district, :city, :lat, :lng, :hotline, :status, :manager_id)";
 
             $stmt = $this->db->prepare($sql);
             $stmt->bindParam(':name', $data['name']);
             $stmt->bindParam(':address', $data['address']);
+            $stmt->bindParam(':street', $data['street']);
+            $stmt->bindParam(':district', $data['district']);
+            $stmt->bindParam(':city', $data['city']);
+
+            $lat = $data['lat'] ?? null;
+            $lng = $data['lng'] ?? null;
+            $stmt->bindParam(':lat', $lat, $lat !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+            $stmt->bindParam(':lng', $lng, $lng !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+
             $hotline = $data['hotline'] ?? null;
             $stmt->bindParam(':hotline', $hotline, $hotline ? PDO::PARAM_STR : PDO::PARAM_NULL);
             $status = $data['status'] ?? 'active';
@@ -131,13 +140,13 @@ class Cinema
     {
         try {
             // Whitelist các trường được phép cập nhật
-            $allowedFields = ['name', 'address', 'hotline', 'manager_id', 'status'];
+            $allowedFields = ['name', 'address', 'street', 'district', 'city', 'lat', 'lng', 'hotline', 'manager_id', 'status'];
             $fields = [];
             $params = [':id' => $id];
 
             foreach ($allowedFields as $field) {
-                if ($field === 'manager_id') {
-                    // manager_id cho phép null
+                if (in_array($field, ['manager_id', 'lat', 'lng', 'street', 'district', 'city', 'hotline'])) {
+                    // Các trường cho phép null
                     if (array_key_exists($field, $data)) {
                         $fields[] = "$field = :$field";
                         $params[":$field"] = $data[$field];

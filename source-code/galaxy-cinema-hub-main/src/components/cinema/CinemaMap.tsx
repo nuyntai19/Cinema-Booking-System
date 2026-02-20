@@ -38,46 +38,64 @@ const CinemaMap: React.FC<CinemaMapProps> = ({ cinemas, className }) => {
         };
     }, [maptilerKey]);
 
+    const markersRef = useRef<maplibregl.Marker[]>([]);
+
     useEffect(() => {
         if (!map.current) return;
 
-        // Clear existing markers if any (a bit complex with maplibre, usually done by keeping refs)
-        // For simplicity, we'll just add markers for now.
-
-        cinemas.forEach((cinema) => {
-            // If we have coordinates, use them. Otherwise, we'd need a geocoder.
-            // Since we don't have coords in the DB yet, we'll use some mock coords if they match known addresses
-            // or just center the map if we find one.
-
-            let coords: [number, number] | null = null;
-
-            // Simple geocoding fallback/mock for demo purposes if coordinates are missing
-            if (cinema.lat && cinema.lng) {
-                coords = [cinema.lng, cinema.lat];
-            } else if (cinema.address.includes("Nguyễn Du")) {
-                coords = [106.6946, 10.7711];
-            } else if (cinema.address.includes("Tân Bình")) {
-                coords = [106.6547, 10.7984];
-            } else if (cinema.address.includes("Gò Vấp")) {
-                coords = [106.6778, 10.8285];
+        const geocodeAddress = async (address: string): Promise<[number, number] | null> => {
+            try {
+                const response = await fetch(
+                    `https://api.maptiler.com/geocoding/${encodeURIComponent(address)}.json?key=${maptilerKey}&limit=1`
+                );
+                const data = await response.json();
+                if (data.features && data.features.length > 0) {
+                    return data.features[0].center;
+                }
+                return null;
+            } catch (error) {
+                console.error("Geocoding error:", error);
+                return null;
             }
+        };
 
-            if (coords) {
-                const marker = new maplibregl.Marker({ color: "#e11d48" })
-                    .setLngLat(coords)
-                    .setPopup(
-                        new maplibregl.Popup({ offset: 25 })
-                            .setHTML(`<h3>${cinema.name}</h3><p>${cinema.address}</p>`)
-                    )
-                    .addTo(map.current!);
+        const updateMarkers = async () => {
+            // Remove existing markers
+            markersRef.current.forEach(marker => marker.remove());
+            markersRef.current = [];
+
+            const newMarkers: maplibregl.Marker[] = [];
+
+            for (const cinema of cinemas) {
+                let coords: [number, number] | null = null;
+
+                if (cinema.lat && cinema.lng) {
+                    coords = [cinema.lng, cinema.lat];
+                } else {
+                    coords = await geocodeAddress(cinema.address);
+                }
+
+                if (coords && map.current) {
+                    const marker = new maplibregl.Marker({ color: "#e11d48" })
+                        .setLngLat(coords)
+                        .setPopup(
+                            new maplibregl.Popup({ offset: 25 })
+                                .setHTML(`<h3>${cinema.name}</h3><p>${cinema.address}</p>`)
+                        )
+                        .addTo(map.current);
+                    newMarkers.push(marker);
+                }
             }
-        });
+            markersRef.current = newMarkers;
+        };
 
-        // Fit bounds if there are markers
-        if (cinemas.length > 0) {
-            // basic zoom to first cinema for now
-        }
-    }, [cinemas]);
+        updateMarkers();
+
+        return () => {
+            // Clean up markers on unmount
+            markersRef.current.forEach(marker => marker.remove());
+        };
+    }, [cinemas, maptilerKey]);
 
     return (
         <div ref={mapContainer} className={`w-full h-full rounded-lg ${className}`} />

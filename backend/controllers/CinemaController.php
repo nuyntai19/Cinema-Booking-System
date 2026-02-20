@@ -139,7 +139,7 @@ class CinemaController
             $input = json_decode(file_get_contents('php://input'), true);
 
             // Validate required fields
-            $requiredFields = ['name', 'address'];
+            $requiredFields = ['name', 'address', 'street', 'district', 'city'];
             foreach ($requiredFields as $field) {
                 if (empty($input[$field])) {
                     return Response::error("Thiếu trường bắt buộc: {$field}", 400);
@@ -189,7 +189,7 @@ class CinemaController
             }
 
             // Whitelist allowed fields
-            $allowedFields = ['name', 'address', 'hotline', 'manager_id', 'status'];
+            $allowedFields = ['name', 'address', 'street', 'district', 'city', 'lat', 'lng', 'hotline', 'manager_id', 'status'];
             $filteredInput = array_intersect_key($input, array_flip($allowedFields));
 
             if (empty($filteredInput)) {
