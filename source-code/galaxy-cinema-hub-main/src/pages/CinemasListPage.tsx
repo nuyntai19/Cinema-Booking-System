@@ -8,6 +8,7 @@ import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useToast } from "@/hooks/use-toast";
+import CinemaMap from "@/components/cinema/CinemaMap";
 
 interface Cinema {
   id: number;
@@ -203,16 +204,7 @@ const CinemasPage: React.FC = () => {
             <CardContent className="p-0 overflow-hidden">
               <h2 className="text-xl font-bold p-6 border-b">Bản đồ hệ thống rạp</h2>
               <div className="aspect-video w-full">
-                <iframe
-                  title="Galaxy Cinema Locations"
-                  src="https://www.google.com/maps/embed?pb=!1m16!1m12!1m12!1m3!1d125414.5901594916!2d106.62966212879025!3d10.795537877292212!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sgalaxy%20cinema!5e0!3m2!1svi!2svn!4v1708346734567!5m2!1svi!2svn"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  allowFullScreen
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                ></iframe>
+                <CinemaMap cinemas={cinemas} />
               </div>
             </CardContent>
           </Card>
