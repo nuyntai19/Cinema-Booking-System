@@ -125,8 +125,8 @@ $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getB
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
-$router->post('/api/transactions/momo/create', 'TransactionController@createMoMoPayment');
-$router->post('/api/transactions/vnpay/create', 'TransactionController@createVNPayPayment');
+$router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
+$router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
 
 // ============================================
 // TICKET ROUTES

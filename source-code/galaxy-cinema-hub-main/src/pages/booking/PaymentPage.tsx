@@ -10,6 +10,7 @@ import { useBooking } from '@/contexts/AppContext';
 import { movies } from '@/data/mockData';
 import { PaymentMethod } from '@/types/cinema';
 import { cn } from '@/lib/utils';
+import { API_ENDPOINTS, apiCall } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedMovie, selectedSeats, concessions, clearBooking } = useBooking();
-  
+
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
   const [promoCode, setPromoCode] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -66,6 +67,50 @@ const PaymentPage: React.FC = () => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const processPayment = async (gateway: string) => {
+    setIsProcessing(true);
+    try {
+      if (gateway === 'momo') {
+        // Simulate MoMo payment processing
+        await apiCall(API_ENDPOINTS.MOMO_PAYMENT, {
+          method: 'POST',
+          body: JSON.stringify({
+            amount: grandTotal,
+            movieId: movie?.id,
+            seats: selectedSeats.map(s => s.id),
+            concessions: concessions.map(c => ({ id: c.id, quantity: c.quantity })),
+            promoCode: discount > 0 ? promoCode : null,
+          }),
+        });
+      } else if (gateway === 'vnpay') {
+        // Simulate VNPay payment processing
+        await apiCall(API_ENDPOINTS.VNPAY_PAYMENT, {
+          method: 'POST',
+          body: JSON.stringify({
+            amount: grandTotal,
+            movieId: movie?.id,
+            seats: selectedSeats.map(s => s.id),
+            concessions: concessions.map(c => ({ id: c.id, quantity: c.quantity })),
+            promoCode: discount > 0 ? promoCode : null,
+          }),
+        });
+      } else {
+        throw new Error('Invalid payment gateway');
+      }
+      // Simulate API call to create transaction
+      setShowQRModal(true);
+      setQRTimeLeft(300);
+    } catch (error) {
+      toast({
+        title: 'Thanh toán thất bại',
+        description: 'Đã có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
 
   const handleApplyPromo = () => {
     if (promoCode.toUpperCase() === 'SUMMER20') {
@@ -118,7 +163,7 @@ const PaymentPage: React.FC = () => {
 
   const paymentMethods = [
     { value: 'momo', label: 'Ví MoMo', icon: Smartphone, color: 'bg-pink-500' },
-    { value: 'atm', label: 'Thẻ ATM nội địa', icon: Building2, color: 'bg-blue-500' },
+    { value: 'vnpay', label: 'VNPay', icon: Building2, color: 'bg-blue-500' },
     { value: 'visa', label: 'Visa / Mastercard', icon: CreditCard, color: 'bg-purple-500' },
   ];
 
@@ -134,7 +179,7 @@ const PaymentPage: React.FC = () => {
           <div className="space-y-6">
             <div className="bg-card rounded-xl border border-border p-6">
               <h2 className="font-bold text-lg mb-4">Phương Thức Thanh Toán</h2>
-              
+
               <RadioGroup
                 value={paymentMethod}
                 onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
@@ -234,7 +279,7 @@ const PaymentPage: React.FC = () => {
             </div>
 
             <Button
-              onClick={handlePayment}
+              onClick={processPayment.bind('momo')}
               className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >
               Tiến Hành Thanh Toán
