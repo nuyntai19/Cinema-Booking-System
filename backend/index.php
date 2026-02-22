@@ -7,7 +7,12 @@
 
 // Error reporting for development
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
+ini_set('log_errors', 1);     // Log errors instead
+
+// Start output buffering to catch any unexpected output
+ob_start();
+file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -27,7 +32,6 @@ require_once __DIR__ . '/config/Config.php';
 require_once __DIR__ . '/core/Router.php';
 require_once __DIR__ . '/core/Response.php';
 require_once __DIR__ . '/middleware/AuthMiddleware.php';
-require_once __DIR__ . '/middleware/CorsMiddleware.php';
 
 // Auto-load controllers and models
 spl_autoload_register(function ($class) {
@@ -55,22 +59,44 @@ $router->get('/api/health', function () {
 });
 
 // ============================================
+// HALL ROUTES
+// ============================================
+$router->post('/api/halls', 'HallController@create'); // Admin
+$router->get('/api/halls/:id', 'HallController@show'); // Admin
+$router->put('/api/halls/:id', 'HallController@update'); // Admin
+$router->delete('/api/halls/:id', 'HallController@delete'); // Admin
+$router->post('/api/halls/:id/layout', 'HallController@saveLayout'); // Admin
+
+// ============================================
 // AUTH ROUTES
 // ============================================
+$router->post('/api/auth/send-verification', 'AuthController@sendVerification');
+$router->post('/api/auth/verify-email', 'AuthController@verifyEmail');
 $router->post('/api/auth/register', 'AuthController@register');
 $router->post('/api/auth/login', 'AuthController@login');
 $router->post('/api/auth/logout', 'AuthController@logout');
+$router->post('/api/auth/refresh-token', 'AuthController@refreshToken');
 $router->get('/api/auth/me', 'AuthController@getCurrentUser'); // Protected
 
 // ============================================
 // USER ROUTES
 // ============================================
-$router->get('/api/users', 'UserController@index'); // Admin only
-$router->get('/api/users/:id', 'UserController@show');
-$router->put('/api/users/:id', 'UserController@update');
+// Admin routes
+$router->get('/api/users', 'UserController@index'); // Admin only - List users
+$router->post('/api/users', 'UserController@create'); // Admin only - Create user
+$router->get('/api/users/:id', 'UserController@show'); // Admin or self
+$router->put('/api/users/:id', 'UserController@update'); // Admin or self
 $router->delete('/api/users/:id', 'UserController@delete'); // Admin only
-$router->get('/api/users/:id/profile', 'UserController@getProfile');
-$router->put('/api/users/:id/profile', 'UserController@updateProfile');
+$router->put('/api/users/:id/role', 'UserController@updateRole'); // Admin only
+
+// User profile routes
+$router->get('/api/users/:id/profile', 'UserController@getProfile'); // Self only
+$router->put('/api/users/:id/profile', 'UserController@updateProfile'); // Self only
+$router->post('/api/users/:id/change-password', 'UserController@changePassword'); // Self only
+$router->post('/api/users/:id/upload-avatar', 'UserController@uploadAvatar'); // Self only
+
+// Role routes
+$router->get('/api/roles', 'RoleController@index'); // Get all roles
 
 // ============================================
 // MOVIE ROUTES
@@ -92,6 +118,8 @@ $router->post('/api/cinemas', 'CinemaController@create'); // Admin
 $router->put('/api/cinemas/:id', 'CinemaController@update'); // Admin
 $router->delete('/api/cinemas/:id', 'CinemaController@delete'); // Admin
 $router->get('/api/cinemas/:id/halls', 'CinemaController@getHalls');
+$router->get('/api/cinemas/:id/showtimes', 'CinemaController@getShowtimes');
+
 
 // ============================================
 // SHOWTIME ROUTES
@@ -102,6 +130,7 @@ $router->post('/api/showtimes', 'ShowtimeController@create'); // Manager
 $router->put('/api/showtimes/:id', 'ShowtimeController@update'); // Manager
 $router->delete('/api/showtimes/:id', 'ShowtimeController@delete'); // Manager
 $router->get('/api/showtimes/:id/seats', 'ShowtimeController@getAvailableSeats');
+$router->get('/api/showtimes/:id/seat-map', 'ShowtimeController@getSeatMap');
 
 // ============================================
 // BOOKING ROUTES

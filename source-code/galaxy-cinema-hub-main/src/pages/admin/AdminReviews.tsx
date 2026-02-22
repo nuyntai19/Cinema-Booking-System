@@ -1,5 +1,13 @@
-import React, { useState } from "react";
-import { Search, Star, Trash2, CheckCircle, XCircle, Flag } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Star,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Flag,
+  Loader2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,19 +29,21 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 interface Review {
-  id: string;
-  movieId: string;
-  movieTitle: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
+  id: number;
+  movie_id: number;
+  movie_title: string;
+  user_id: number;
+  email: string;
+  full_name: string | null;
+  avatar: string | null;
   rating: number;
   comment: string;
-  createdAt: string;
-  status: "approved" | "pending" | "rejected" | "reported";
-  helpful: number;
+  created_at: string;
+  status: "Approved" | "Pending" | "Rejected" | "Reported";
+  helpful_count?: number;
 }
 
 const AdminReviews: React.FC = () => {
@@ -41,130 +51,147 @@ const AdminReviews: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRating, setFilterRating] = useState("all");
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [reviews, setReviews] = useState<Review[]>([
-    {
-      id: "1",
-      movieId: "movie-1",
-      movieTitle: "MAI",
-      userId: "user-1",
-      userName: "Nguyễn Văn A",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user1",
-      rating: 5,
-      comment:
-        "Phim rất hay, diễn xuất tốt. Câu chuyện cảm động và ý nghĩa. Đáng xem!",
-      createdAt: "2026-01-23T10:30:00",
-      status: "approved",
-      helpful: 24,
-    },
-    {
-      id: "2",
-      movieId: "movie-2",
-      movieTitle: "Kung Fu Panda 4",
-      userId: "user-2",
-      userName: "Trần Thị B",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user2",
-      rating: 4,
-      comment: "Phim vui nhộn, phù hợp với cả gia đình. Đồ họa đẹp mắt.",
-      createdAt: "2026-01-22T15:20:00",
-      status: "approved",
-      helpful: 18,
-    },
-    {
-      id: "3",
-      movieId: "movie-3",
-      movieTitle: "Dune: Part Two",
-      userId: "user-3",
-      userName: "Lê Văn C",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user3",
-      rating: 5,
-      comment:
-        "Siêu phẩm điện ảnh! Hình ảnh hoành tráng, âm nhạc đỉnh cao. Must watch!",
-      createdAt: "2026-01-21T09:15:00",
-      status: "pending",
-      helpful: 0,
-    },
-    {
-      id: "4",
-      movieId: "movie-1",
-      movieTitle: "MAI",
-      userId: "user-4",
-      userName: "Phạm Thị D",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user4",
-      rating: 2,
-      comment: "Phim không hay, nội dung chán. Lãng phí tiền.",
-      createdAt: "2026-01-20T14:45:00",
-      status: "reported",
-      helpful: 3,
-    },
-    {
-      id: "5",
-      movieId: "movie-4",
-      movieTitle: "Đào, Phở và Piano",
-      userId: "user-5",
-      userName: "Hoàng Văn E",
-      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user5",
-      rating: 4,
-      comment: "Phim hay, tái hiện lịch sử tốt. Diễn xuất xuất sắc.",
-      createdAt: "2026-01-19T11:20:00",
-      status: "approved",
-      helpful: 15,
-    },
-  ]);
+  useEffect(() => {
+    fetchReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchReviews = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (filterStatus !== "all") params.append("status", filterStatus);
+      if (filterRating !== "all") params.append("rating", filterRating);
+
+      const response = await apiCall<{
+        success: boolean;
+        data: {
+          reviews: Review[];
+        };
+      }>(
+        `${API_ENDPOINTS.REVIEWS}${params.toString() ? `?${params.toString()}` : ""}`,
+        {
+          method: "GET",
+        },
+      );
+
+      if (response.success && response.data) {
+        setReviews(response.data.reviews || []);
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách đánh giá",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredReviews = reviews.filter((review) => {
+    const displayName = review.full_name || review.email;
     const matchesSearch =
-      review.movieTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      review.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (review.movie_title?.toLowerCase() || "").includes(
+        searchQuery.toLowerCase(),
+      ) ||
+      displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       review.comment.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
-      filterStatus === "all" || review.status === filterStatus;
+      filterStatus === "all" ||
+      review.status.toLowerCase() === filterStatus.toLowerCase();
     const matchesRating =
       filterRating === "all" || review.rating.toString() === filterRating;
     return matchesSearch && matchesStatus && matchesRating;
   });
 
-  const handleApprove = (id: string, movieTitle: string) => {
-    setReviews(
-      reviews.map((r) =>
-        r.id === id ? { ...r, status: "approved" as const } : r,
-      ),
-    );
-    toast({
-      title: "Đã duyệt đánh giá",
-      description: `Đánh giá cho phim "${movieTitle}" đã được phê duyệt`,
-    });
+  const handleApprove = async (id: number, movieTitle: string) => {
+    try {
+      await apiCall(API_ENDPOINTS.REVIEW_APPROVE(id), {
+        method: "PUT",
+      });
+
+      setReviews(
+        reviews.map((r) =>
+          r.id === id ? { ...r, status: "Approved" as const } : r,
+        ),
+      );
+      toast({
+        title: "Đã duyệt đánh giá",
+        description: `Đánh giá cho phim "${movieTitle}" đã được phê duyệt`,
+      });
+    } catch (error) {
+      console.error("Error approving review:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể duyệt đánh giá",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleReject = (id: string, movieTitle: string) => {
-    setReviews(
-      reviews.map((r) =>
-        r.id === id ? { ...r, status: "rejected" as const } : r,
-      ),
-    );
-    toast({
-      title: "Đã từ chối đánh giá",
-      description: `Đánh giá cho phim "${movieTitle}" đã bị từ chối`,
-      variant: "destructive",
-    });
+  const handleReject = async (id: number, movieTitle: string) => {
+    try {
+      await apiCall(API_ENDPOINTS.REVIEW_REJECT(id), {
+        method: "PUT",
+      });
+
+      setReviews(
+        reviews.map((r) =>
+          r.id === id ? { ...r, status: "Rejected" as const } : r,
+        ),
+      );
+      toast({
+        title: "Đã từ chối đánh giá",
+        description: `Đánh giá cho phim "${movieTitle}" đã bị từ chối`,
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error("Error rejecting review:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể từ chối đánh giá",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDelete = (id: string, movieTitle: string) => {
-    setReviews(reviews.filter((r) => r.id !== id));
-    toast({
-      title: "Đã xóa đánh giá",
-      description: `Đã xóa đánh giá cho phim "${movieTitle}"`,
-    });
+  const handleDelete = async (id: number, movieTitle: string) => {
+    try {
+      await apiCall(API_ENDPOINTS.REVIEW_DETAIL(id), {
+        method: "DELETE",
+      });
+
+      setReviews(reviews.filter((r) => r.id !== id));
+      toast({
+        title: "Đã xóa đánh giá",
+        description: `Đã xóa đánh giá cho phim "${movieTitle}"`,
+      });
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể xóa đánh giá",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
     const configs = {
-      approved: { color: "bg-green-500", label: "Đã duyệt", icon: CheckCircle },
-      pending: { color: "bg-yellow-500", label: "Chờ duyệt", icon: Star },
-      rejected: { color: "bg-red-500", label: "Từ chối", icon: XCircle },
-      reported: { color: "bg-orange-500", label: "Báo cáo", icon: Flag },
+      Approved: { color: "bg-green-500", label: "Đã duyệt", icon: CheckCircle },
+      Pending: { color: "bg-yellow-500", label: "Chờ duyệt", icon: Star },
+      Rejected: { color: "bg-red-500", label: "Từ chối", icon: XCircle },
+      Reported: { color: "bg-orange-500", label: "Báo cáo", icon: Flag },
     };
     const config = configs[status as keyof typeof configs];
+    if (!config) {
+      return <Badge>Unknown</Badge>;
+    }
     return (
       <Badge className={`${config.color} text-white gap-1`}>
         <config.icon className="w-3 h-3" />
@@ -194,9 +221,20 @@ const AdminReviews: React.FC = () => {
     return new Date(dateStr).toLocaleString("vi-VN");
   };
 
-  const avgRating = (
-    reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-  ).toFixed(1);
+  const avgRating =
+    reviews.length > 0
+      ? (
+          reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+        ).toFixed(1)
+      : "0.0";
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -231,7 +269,7 @@ const AdminReviews: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Chờ duyệt</p>
                 <p className="text-2xl font-bold">
-                  {reviews.filter((r) => r.status === "pending").length}
+                  {reviews.filter((r) => r.status === "Pending").length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center">
@@ -261,7 +299,7 @@ const AdminReviews: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Báo cáo</p>
                 <p className="text-2xl font-bold">
-                  {reviews.filter((r) => r.status === "reported").length}
+                  {reviews.filter((r) => r.status === "Reported").length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center">
@@ -330,72 +368,92 @@ const AdminReviews: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredReviews.map((review) => (
-                <TableRow key={review.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={review.userAvatar} />
-                        <AvatarFallback>
-                          {review.userName.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{review.userName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {review.movieTitle}
-                  </TableCell>
-                  <TableCell>{renderStars(review.rating)}</TableCell>
-                  <TableCell>
-                    <p className="text-sm max-w-md line-clamp-2">
-                      {review.comment}
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {review.helpful}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(review.status)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDateTime(review.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {review.status === "pending" && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleApprove(review.id, review.movieTitle)
-                            }
-                          >
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleReject(review.id, review.movieTitle)
-                            }
-                          >
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          handleDelete(review.id, review.movieTitle)
-                        }
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
+              {filteredReviews.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    Không có đánh giá nào
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredReviews.map((review) => {
+                  const displayName = review.full_name || review.email;
+                  return (
+                    <TableRow key={review.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={review.avatar || undefined} />
+                            <AvatarFallback>
+                              {displayName.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{displayName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {review.movie_title || "N/A"}
+                      </TableCell>
+                      <TableCell>{renderStars(review.rating)}</TableCell>
+                      <TableCell>
+                        <p className="text-sm max-w-md line-clamp-2">
+                          {review.comment}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {review.helpful_count || 0}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(review.status)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDateTime(review.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {review.status === "Pending" && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  handleApprove(
+                                    review.id,
+                                    review.movie_title || "",
+                                  )
+                                }
+                              >
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  handleReject(
+                                    review.id,
+                                    review.movie_title || "",
+                                  )
+                                }
+                              >
+                                <XCircle className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              handleDelete(review.id, review.movie_title || "")
+                            }
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>

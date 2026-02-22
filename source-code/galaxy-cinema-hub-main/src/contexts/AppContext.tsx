@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { User, Booking, Seat, ConcessionItem, Showtime } from '@/types/cinema';
-import { demoUsers } from '@/data/mockData';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User, Booking, Seat, ConcessionItem, Showtime, UserRole } from '@/types/cinema';
+import { API_ENDPOINTS } from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; user?: User }>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -29,31 +30,130 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    const credentials: Record<string, string> = {
-      'admin@cinema.com': 'admin123',
-      'staff@cinema.com': 'staff123',
-      'client@gmail.com': 'client123',
-    };
-
-    if (credentials[email] === password) {
-      const foundUser = demoUsers.find(u => u.email === email);
-      if (foundUser) {
-        setUser(foundUser);
-        return true;
+  // Initialize user synchronously from localStorage to prevent race conditions
+  // (e.g., AdminLayout checking isAuthenticated before useEffect runs)
+  const [user, setUser] = useState<User | null>(() => {
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
+      try {
+        return JSON.parse(savedUser);
+      } catch (error) {
+        console.error('Failed to parse saved user:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        return null;
       }
     }
-    return false;
+    return null;
+  });
+
+  // Helper function to map role_id to role
+  const mapRoleIdToRole = (roleId: number): UserRole => {
+    switch (roleId) {
+      case 5: return 'admin';
+      case 4: return 'manager';
+      case 3: return 'staff';
+      case 2:
+      case 1:
+      default: return 'client';
+    }
+  };
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; user?: User }> => {
+    try {
+      const response = await fetch(API_ENDPOINTS.LOGIN, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Login failed:', data.message);
+        return { success: false };
+      }
+
+      // Map backend response to User type
+      const userData: User = {
+        id: data.data.user.id.toString(),
+        name: data.data.user.full_name,
+        email: data.data.user.email,
+        role: mapRoleIdToRole(data.data.user.role_id),
+        avatar: data.data.user.avatar || undefined,
+        loyaltyPoints: data.data.user.current_points || 0,
+        phone: data.data.user.phone,
+        dob: data.data.user.dob,
+      };
+
+      // Save token and user to localStorage
+      localStorage.setItem('token', data.data.token);
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      setUser(userData);
+      return { success: true, user: userData };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false };
+    }
   };
 
   const logout = () => {
+    console.log('👋 Logging out...');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
+
+    // Redirect to home page
+    console.log('🏠 Redirecting to home page...');
+    window.location.href = '/';
+  };
+
+  const refreshUser = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No token found, cannot refresh user');
+        return;
+      }
+
+      console.log('🔄 Refreshing user data...');
+      const response = await fetch(API_ENDPOINTS.GET_CURRENT_USER, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      console.log('📦 Refreshed user data:', data);
+
+      if (data.success && data.data.user) {
+        const userData: User = {
+          id: data.data.user.id.toString(),
+          name: data.data.user.full_name,
+          email: data.data.user.email,
+          role: mapRoleIdToRole(data.data.user.role_id),
+          avatar: data.data.user.avatar || undefined,
+          loyaltyPoints: data.data.user.current_points || 0,
+          phone: data.data.user.phone,
+          dob: data.data.user.dob,
+        };
+
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        console.log('✅ User data refreshed successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing user:', error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, refreshUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

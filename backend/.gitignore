@@ -1,0 +1,23 @@
+# Environment files
+.env
+
+# Upload files
+uploads/*
+!uploads/.gitkeep
+!uploads/verification_codes.json
+
+# PHP
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Temporary files
+*.tmp
+*.temp
+*.cache

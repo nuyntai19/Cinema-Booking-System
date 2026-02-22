@@ -1,10 +1,11 @@
-import React from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Film,
   Users,
   Building2,
+  Armchair,
   Ticket,
   Coffee,
   Calendar,
@@ -23,14 +24,34 @@ import { useState } from "react";
 
 const AdminLayout: React.FC = () => {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Check authentication and redirect if not logged in or not admin
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    // Check if user is admin (role = 'admin')
+    if (user && user.role !== 'admin') {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Don't render anything while checking authentication
+  if (!isAuthenticated || !user || user.role !== 'admin') {
+    return null;
+  }
 
   const navItems = [
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: "Quản lý Phim", path: "/admin/movies", icon: Film },
     { label: "Người Dùng", path: "/admin/users", icon: Users },
     { label: "Quản lý Rạp", path: "/admin/cinemas", icon: Building2 },
+    { label: "Quản lý chỗ ngồi", path: "/admin/seats", icon: Armchair },
     { label: "Khuyến Mãi", path: "/admin/promotions", icon: Ticket },
     { label: "Bắp Nước", path: "/admin/concessions", icon: Coffee },
     { label: "Lịch Chiếu", path: "/admin/scheduler", icon: Calendar },

@@ -1,0 +1,10 @@
+-- Migration: Safely add detailed address fields and coordinates to cinemas table
+-- Optimized for modern MariaDB/MySQL (Supports IF NOT EXISTS in ALTER TABLE)
+
+USE galaxy_cinema;
+
+ALTER TABLE cinemas ADD COLUMN IF NOT EXISTS street VARCHAR(255) DEFAULT NULL;
+ALTER TABLE cinemas ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT NULL;
+ALTER TABLE cinemas ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT NULL;
+ALTER TABLE cinemas ADD COLUMN IF NOT EXISTS lat DECIMAL(10, 8) DEFAULT NULL;
+ALTER TABLE cinemas ADD COLUMN IF NOT EXISTS lng DECIMAL(11, 8) DEFAULT NULL;

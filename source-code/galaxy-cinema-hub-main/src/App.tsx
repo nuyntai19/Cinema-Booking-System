@@ -10,6 +10,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import BookingHistoryPage from "./pages/BookingHistoryPage";
 import SearchPage from "./pages/SearchPage";
@@ -26,6 +28,7 @@ import BookingFailedPage from "./pages/booking/BookingFailedPage";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminMovies from "./pages/admin/AdminMovies";
+import AdminMovieDetailPage from "./pages/admin/MovieDetailPage";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminCinemas from "./pages/admin/AdminCinemas";
 import AdminPromotions from "./pages/admin/AdminPromotions";
@@ -35,6 +38,9 @@ import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminReviews from "./pages/admin/AdminReviews";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminSeatManagement from "./pages/admin/AdminSeatManagement";
+import ManagerLayout from "./components/manager/ManagerLayout";
+import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
@@ -56,6 +62,11 @@ const App = () => (
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route
+                  path="/forgot-password"
+                  element={<ForgotPasswordPage />}
+                />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/bookings" element={<BookingHistoryPage />} />
                 <Route path="/search" element={<SearchPage />} />
@@ -80,6 +91,7 @@ const App = () => (
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<AdminDashboard />} />
                   <Route path="movies" element={<AdminMovies />} />
+                  <Route path="movies/:id" element={<AdminMovieDetailPage />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="cinemas" element={<AdminCinemas />} />
                   <Route path="promotions" element={<AdminPromotions />} />
@@ -92,6 +104,24 @@ const App = () => (
                     element={<AdminNotifications />}
                   />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="seats" element={<AdminSeatManagement />} />
+                </Route>
+
+                {/* Manager Routes */}
+                <Route path="/manager" element={<ManagerLayout />}>
+                  <Route index element={<ManagerDashboard />} />
+                  <Route path="movies" element={<AdminMovies />} />
+                  <Route path="cinemas" element={<AdminCinemas />} />
+                  <Route path="scheduler" element={<AdminScheduler />} />
+                  <Route path="concessions" element={<AdminConcessions />} />
+                  <Route path="promotions" element={<AdminPromotions />} />
+                  <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="reviews" element={<AdminReviews />} />
+                  <Route
+                    path="notifications"
+                    element={<AdminNotifications />}
+                  />
+                  <Route path="staff" element={<AdminUsers />} />
                 </Route>
 
                 {/* Staff Routes */}
