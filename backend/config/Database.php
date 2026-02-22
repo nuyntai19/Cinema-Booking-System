@@ -6,7 +6,7 @@ class Database {
     private static $instance = null;
     private $connection;
     
-    // Database credentials
+    // Database credentials (can be overridden by environment variables)
     private $host = 'localhost';
     private $db_name = 'galaxy_cinema';
     private $username = 'root';
@@ -14,6 +14,12 @@ class Database {
     private $charset = 'utf8mb4';
     
     private function __construct() {
+        $this->host = getenv('DB_HOST') ?: $this->host;
+        $this->db_name = getenv('DB_NAME') ?: $this->db_name;
+        $this->username = getenv('DB_USER') ?: $this->username;
+        $this->password = getenv('DB_PASSWORD') ?: $this->password;
+        $this->charset = getenv('DB_CHARSET') ?: $this->charset;
+
         try {
             $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset={$this->charset}";
             $options = [

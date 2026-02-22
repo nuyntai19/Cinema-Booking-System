@@ -23,6 +23,8 @@ class Config {
     // Booking Settings
     public static $seat_hold_duration = 600; // 10 minutes in seconds
     public static $min_vietnamese_quota = 15; // 15% minimum Vietnamese movies
+    public static $base_ticket_price = 90000; // Base ticket price (VND)
+    public static $holiday_dates = []; // Array of 'YYYY-MM-DD'
     
     // Loyalty Settings
     public static $points_per_vnd = 10000; // 10,000 VND = 1 point
