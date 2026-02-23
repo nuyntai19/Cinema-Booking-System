@@ -43,7 +43,9 @@ class PromotionController {
     }
 
     public function delete($id) {
-        $ok = $this->model->update($id, ['end_date' => date('Y-m-d', strtotime('-1 day'))]);
+        // Hard delete the promotion from database. This will also cascade to user_vouchers
+        // because the foreign key in `user_vouchers` is defined with ON DELETE CASCADE.
+        $ok = $this->model->delete($id);
         if (!$ok) return Response::error('Could not delete promotion', 500);
         return Response::success(['deleted' => true]);
     }

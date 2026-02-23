@@ -90,6 +90,18 @@ class Promotion {
         }
     }
 
+    public function delete($id) {
+        try {
+            $query = "DELETE FROM {$this->table} WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log('Promotion Delete Error: '.$e->getMessage());
+            return false;
+        }
+    }
+
     public function getActive() {
         return $this->getAll(['active' => true]);
     }

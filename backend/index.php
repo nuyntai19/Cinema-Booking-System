@@ -4,6 +4,9 @@
  * REST API for Cinema Booking System
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // Error reporting for development
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
