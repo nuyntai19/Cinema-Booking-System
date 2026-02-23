@@ -120,6 +120,8 @@ CREATE TABLE cinemas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     address TEXT NOT NULL,
+    hotline VARCHAR(20) DEFAULT NULL COMMENT 'Số hotline của rạp',
+    status ENUM('active', 'maintenance', 'closed') DEFAULT 'active' COMMENT 'Trạng thái hoạt động',
     manager_id INT NULL COMMENT 'FK -> users (role Manager)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

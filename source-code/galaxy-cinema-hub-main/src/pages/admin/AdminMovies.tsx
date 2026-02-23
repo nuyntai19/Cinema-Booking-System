@@ -1,5 +1,16 @@
-import React, { useState } from "react";
-import { Plus, Search, Edit, Trash2, Eye, Flag } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Eye,
+  Flag,
+  Loader2,
+  Upload,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,28 +40,112 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { movies as mockMovies } from "@/data/mockData";
+import { Textarea } from "@/components/ui/textarea";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
+interface Genre {
+  id: number;
+  name: string;
+}
+
 interface Movie {
-  id: string;
+  id: number;
   title: string;
   duration: number;
-  ageRating: string;
+  age_rating: string;
   origin: string;
-  poster: string;
-  genre: string[];
-  isNowShowing: boolean;
+  poster_url: string | null;
+  trailer_url: string | null;
+  description: string | null;
+  release_date: string;
+  status: string;
+  director?: string | null;
+  cast?: string | null;
+  genres?: Genre[] | string; // Can be array from detail endpoint or string from list endpoint
+  genre_ids?: string; // Comma-separated genre IDs from backend: "1,2,3"
+  rating?: number;
 }
 
 const AdminMovies: React.FC = () => {
   const { toast } = useToast();
-  const [movies, setMovies] = useState(mockMovies);
+  const navigate = useNavigate();
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [genres, setGenres] = useState<Genre[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+
+  // Form states for Add/Edit
+  const [formData, setFormData] = useState({
+    title: "",
+    duration: "",
+    age_rating: "P",
+    origin: "Vietnam",
+    poster_url: "",
+    trailer_url: "",
+    description: "",
+    release_date: "",
+    status: "Coming Soon",
+    director: "",
+    cast: "",
+    genre_ids: [] as number[],
+  });
+
+  // File upload state
+  const [posterFile, setPosterFile] = useState<File | null>(null);
+  const [uploadingPoster, setUploadingPoster] = useState(false);
+
+  // Fetch movies from API
+  useEffect(() => {
+    fetchMovies();
+    fetchGenres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      const response = await apiCall<{
+        success: boolean;
+        data: { movies: Movie[] };
+      }>(API_ENDPOINTS.MOVIES, {
+        method: "GET",
+      });
+      if (response.success && response.data && response.data.movies) {
+        setMovies(response.data.movies);
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể tải danh sách phim";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchGenres = async () => {
+    try {
+      const response = await apiCall<{
+        success: boolean;
+        data: { genres: Genre[] };
+      }>(API_ENDPOINTS.GENRES, {
+        method: "GET",
+      });
+      if (response.success && response.data && response.data.genres) {
+        setGenres(response.data.genres);
+      }
+    } catch (error: unknown) {
+      console.error("Error fetching genres:", error);
+    }
+  };
 
   const filteredMovies = movies.filter((m) =>
     m.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -67,17 +162,324 @@ const AdminMovies: React.FC = () => {
     return classes[rating] || "bg-gray-500";
   };
 
-  const handleEdit = (movie: any) => {
-    setSelectedMovie(movie);
-    setShowEditModal(true);
+  const handleEdit = async (movie: Movie) => {
+    try {
+      setSelectedMovie(movie);
+
+      // Fetch full movie detail to get genre IDs
+      const detailResponse = await apiCall<{
+        success: boolean;
+        data: { movie: Movie };
+      }>(API_ENDPOINTS.MOVIE_DETAIL(movie.id));
+
+      let genreIds: number[] = [];
+      if (detailResponse.success && detailResponse.data?.movie) {
+        const fullMovie = detailResponse.data.movie;
+        if (Array.isArray(fullMovie.genres)) {
+          genreIds = fullMovie.genres.map((g: Genre) => g.id);
+        } else if (
+          typeof fullMovie.genre_ids === "string" &&
+          fullMovie.genre_ids
+        ) {
+          // Parse genre_ids from "1,2,3" to [1, 2, 3]
+          genreIds = fullMovie.genre_ids
+            .split(",")
+            .map((id) => parseInt(id.trim()))
+            .filter((id) => !isNaN(id));
+        }
+      }
+
+      const fullMovieData =
+        detailResponse.success && detailResponse.data?.movie
+          ? detailResponse.data.movie
+          : movie;
+
+      console.log("=== DEBUG handleEdit ===");
+      console.log("fullMovieData.poster_url:", fullMovieData.poster_url);
+      console.log("fullMovieData.director:", fullMovieData.director);
+      console.log("fullMovieData.cast:", fullMovieData.cast);
+      console.log("genreIds:", genreIds);
+
+      setFormData({
+        title: fullMovieData.title,
+        duration: fullMovieData.duration.toString(),
+        age_rating: fullMovieData.age_rating,
+        origin: fullMovieData.origin,
+        poster_url: fullMovieData.poster_url || "",
+        trailer_url: fullMovieData.trailer_url || "",
+        description: fullMovieData.description || "",
+        release_date: fullMovieData.release_date,
+        status: fullMovieData.status,
+        director: fullMovieData.director || "",
+        cast: fullMovieData.cast || "",
+        genre_ids: genreIds,
+      });
+
+      setPosterFile(null);
+
+      setShowEditModal(true);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể tải thông tin phim";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDelete = (movieId: string) => {
-    setMovies(movies.filter((m) => m.id !== movieId));
-    toast({
-      title: "Đã xóa phim",
-      description: "Phim đã được xóa khỏi hệ thống",
+  const handleDelete = async (movieId: number) => {
+    if (!confirm("Bạn có chắc muốn xóa phim này?")) return;
+
+    try {
+      setLoading(true);
+      await apiCall(API_ENDPOINTS.MOVIE_DETAIL(movieId), {
+        method: "DELETE",
+      });
+
+      toast({
+        title: "Đã xóa phim",
+        description: "Phim đã được xóa khỏi hệ thống",
+      });
+
+      await fetchMovies(); // Refresh list
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể xóa phim";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      // Validate required fields
+      if (!formData.title || !formData.duration || !formData.release_date) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const duration = parseInt(formData.duration);
+      if (isNaN(duration) || duration <= 0) {
+        toast({
+          title: "Lỗi",
+          description: "Thời lượng phải là số dương",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setLoading(true);
+
+      // Upload poster if a file is selected
+      let posterUrl = formData.poster_url;
+      if (posterFile) {
+        posterUrl = await uploadPosterFile(posterFile);
+      }
+
+      const payload = {
+        title: formData.title,
+        duration: duration,
+        age_rating: formData.age_rating,
+        origin: formData.origin,
+        poster_url: posterUrl || null,
+        trailer_url: formData.trailer_url || null,
+        description: formData.description || null,
+        release_date: formData.release_date,
+        status: formData.status,
+        director: formData.director || null,
+        cast: formData.cast || null,
+        genre_ids: formData.genre_ids,
+      };
+
+      await apiCall(API_ENDPOINTS.MOVIES, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      toast({
+        title: "Thành công",
+        description: "Phim đã được thêm vào hệ thống",
+      });
+
+      setShowAddModal(false);
+      resetForm();
+      await fetchMovies();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể thêm phim";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedMovie) return;
+
+    try {
+      // Validate required fields
+      if (!formData.title || !formData.duration || !formData.release_date) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const duration = parseInt(formData.duration);
+      if (isNaN(duration) || duration <= 0) {
+        toast({
+          title: "Lỗi",
+          description: "Thời lượng phải là số dương",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setLoading(true);
+
+      // Upload poster if a new file is selected
+      let posterUrl = formData.poster_url;
+      if (posterFile) {
+        console.log("=== UPLOADING POSTER ===");
+        console.log("File:", posterFile.name, posterFile.size, "bytes");
+        posterUrl = await uploadPosterFile(posterFile, selectedMovie.id);
+        console.log("Upload result URL:", posterUrl);
+      }
+
+      console.log("=== UPDATE PAYLOAD ===");
+      console.log("poster_url in payload:", posterUrl);
+
+      const payload = {
+        title: formData.title,
+        duration: duration,
+        age_rating: formData.age_rating,
+        origin: formData.origin,
+        poster_url: posterUrl || null,
+        trailer_url: formData.trailer_url || null,
+        description: formData.description || null,
+        release_date: formData.release_date,
+        status: formData.status,
+        director: formData.director || null,
+        cast: formData.cast || null,
+        genre_ids: formData.genre_ids,
+      };
+
+      await apiCall(API_ENDPOINTS.MOVIE_DETAIL(selectedMovie.id), {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+
+      toast({
+        title: "Thành công",
+        description: "Phim đã được cập nhật",
+      });
+
+      setShowEditModal(false);
+      setSelectedMovie(null);
+      resetForm();
+      await fetchMovies();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể cập nhật phim";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      duration: "",
+      age_rating: "P",
+      origin: "Vietnam",
+      poster_url: "",
+      trailer_url: "",
+      description: "",
+      release_date: "",
+      status: "Coming Soon",
+      director: "",
+      cast: "",
+      genre_ids: [],
     });
+    setPosterFile(null);
+  };
+
+  // Upload poster file
+  const uploadPosterFile = async (
+    file: File,
+    movieId: number = 0,
+  ): Promise<string | null> => {
+    if (!file) return null;
+
+    try {
+      setUploadingPoster(true);
+      const formDataUpload = new FormData();
+      formDataUpload.append("poster", file);
+
+      console.log("=== UPLOAD API CALL ===");
+      console.log("Movie ID:", movieId);
+      console.log("API URL:", API_ENDPOINTS.MOVIE_UPLOAD_POSTER(movieId));
+
+      const response = await fetch(API_ENDPOINTS.MOVIE_UPLOAD_POSTER(movieId), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formDataUpload,
+      });
+
+      const result = await response.json();
+      console.log("Upload API response:", result);
+
+      if (result.success && result.data?.poster_url) {
+        // Remove leading slash if present to match database format
+        let posterUrl = result.data.poster_url;
+        if (posterUrl.startsWith("/")) {
+          posterUrl = posterUrl.substring(1);
+        }
+        return posterUrl;
+      } else {
+        throw new Error(result.message || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        title: "Lỗi upload poster",
+        description:
+          error instanceof Error ? error.message : "Không thể upload ảnh",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setUploadingPoster(false);
+    }
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setShowAddModal(true);
   };
 
   return (
@@ -92,12 +494,15 @@ const AdminMovies: React.FC = () => {
         </div>
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button
+              className="bg-primary hover:bg-primary/90"
+              onClick={openAddModal}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Thêm Phim Mới
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Thêm Phim Mới</DialogTitle>
               <DialogDescription>
@@ -106,22 +511,44 @@ const AdminMovies: React.FC = () => {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="title">Tên phim</Label>
-                <Input id="title" placeholder="VD: Mai" />
+                <Label htmlFor="title">Tên phim *</Label>
+                <Input
+                  id="title"
+                  placeholder="VD: Mai"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="duration">Thời lượng (phút)</Label>
-                  <Input id="duration" type="number" placeholder="120" />
+                  <Label htmlFor="duration">Thời lượng (phút) *</Label>
+                  <Input
+                    id="duration"
+                    type="number"
+                    placeholder="120"
+                    value={formData.duration}
+                    onChange={(e) =>
+                      setFormData({ ...formData, duration: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ageRating">Phân loại</Label>
-                  <Select>
+                  <Label htmlFor="ageRating">Phân loại *</Label>
+                  <Select
+                    value={formData.age_rating}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, age_rating: value })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="P">P - Phổ biến</SelectItem>
+                      <SelectItem value="K">K - Trẻ em</SelectItem>
+                      <SelectItem value="K">K - Trẻ em</SelectItem>
                       <SelectItem value="T13">T13 - Từ 13 tuổi</SelectItem>
                       <SelectItem value="T16">T16 - Từ 16 tuổi</SelectItem>
                       <SelectItem value="T18">T18 - Từ 18 tuổi</SelectItem>
@@ -130,39 +557,204 @@ const AdminMovies: React.FC = () => {
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label>Nguồn gốc</Label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="origin"
-                      value="VN"
-                      className="text-primary"
-                    />
-                    <span>🇻🇳 Việt Nam</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="origin"
-                      value="INT"
-                      className="text-primary"
-                    />
-                    <span>🌍 Quốc tế</span>
-                  </label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Nguồn gốc *</Label>
+                  <Select
+                    value={formData.origin}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, origin: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn nguồn gốc" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Vietnam">🇻🇳 Việt Nam</SelectItem>
+                      <SelectItem value="International">🌍 Quốc Tế</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Trạng thái *</Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, status: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn trạng thái" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Coming Soon">Sắp chiếu</SelectItem>
+                      <SelectItem value="Now Showing">Đang chiếu</SelectItem>
+                      <SelectItem value="Ended">Đã kết thúc</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="trailer">Link Trailer (YouTube)</Label>
-                <Input id="trailer" placeholder="https://youtube.com/..." />
+                <Label htmlFor="release_date">Ngày phát hành *</Label>
+                <Input
+                  id="release_date"
+                  type="date"
+                  value={formData.release_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, release_date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="director">Đạo diễn</Label>
+                <Input
+                  id="director"
+                  placeholder="Trần Anh Hùng, Christopher Nolan..."
+                  value={formData.director}
+                  onChange={(e) =>
+                    setFormData({ ...formData, director: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="cast">Diễn viên (cách nhau bởi dấu phẩy)</Label>
+                <Textarea
+                  id="cast"
+                  placeholder="Trấn Thành, Lý Hải, Tom Cruise..."
+                  rows={2}
+                  value={formData.cast}
+                  onChange={(e) =>
+                    setFormData({ ...formData, cast: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="poster">Poster phim</Label>
+                {formData.poster_url && !posterFile && (
+                  <div className="relative">
+                    <img
+                      src={getImageUrl(formData.poster_url)}
+                      alt="Preview"
+                      className="w-32 h-48 object-cover rounded border"
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-size='14' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, poster_url: "" })
+                      }
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                {posterFile && (
+                  <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                    <Upload className="w-4 h-4" />
+                    <span className="text-sm">{posterFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPosterFile(null)}
+                      className="ml-auto text-red-500 hover:text-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                <Input
+                  id="poster"
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setPosterFile(file);
+                      setFormData({ ...formData, poster_url: "" });
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Định dạng: PNG, JPG, WebP. Tối đa 5MB
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="trailer">URL Trailer</Label>
+                <Input
+                  id="trailer"
+                  placeholder="https://youtube.com/..."
+                  value={formData.trailer_url}
+                  onChange={(e) =>
+                    setFormData({ ...formData, trailer_url: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Mô tả</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Mô tả phim..."
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Thể loại</Label>
+                <div className="flex flex-wrap gap-2">
+                  {Array.isArray(genres) &&
+                    genres.map((genre) => (
+                      <label
+                        key={genre.id}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.genre_ids.includes(genre.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                genre_ids: [...formData.genre_ids, genre.id],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                genre_ids: formData.genre_ids.filter(
+                                  (id) => id !== genre.id,
+                                ),
+                              });
+                            }
+                          }}
+                        />
+                        <span>{genre.name}</span>
+                      </label>
+                    ))}
+                </div>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddModal(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddModal(false)}
+                disabled={loading}
+              >
                 Hủy
               </Button>
-              <Button className="bg-primary hover:bg-primary/90">
+              <Button
+                className="bg-primary hover:bg-primary/90"
+                onClick={handleCreate}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : null}
                 Thêm Phim
               </Button>
             </DialogFooter>
@@ -201,7 +793,17 @@ const AdminMovies: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMovies.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center py-12 text-muted-foreground"
+                  >
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p>Đang tải dữ liệu...</p>
+                  </TableCell>
+                </TableRow>
+              ) : filteredMovies.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={7}
@@ -215,16 +817,30 @@ const AdminMovies: React.FC = () => {
                   <TableRow key={movie.id}>
                     <TableCell>
                       <img
-                        src={movie.poster}
+                        src={
+                          getImageUrl(movie.poster_url) ||
+                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='150' viewBox='0 0 100 150'%3E%3Crect fill='%23ddd' width='100' height='150'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Poster%3C/text%3E%3C/svg%3E"
+                        }
                         alt={movie.title}
                         className="w-12 h-18 object-cover rounded"
+                        onError={(e) => {
+                          e.currentTarget.src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='150' viewBox='0 0 100 150'%3E%3Crect fill='%23ddd' width='100' height='150'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Poster%3C/text%3E%3C/svg%3E";
+                          e.currentTarget.onerror = null;
+                        }}
                       />
                     </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-medium">{movie.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          {movie.genre.join(", ")}
+                          {typeof movie.genres === "string"
+                            ? movie.genres || "Chưa có thể loại"
+                            : Array.isArray(movie.genres)
+                              ? movie.genres
+                                  .map((g: Genre) => g.name)
+                                  .join(", ")
+                              : "Chưa có thể loại"}
                         </p>
                       </div>
                     </TableCell>
@@ -233,41 +849,55 @@ const AdminMovies: React.FC = () => {
                       <Badge
                         className={cn(
                           "text-white",
-                          getAgeRatingClass(movie.ageRating),
+                          getAgeRatingClass(movie.age_rating),
                         )}
                       >
-                        {movie.ageRating}
+                        {movie.age_rating}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {movie.origin === "VN" ? (
-                        <Badge
-                          variant="outline"
-                          className="border-red-500 text-red-600"
-                        >
-                          <Flag className="w-3 h-3 mr-1" />
-                          Việt Nam
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Quốc tế</Badge>
-                      )}
+                      <Badge
+                        variant="outline"
+                        className={
+                          movie.origin === "Vietnam"
+                            ? "border-red-500 text-red-600"
+                            : "border-blue-500 text-blue-600"
+                        }
+                      >
+                        <Flag className="w-3 h-3 mr-1" />
+                        {movie.origin === "Vietnam" ? "Việt Nam" : "Quốc Tế"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={movie.isNowShowing ? "default" : "secondary"}
+                        variant={
+                          movie.status === "Now Showing"
+                            ? "default"
+                            : "secondary"
+                        }
                       >
-                        {movie.isNowShowing ? "Đang chiếu" : "Sắp chiếu"}
+                        {movie.status === "Now Showing"
+                          ? "Đang chiếu"
+                          : movie.status === "Coming Soon"
+                            ? "Sắp chiếu"
+                            : "Đã kết thúc"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => navigate(`/admin/movies/${movie.id}`)}
+                          title="Xem chi tiết"
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => handleEdit(movie)}
+                          title="Chỉnh sửa"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -276,6 +906,7 @@ const AdminMovies: React.FC = () => {
                           size="icon"
                           className="text-destructive hover:text-destructive"
                           onClick={() => handleDelete(movie.id)}
+                          title="Xóa"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -291,7 +922,7 @@ const AdminMovies: React.FC = () => {
 
       {/* Edit Movie Dialog */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh Sửa Phim</DialogTitle>
             <DialogDescription>
@@ -300,21 +931,35 @@ const AdminMovies: React.FC = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="edit-title">Tên phim</Label>
-              <Input id="edit-title" defaultValue={selectedMovie?.title} />
+              <Label htmlFor="edit-title">Tên phim *</Label>
+              <Input
+                id="edit-title"
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-duration">Thời lượng (phút)</Label>
+                <Label htmlFor="edit-duration">Thời lượng (phút) *</Label>
                 <Input
                   id="edit-duration"
                   type="number"
-                  defaultValue={selectedMovie?.duration}
+                  value={formData.duration}
+                  onChange={(e) =>
+                    setFormData({ ...formData, duration: e.target.value })
+                  }
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-ageRating">Phân loại</Label>
-                <Select defaultValue={selectedMovie?.ageRating}>
+                <Label htmlFor="edit-ageRating">Phân loại *</Label>
+                <Select
+                  value={formData.age_rating}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, age_rating: value })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -328,51 +973,198 @@ const AdminMovies: React.FC = () => {
                 </Select>
               </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-origin">Nguồn gốc</Label>
-              <Select defaultValue={selectedMovie?.origin}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="VN">Việt Nam</SelectItem>
-                  <SelectItem value="US">Mỹ</SelectItem>
-                  <SelectItem value="KR">Hàn Quốc</SelectItem>
-                  <SelectItem value="JP">Nhật Bản</SelectItem>
-                  <SelectItem value="OTHER">Khác</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-origin">Nguồn gốc *</Label>
+                <Select
+                  value={formData.origin}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, origin: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Vietnam">🇻🇳 Việt Nam</SelectItem>
+                    <SelectItem value="International">🌍 Quốc Tế</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">Trạng thái *</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, status: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Coming Soon">Sắp chiếu</SelectItem>
+                    <SelectItem value="Now Showing">Đang chiếu</SelectItem>
+                    <SelectItem value="Ended">Đã kết thúc</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-status">Trạng thái</Label>
-              <Select
-                defaultValue={
-                  selectedMovie?.isNowShowing ? "showing" : "upcoming"
+              <Label htmlFor="edit-release_date">Ngày phát hành *</Label>
+              <Input
+                id="edit-release_date"
+                type="date"
+                value={formData.release_date}
+                onChange={(e) =>
+                  setFormData({ ...formData, release_date: e.target.value })
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="showing">Đang chiếu</SelectItem>
-                  <SelectItem value="upcoming">Sắp chiếu</SelectItem>
-                </SelectContent>
-              </Select>
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-director">Đạo diễn</Label>
+              <Input
+                id="edit-director"
+                placeholder="Trần Anh Hùng, Christopher Nolan..."
+                value={formData.director}
+                onChange={(e) =>
+                  setFormData({ ...formData, director: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-cast">
+                Diễn viên (cách nhau bởi dấu phẩy)
+              </Label>
+              <Textarea
+                id="edit-cast"
+                placeholder="Trấn Thành, Lý Hải, Tom Cruise..."
+                rows={2}
+                value={formData.cast}
+                onChange={(e) =>
+                  setFormData({ ...formData, cast: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-poster">Poster phim</Label>
+              {formData.poster_url && !posterFile && (
+                <div className="relative inline-block">
+                  <img
+                    src={getImageUrl(formData.poster_url)}
+                    alt="Preview"
+                    className="w-32 h-48 object-cover rounded border"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-size='14' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, poster_url: "" })}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {posterFile && (
+                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm">{posterFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPosterFile(null)}
+                    className="ml-auto text-red-500 hover:text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              <Input
+                id="edit-poster"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setPosterFile(file);
+                    setFormData({ ...formData, poster_url: "" });
+                  }
+                }}
+                className="cursor-pointer"
+              />
+              <p className="text-xs text-muted-foreground">
+                Định dạng: PNG, JPG, WebP. Tối đa 5MB
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-trailer_url">URL Trailer</Label>
+              <Input
+                id="edit-trailer_url"
+                value={formData.trailer_url}
+                onChange={(e) =>
+                  setFormData({ ...formData, trailer_url: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Mô tả</Label>
+              <Textarea
+                id="edit-description"
+                rows={3}
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Thể loại</Label>
+              <div className="flex flex-wrap gap-2">
+                {Array.isArray(genres) &&
+                  genres.map((genre) => (
+                    <label
+                      key={genre.id}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.genre_ids.includes(genre.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              genre_ids: [...formData.genre_ids, genre.id],
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              genre_ids: formData.genre_ids.filter(
+                                (id) => id !== genre.id,
+                              ),
+                            });
+                          }
+                        }}
+                      />
+                      <span>{genre.name}</span>
+                    </label>
+                  ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(false)}
+              disabled={loading}
+            >
               Hủy
             </Button>
-            <Button
-              onClick={() => {
-                toast({
-                  title: "Đã cập nhật",
-                  description: "Thông tin phim đã được cập nhật",
-                });
-                setShowEditModal(false);
-              }}
-            >
+            <Button onClick={handleUpdate} disabled={loading}>
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
               Lưu Thay Đổi
             </Button>
           </DialogFooter>

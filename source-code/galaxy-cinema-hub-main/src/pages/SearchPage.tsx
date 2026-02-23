@@ -1,37 +1,87 @@
 import React, { useState, useEffect } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Search, Film as FilmIcon, Calendar, Clock, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { movies } from "@/data/mockData";
+import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
+interface MovieFromAPI {
+  id: number;
+  title: string;
+  poster_url?: string;
+  duration_minutes?: number;
+  duration?: number;
+  release_date?: string;
+  age_rating?: string;
+  genres?: string;
+  director?: string;
+  cast?: string;
+  description?: string;
+  avg_rating?: string | number;
+  status?: string;
+}
+
 const SearchPage: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
-  const [results, setResults] = useState(movies);
+  const [results, setResults] = useState<MovieFromAPI[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const query = searchParams.get("q") || "";
     setSearchQuery(query);
 
-    if (query) {
-      const filtered = movies.filter(
-        (movie) =>
-          movie.title.toLowerCase().includes(query.toLowerCase()) ||
-          movie.titleVi?.toLowerCase().includes(query.toLowerCase()) ||
-          movie.genre.some((g) =>
-            g.toLowerCase().includes(query.toLowerCase()),
-          ) ||
-          movie.director.toLowerCase().includes(query.toLowerCase()),
-      );
-      setResults(filtered);
-    } else {
-      setResults(movies);
-    }
+    const fetchMovies = async () => {
+      setLoading(true);
+      try {
+        let url = `${API_ENDPOINTS.MOVIES}?limit=100`;
+
+        // Add search query if exists
+        if (query) {
+          url += `&search=${encodeURIComponent(query)}`;
+        }
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          setResults(data.data.movies || []);
+        } else {
+          setResults([]);
+        }
+      } catch (error) {
+        console.error("Error fetching movies:", error);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMovies();
   }, [searchParams]);
+
+  // Handle search input change with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQuery = searchParams.get("q") || "";
+      if (searchQuery !== currentQuery) {
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) {
+          params.set("q", searchQuery.trim());
+          navigate(`/search?${params.toString()}`, { replace: true });
+        } else if (currentQuery) {
+          // Clear query if searchQuery is empty
+          navigate("/search", { replace: true });
+        }
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, navigate, searchParams]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -67,88 +117,113 @@ const SearchPage: React.FC = () => {
         </div>
 
         {/* Search Results */}
-        {results.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-20">
+            <p className="text-muted-foreground">Đang tìm kiếm...</p>
+          </div>
+        ) : results.length > 0 ? (
           <div className="space-y-4">
-            {results.map((movie) => (
-              <Link key={movie.id} to={`/movie/${movie.id}`}>
-                <Card className="group hover:shadow-lg transition-all">
-                  <CardContent className="p-0">
-                    <div className="flex gap-4 p-4">
-                      {/* Movie Poster */}
-                      <div className="flex-shrink-0">
-                        <img
-                          src={movie.poster}
-                          alt={movie.title}
-                          className="w-24 h-36 object-cover rounded-lg group-hover:scale-105 transition-transform"
-                        />
-                      </div>
+            {results.map((movie) => {
+              const genreArray = movie.genres ? movie.genres.split(", ") : [];
+              const duration = movie.duration_minutes || movie.duration || 0;
+              const posterUrl = movie.poster_url
+                ? movie.poster_url.startsWith("http")
+                  ? movie.poster_url
+                  : `${API_BASE_URL}/${movie.poster_url}`
+                : "https://via.placeholder.com/400x600?text=No+Poster";
 
-                      {/* Movie Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                            {movie.title}
-                          </h3>
-                          <Badge className="bg-primary text-primary-foreground flex-shrink-0">
-                            {movie.ageRating}
-                          </Badge>
+              return (
+                <Link key={movie.id} to={`/movie/${movie.id}`}>
+                  <Card className="group hover:shadow-lg transition-all">
+                    <CardContent className="p-0">
+                      <div className="flex gap-4 p-4">
+                        {/* Movie Poster */}
+                        <div className="flex-shrink-0">
+                          <img
+                            src={posterUrl}
+                            alt={movie.title}
+                            className="w-24 h-36 object-cover rounded-lg group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src =
+                                "https://via.placeholder.com/400x600?text=No+Poster";
+                            }}
+                          />
                         </div>
 
-                        {movie.titleVi && (
-                          <p className="text-sm text-muted-foreground mb-3 line-clamp-1">
-                            {movie.titleVi}
-                          </p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            {movie.duration} phút
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {new Date(movie.releaseDate).toLocaleDateString(
-                              "vi-VN",
+                        {/* Movie Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                              {movie.title}
+                            </h3>
+                            {movie.age_rating && (
+                              <Badge className="bg-primary text-primary-foreground flex-shrink-0">
+                                {movie.age_rating}
+                              </Badge>
                             )}
-                          </span>
-                          {movie.rating && (
-                            <span className="flex items-center gap-1">
-                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                              {movie.rating}
-                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
+                            {duration > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {duration} phút
+                              </span>
+                            )}
+                            {movie.release_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4" />
+                                {new Date(
+                                  movie.release_date,
+                                ).toLocaleDateString("vi-VN")}
+                              </span>
+                            )}
+                            {movie.avg_rating &&
+                              Number(movie.avg_rating) > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                  {Number(movie.avg_rating).toFixed(1)}
+                                </span>
+                              )}
+                          </div>
+
+                          {genreArray.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {genreArray.map((g) => (
+                                <Badge
+                                  key={g}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {g}
+                                </Badge>
+                              ))}
+                              {movie.status === "Now Showing" && (
+                                <Badge className="bg-green-500 text-white text-xs">
+                                  Đang chiếu
+                                </Badge>
+                              )}
+                              {movie.status === "Coming Soon" && (
+                                <Badge className="bg-blue-500 text-white text-xs">
+                                  Sắp chiếu
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+
+                          {movie.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2">
+                              {movie.description}
+                            </p>
                           )}
                         </div>
-
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {movie.genre.map((g) => (
-                            <Badge
-                              key={g}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              {g}
-                            </Badge>
-                          ))}
-                          {movie.isNowShowing ? (
-                            <Badge className="bg-green-500 text-white text-xs">
-                              Đang chiếu
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-blue-500 text-white text-xs">
-                              Sắp chiếu
-                            </Badge>
-                          )}
-                        </div>
-
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {movie.description}
-                        </p>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-20">

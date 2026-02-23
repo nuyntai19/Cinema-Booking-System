@@ -15,10 +15,27 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved email from localStorage on mount
+  React.useEffect(() => {
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // Save or remove email based on remember me checkbox
+    if (rememberMe) {
+      localStorage.setItem("rememberedEmail", email);
+    } else {
+      localStorage.removeItem("rememberedEmail");
+    }
 
     const result = await login(email, password);
 
@@ -132,12 +149,20 @@ const LoginPage: React.FC = () => {
 
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="rounded border-border" />
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-border"
+                />
                 <span className="text-muted-foreground">Ghi nhớ đăng nhập</span>
               </label>
-              <a href="#" className="text-primary hover:underline">
+              <Link
+                to="/forgot-password"
+                className="text-primary hover:underline"
+              >
                 Quên mật khẩu?
-              </a>
+              </Link>
             </div>
 
             <Button

@@ -5,6 +5,7 @@ import {
   Film,
   Users,
   Building2,
+  Armchair,
   Ticket,
   Coffee,
   Calendar,
@@ -33,7 +34,7 @@ const AdminLayout: React.FC = () => {
       navigate('/login', { replace: true });
       return;
     }
-    
+
     // Check if user is admin (role = 'admin')
     if (user && user.role !== 'admin') {
       navigate('/', { replace: true });
@@ -50,6 +51,7 @@ const AdminLayout: React.FC = () => {
     { label: "Quản lý Phim", path: "/admin/movies", icon: Film },
     { label: "Người Dùng", path: "/admin/users", icon: Users },
     { label: "Quản lý Rạp", path: "/admin/cinemas", icon: Building2 },
+    { label: "Quản lý chỗ ngồi", path: "/admin/seats", icon: Armchair },
     { label: "Khuyến Mãi", path: "/admin/promotions", icon: Ticket },
     { label: "Bắp Nước", path: "/admin/concessions", icon: Coffee },
     { label: "Lịch Chiếu", path: "/admin/scheduler", icon: Calendar },
