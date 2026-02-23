@@ -8,21 +8,12 @@ class Database
     private static $instance = null;
     private $connection;
 
-<<<<<<< Updated upstream
-    // Database credentials
-    private $host = 'localhost';
-    private $db_name = 'galaxy_cinema';
-    private $username = 'root';
-    private $password = '12345678';
-    private $charset = 'utf8mb4';
-=======
     // Database credentials - read from environment variables or use defaults
     private $host;
     private $db_name;
     private $username;
     private $password;
     private $charset;
->>>>>>> Stashed changes
 
     private function __construct()
     {

@@ -5,11 +5,11 @@ import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useBooking } from '@/contexts/AppContext';
-import { movies } from '@/data/mockData';
 import { ConcessionItem } from '@/types/cinema';
 import { ConcessionService } from '@/services/concession.service';
 import { Concession } from '@/types/api';
 import { useToast } from '@/hooks/use-toast';
+import { API_ENDPOINTS, apiCall } from '@/lib/api';
 
 const ConcessionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,8 +18,34 @@ const ConcessionsPage: React.FC = () => {
   const [items, setItems] = useState<ConcessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [movie, setMovie] = useState<any>(null);
 
-  const movie = movies.find(m => m.id === selectedMovie);
+  // Fetch movie data from API
+  useEffect(() => {
+    const movieId = selectedMovie;
+    if (!movieId) return;
+
+    const fetchMovie = async () => {
+      try {
+        const response = await apiCall<{ success: boolean; data: { movie: any } }>(
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId))
+        );
+        if (response.success && response.data?.movie) {
+          const m = response.data.movie;
+          setMovie({
+            id: String(m.id),
+            title: m.title,
+            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
+            duration: m.duration || m.duration_minutes,
+            ageRating: m.age_rating || 'P',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch movie:', error);
+      }
+    };
+    fetchMovie();
+  }, [selectedMovie]);
 
   // Fetch available concessions from API
   useEffect(() => {
@@ -82,9 +108,28 @@ const ConcessionsPage: React.FC = () => {
     navigate('/booking/payment');
   };
 
+  // Redirect if no movie or seats selected
+  useEffect(() => {
+    if (!selectedMovie || selectedSeats.length === 0) {
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedMovie, selectedSeats, navigate]);
+
   if (!movie) {
-    navigate('/');
-    return null;
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Đang tải thông tin phim...</p>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (

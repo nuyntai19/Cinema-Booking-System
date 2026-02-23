@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X } from 'lucide-react';
+import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X, Loader2 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ const PaymentPage: React.FC = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrTimeLeft, setQRTimeLeft] = useState(300); // 5 minutes
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [movie, setMovie] = useState<any>(null);
 
@@ -38,6 +39,7 @@ const PaymentPage: React.FC = () => {
     const fetchMovie = async () => {
       if (!selectedMovie) return;
       try {
+        setLoading(true);
         const response = await apiCall<{ success: boolean; data: { movie: any } }>(
           API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie))
         );
@@ -51,6 +53,8 @@ const PaymentPage: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to fetch movie:', error);
+      } finally {
+        setLoading(false);
       }
     };
     fetchMovie();
@@ -134,9 +138,28 @@ const PaymentPage: React.FC = () => {
     navigate('/booking/failed');
   };
 
-  if (!movie) {
-    navigate('/');
-    return null;
+  // Redirect if no movie or seats selected
+  useEffect(() => {
+    if (!selectedMovie || selectedSeats.length === 0) {
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedMovie, selectedSeats, navigate]);
+
+  if (loading || !movie) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Đang tải thông tin thanh toán...</p>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   const paymentMethods = [

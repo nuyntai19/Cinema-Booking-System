@@ -14,14 +14,14 @@ ini_set('log_errors', 1);     // Log errors instead
 ob_start();
 file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
-// CORS headers are set in .htaccess
-header('Content-Type: application/json; charset=UTF-8');
+// Load CorsMiddleware first
+require_once __DIR__ . '/middleware/CorsMiddleware.php';
 
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
+// Handle CORS
+CorsMiddleware::handle();
+
+// Set content type
+header('Content-Type: application/json; charset=UTF-8');
 
 // Load .env before configs
 require_once __DIR__ . '/config/Env.php';
@@ -110,6 +110,12 @@ $router->put('/api/movies/:id', 'MovieController@update'); // Admin
 $router->delete('/api/movies/:id', 'MovieController@delete'); // Admin
 $router->get('/api/movies/:id/showtimes', 'MovieController@getShowtimes');
 $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
+
+// ============================================
+// GENRE ROUTES
+// ============================================
+$router->get('/api/genres', 'GenreController@index');
+$router->get('/api/genres/:id', 'GenreController@show');
 
 // ============================================
 // CINEMA ROUTES
