@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Database Configuration
  */
@@ -7,15 +8,31 @@ class Database
     private static $instance = null;
     private $connection;
 
+<<<<<<< Updated upstream
     // Database credentials
     private $host = 'localhost';
     private $db_name = 'galaxy_cinema';
     private $username = 'root';
     private $password = '';
     private $charset = 'utf8mb4';
+=======
+    // Database credentials - read from environment variables or use defaults
+    private $host;
+    private $db_name;
+    private $username;
+    private $password;
+    private $charset;
+>>>>>>> Stashed changes
 
     private function __construct()
     {
+        // Read from environment variables with fallback to defaults
+        $this->host = getenv('DB_HOST') ?: 'localhost';
+        $this->db_name = getenv('DB_NAME') ?: 'galaxy_cinema';
+        $this->username = getenv('DB_USER') ?: 'root';
+        $this->password = getenv('DB_PASSWORD') ?: '12345678';
+        $this->charset = getenv('DB_CHARSET') ?: 'utf8mb4';
+
         try {
             $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset={$this->charset}";
             $options = [
@@ -47,9 +64,7 @@ class Database
     }
 
     // Prevent cloning
-    private function __clone()
-    {
-    }
+    private function __clone() {}
 
     // Prevent unserialization
     public function __wakeup()

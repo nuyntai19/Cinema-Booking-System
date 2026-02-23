@@ -53,6 +53,7 @@ INSERT INTO genres (name) VALUES
 ('Tâm Lý'),
 ('Tài Liệu');
 
+<<<<<<< Updated upstream
 INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, release_date, status) VALUES
 ('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', '2024-02-10', 'Now Showing'),
 ('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', '2024-02-25', 'Now Showing'),
@@ -60,6 +61,15 @@ INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, tra
 ('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', '2024-03-01', 'Now Showing'),
 ('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', '2024-03-29', 'Coming Soon'),
 ('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', '2024-04-26', 'Coming Soon');
+=======
+INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, director, cast, release_date, status) VALUES
+('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', 'Trấn Thành', 'Phương Anh Đào, Tuấn Trần, Hồng Đào, Uyển Ân', '2026-02-10', 'Now Showing'),
+('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', 'Phi Tiến Sơn', 'Doãn Quốc Đam, Cao Thái Hà, Trọng Khang', '2026-02-25', 'Now Showing'),
+('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', 'Mike Mitchell', 'Jack Black, Awkwafina, Viola Davis, Dustin Hoffman', '2026-03-08', 'Now Showing'),
+('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', 'Denis Villeneuve', 'Timothée Chalamet, Zendaya, Rebecca Ferguson, Austin Butler', '2026-03-01', 'Now Showing'),
+('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', 'Adam Wingard', 'Rebecca Hall, Dan Stevens, Brian Tyree Henry', '2026-03-29', 'Coming Soon'),
+('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', 'Lý Hải', 'Lý Hải, Minh Hà, Trương Minh Quốc Thái, Trần Kim Hào', '2026-04-26', 'Coming Soon');
+>>>>>>> Stashed changes
 
 INSERT INTO movie_genres (movie_id, genre_id) VALUES
 (1, 3), (1, 7), -- MAI: Tình cảm, Tâm lý
@@ -141,16 +151,16 @@ INSERT INTO pricing_rules (condition_type, adjustment_amount, is_active) VALUES
 -- 7. PROMOTIONS
 -- ============================================
 INSERT INTO promotions (code, description, discount_amount, discount_type, min_order_value, start_date, end_date, is_auto_apply, usage_limit) VALUES
-('WELCOME2024', 'Giảm 50K cho khách hàng mới', 50000, 'FIXED', 200000, '2024-01-01', '2024-12-31', FALSE, NULL),
-('BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20, 'PERCENT', 100000, '2024-01-01', '2024-12-31', TRUE, 1),
-('WEEKEND20', 'Giảm 20% cuối tuần', 20, 'PERCENT', 150000, '2024-01-01', '2024-12-31', FALSE, NULL),
-('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2024-01-01', '2024-12-31', FALSE, NULL);
+('WELCOME2026', 'Giảm 50K cho khách hàng mới', 50000, 'FIXED', 200000, '2026-01-01', '2026-12-31', FALSE, NULL),
+('BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20, 'PERCENT', 100000, '2026-01-01', '2026-12-31', TRUE, 1),
+('WEEKEND20', 'Giảm 20% cuối tuần', 20, 'PERCENT', 150000, '2026-01-01', '2026-12-31', FALSE, NULL),
+('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2026-01-01', '2026-12-31', FALSE, NULL);
 
 -- ============================================
 -- 8. USER VOUCHERS (Assign vouchers cho users)
 -- ============================================
 INSERT INTO user_vouchers (user_id, promotion_id, status) VALUES
-(4, 1, 'ACTIVE'), -- Nguyễn Văn A có voucher WELCOME2024
+(4, 1, 'ACTIVE'), -- Nguyễn Văn A có voucher WELCOME2026
 (5, 3, 'ACTIVE'), -- Trần Thị B có voucher WEEKEND20
 (6, 4, 'ACTIVE'); -- Lê Văn C có voucher MEMBER100
 
