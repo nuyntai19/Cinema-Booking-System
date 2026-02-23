@@ -37,34 +37,45 @@ export const API_ENDPOINTS = {
 
     // Movies
     MOVIES: {
+        ALL: '/movies',
         LIST: '/movies',
-        DETAIL: (id: string) => `/movies/${id}`,
-        SHOWTIMES: (id: string) => `/movies/${id}/showtimes`,
-        REVIEWS: (id: string) => `/movies/${id}/reviews`,
+        BY_ID: (id: number | string) => `/movies/${id}`,
+        DETAIL: (id: number | string) => `/movies/${id}`,
+        SHOWTIMES: (id: number | string) => `/movies/${id}/showtimes`,
+        REVIEWS: (id: number | string) => `/movies/${id}/reviews`,
     },
 
     // Cinemas
     CINEMAS: {
+        ALL: '/cinemas',
         LIST: '/cinemas',
-        DETAIL: (id: string) => `/cinemas/${id}`,
-        HALLS: (id: string) => `/cinemas/${id}/halls`,
+        BY_ID: (id: number | string) => `/cinemas/${id}`,
+        DETAIL: (id: number | string) => `/cinemas/${id}`,
+        HALLS: (id: number | string) => `/cinemas/${id}/halls`,
+        SHOWTIMES: (id: number | string) => `/cinemas/${id}/showtimes`,
     },
 
     // Bookings
     BOOKINGS: {
+        ALL: '/bookings',
         LIST: '/bookings',
-        DETAIL: (id: string) => `/bookings/${id}`,
+        BY_ID: (id: number | string) => `/bookings/${id}`,
+        DETAIL: (id: number | string) => `/bookings/${id}`,
         CREATE: '/bookings',
-        CONFIRM: (id: string) => `/bookings/${id}/confirm`,
-        CANCEL: (id: string) => `/bookings/${id}/cancel`,
-        USER_BOOKINGS: (userId: string) => `/bookings/user/${userId}`,
+        CONFIRM: (id: number | string) => `/bookings/${id}/confirm`,
+        CANCEL: (id: number | string) => `/bookings/${id}/cancel`,
+        USER: (userId: number | string) => `/bookings/user/${userId}`,
+        USER_BOOKINGS: (userId: number | string) => `/bookings/user/${userId}`,
     },
 
     // Showtimes
     SHOWTIMES: {
+        ALL: '/showtimes',
         LIST: '/showtimes',
-        DETAIL: (id: string) => `/showtimes/${id}`,
-        SEATS: (id: string) => `/showtimes/${id}/seats`,
+        BY_ID: (id: number | string) => `/showtimes/${id}`,
+        DETAIL: (id: number | string) => `/showtimes/${id}`,
+        SEATS: (id: number | string) => `/showtimes/${id}/seats`,
+        SEAT_MAP: (id: number | string) => `/showtimes/${id}/seat-map`,
     },
 };
 

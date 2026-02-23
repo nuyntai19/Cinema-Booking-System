@@ -1,7 +1,13 @@
 {
+<<<<<<< Updated upstream
     "time": "2026-02-23 21:05:52",
     "raw_request_uri": "\/favicon.ico",
     "parsed_uri": "\/favicon.ico",
+=======
+    "time": "2026-02-23 20:12:07",
+    "raw_request_uri": "\/backend\/api\/genres\/index.php",
+    "parsed_uri": "\/api\/genres\/index.php",
+>>>>>>> Stashed changes
     "method": "GET",
     "routes": [
         {
@@ -414,6 +420,7 @@
         },
         {
             "index": 51,
+<<<<<<< Updated upstream
             "method": "POST",
             "path": "\/api\/transactions",
             "pattern": "#^\/api\/transactions$#",
@@ -470,6 +477,8 @@
         },
         {
             "index": 58,
+=======
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/tickets\/code\/:code",
             "pattern": "#^\/api\/tickets\/code\/([^\/]+)$#",
@@ -477,7 +486,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 59,
+=======
+            "index": 52,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/tickets\/booking\/:bookingId",
             "pattern": "#^\/api\/tickets\/booking\/([^\/]+)$#",
@@ -485,7 +498,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 60,
+=======
+            "index": 53,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/tickets\/check",
             "pattern": "#^\/api\/tickets\/check$#",
@@ -493,7 +510,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 61,
+=======
+            "index": 54,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/tickets\/:id\/use",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/use$#",
@@ -501,7 +522,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 62,
+=======
+            "index": 55,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/tickets\/:id\/refund",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/refund$#",
@@ -509,7 +534,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 63,
+=======
+            "index": 56,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/tickets\/:id\/send-email",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/send-email$#",
@@ -517,7 +546,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 64,
+=======
+            "index": 57,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/loyalty\/history\/:userId",
             "pattern": "#^\/api\/loyalty\/history\/([^\/]+)$#",
@@ -525,7 +558,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 65,
+=======
+            "index": 58,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/loyalty\/earn",
             "pattern": "#^\/api\/loyalty\/earn$#",
@@ -533,7 +570,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 66,
+=======
+            "index": 59,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/loyalty\/redeem",
             "pattern": "#^\/api\/loyalty\/redeem$#",
@@ -541,7 +582,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 67,
+=======
+            "index": 60,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/memberships",
             "pattern": "#^\/api\/memberships$#",
@@ -549,7 +594,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 68,
+=======
+            "index": 61,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/promotions",
             "pattern": "#^\/api\/promotions$#",
@@ -557,7 +606,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 69,
+=======
+            "index": 62,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -565,7 +618,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 70,
+=======
+            "index": 63,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/promotions",
             "pattern": "#^\/api\/promotions$#",
@@ -573,7 +630,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 71,
+=======
+            "index": 64,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -581,7 +642,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 72,
+=======
+            "index": 65,
+>>>>>>> Stashed changes
             "method": "DELETE",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -589,7 +654,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 73,
+=======
+            "index": 66,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/vouchers\/user\/:userId",
             "pattern": "#^\/api\/vouchers\/user\/([^\/]+)$#",
@@ -597,7 +666,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 74,
+=======
+            "index": 67,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/vouchers\/apply",
             "pattern": "#^\/api\/vouchers\/apply$#",
@@ -605,7 +678,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 75,
+=======
+            "index": 68,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/concessions",
             "pattern": "#^\/api\/concessions$#",
@@ -613,7 +690,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 76,
+=======
+            "index": 69,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/concessions\/available",
             "pattern": "#^\/api\/concessions\/available$#",
@@ -621,7 +702,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 77,
+=======
+            "index": 70,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -629,7 +714,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 78,
+=======
+            "index": 71,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/concessions",
             "pattern": "#^\/api\/concessions$#",
@@ -637,7 +726,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 79,
+=======
+            "index": 72,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -645,7 +738,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 80,
+=======
+            "index": 73,
+>>>>>>> Stashed changes
             "method": "DELETE",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -653,7 +750,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 81,
+=======
+            "index": 74,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/reviews\/movie\/:movieId",
             "pattern": "#^\/api\/reviews\/movie\/([^\/]+)$#",
@@ -661,7 +762,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 82,
+=======
+            "index": 75,
+>>>>>>> Stashed changes
             "method": "POST",
             "path": "\/api\/reviews",
             "pattern": "#^\/api\/reviews$#",
@@ -669,7 +774,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 83,
+=======
+            "index": 76,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/reviews\/:id",
             "pattern": "#^\/api\/reviews\/([^\/]+)$#",
@@ -677,7 +786,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 84,
+=======
+            "index": 77,
+>>>>>>> Stashed changes
             "method": "DELETE",
             "path": "\/api\/reviews\/:id",
             "pattern": "#^\/api\/reviews\/([^\/]+)$#",
@@ -685,7 +798,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 85,
+=======
+            "index": 78,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/notifications\/user\/:userId",
             "pattern": "#^\/api\/notifications\/user\/([^\/]+)$#",
@@ -693,7 +810,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 86,
+=======
+            "index": 79,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/notifications\/:id\/read",
             "pattern": "#^\/api\/notifications\/([^\/]+)\/read$#",
@@ -701,7 +822,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 87,
+=======
+            "index": 80,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/admin\/stats",
             "pattern": "#^\/api\/admin\/stats$#",
@@ -709,7 +834,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 88,
+=======
+            "index": 81,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/admin\/revenue",
             "pattern": "#^\/api\/admin\/revenue$#",
@@ -717,7 +846,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 89,
+=======
+            "index": 82,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/admin\/seat-heatmap",
             "pattern": "#^\/api\/admin\/seat-heatmap$#",
@@ -725,7 +858,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 90,
+=======
+            "index": 83,
+>>>>>>> Stashed changes
             "method": "GET",
             "path": "\/api\/config",
             "pattern": "#^\/api\/config$#",
@@ -733,7 +870,11 @@
             "matches_uri": false
         },
         {
+<<<<<<< Updated upstream
             "index": 91,
+=======
+            "index": 84,
+>>>>>>> Stashed changes
             "method": "PUT",
             "path": "\/api\/config",
             "pattern": "#^\/api\/config$#",
