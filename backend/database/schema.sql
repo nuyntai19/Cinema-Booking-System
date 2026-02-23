@@ -321,12 +321,14 @@ CREATE TABLE reviews (
     movie_id INT NOT NULL,
     rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment TEXT,
+    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending' COMMENT 'Review moderation status',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
     UNIQUE KEY unique_user_movie (user_id, movie_id),
-    INDEX idx_movie_rating (movie_id, rating)
+    INDEX idx_movie_rating (movie_id, rating),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng Thông Báo

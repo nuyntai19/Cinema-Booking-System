@@ -11,7 +11,7 @@ class Database
     private $host = 'localhost';
     private $db_name = 'galaxy_cinema';
     private $username = 'root';
-    private $password = '';
+    private $password = '12345678';
     private $charset = 'utf8mb4';
 
     private function __construct()

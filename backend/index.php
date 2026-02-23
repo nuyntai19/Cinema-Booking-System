@@ -14,10 +14,7 @@ ini_set('log_errors', 1);     // Log errors instead
 ob_start();
 file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
-// CORS Headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+// CORS headers are set in .htaccess
 header('Content-Type: application/json; charset=UTF-8');
 
 // Handle preflight OPTIONS request
