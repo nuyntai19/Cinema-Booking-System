@@ -36,7 +36,8 @@ export const API_ENDPOINTS = {
   CINEMAS: `${API_BASE_URL}/api/cinemas`,
   CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/api/cinemas/${id}`,
   CINEMA_HALLS: (id: number) => `${API_BASE_URL}/api/cinemas/${id}/halls`,
-  CINEMA_SHOWTIMES: (id: number) => `${API_BASE_URL}/api/cinemas/${id}/showtimes`,
+  CINEMA_SHOWTIMES: (id: number) =>
+    `${API_BASE_URL}/api/cinemas/${id}/showtimes`,
 
   // Halls
   HALLS: `${API_BASE_URL}/api/halls`,
@@ -46,7 +47,8 @@ export const API_ENDPOINTS = {
   // Showtimes
   SHOWTIMES: `${API_BASE_URL}/api/showtimes`,
   SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seats`,
-  SHOWTIME_SEAT_MAP: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
+  SHOWTIME_SEAT_MAP: (id: number) =>
+    `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
 
   // Bookings
   BOOKINGS: `${API_BASE_URL}/api/bookings`,
@@ -103,6 +105,13 @@ export const apiCall = async <T = unknown>(
 ): Promise<T> => {
   const token = localStorage.getItem("token");
 
+  // Debug: Log token status
+  if (!token) {
+    console.warn(
+      "⚠️ No auth token found in localStorage. User may need to login again.",
+    );
+  }
+
   const defaultHeaders: HeadersInit = {
     "Content-Type": "application/json",
   };
@@ -124,6 +133,10 @@ export const apiCall = async <T = unknown>(
     const data = await response.json();
 
     if (!response.ok) {
+      // Better error handling for 403
+      if (response.status === 403) {
+        throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
+      }
       throw new Error(data.message || "API request failed");
     }
 
