@@ -1,72 +1,148 @@
-import { apiClient } from '@/lib/api-client';
-import { API_ENDPOINTS } from '@/lib/api-config';
-import { ApiResponse } from '@/types/api';
+/**
+ * Booking API Service
+ */
 
-export interface Booking {
+import {
+  apiClient,
+  ApiResponse,
+  PaginatedData,
+  PaginatedResponse,
+} from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/api-config";
+
+export interface BookingDetailResponse {
+  id: string;
+  booking_code: string;
+  user_id: number;
+  showtime_id: number;
+  status: "Pending" | "Paid" | "Cancelled" | "Refunded";
+  total_price: number;
+  created_at: string;
+
+  // Showtime details
+  movie_id: number;
+  movie_title: string;
+  movie_poster?: string;
+  movie_duration: number;
+  movie_age_rating?: string;
+  showtime_date: string;
+  showtime_start_time: string;
+  cinema_name: string;
+  hall_name: string;
+
+  // Seats
+  seats: Array<{
     id: number;
-    user_id: number;
-    showtime_id: number;
-    total_price: number;
-    discount_amount: number;
-    final_price: number;
-    status: 'Pending' | 'Paid' | 'Cancelled' | 'Expired';
-    created_at: string;
-    updated_at?: string;
-    movie_title?: string;
-    cinema_name?: string;
-    showtime?: string;
+    seat_code: string;
+    row_number: string;
+    seat_number: number;
+    seat_type: string;
+    price: number;
+  }>;
+
+  // Concessions (optional)
+  concessions?: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+  }>;
+
+  // Payment info
+  payment_method?: string;
+  paid_at?: string;
 }
 
 export interface CreateBookingRequest {
-    showtime_id: number;
-    seat_ids: number[];
-    concession_items?: Array<{
-        concession_id: number;
-        quantity: number;
-    }>;
-    promotion_code?: string;
+  user_id: number;
+  showtime_id: number;
+  seat_ids: number[];
+  concessions?: Array<{
+    concession_id: number;
+    quantity: number;
+  }>;
+  user_voucher_id?: number;
 }
 
 export class BookingService {
-    /**
-     * Get all bookings (Admin only)
-     */
-    static async getAll(): Promise<ApiResponse<Booking[]>> {
-        return apiClient.get<Booking[]>(API_ENDPOINTS.BOOKINGS.ALL);
-    }
+  /**
+   * Get all bookings (Admin/Manager only)
+   */
+  static async getAll(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+  }): Promise<PaginatedResponse<BookingDetailResponse[]>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.limit) queryParams.append("limit", params.limit.toString());
+    if (params?.status) queryParams.append("status", params.status);
 
-    /**
-     * Get a single booking by ID
-     */
-    static async getById(id: number): Promise<ApiResponse<Booking>> {
-        return apiClient.get<Booking>(API_ENDPOINTS.BOOKINGS.BY_ID(id));
-    }
+    const url = `${API_ENDPOINTS.BOOKINGS.LIST}${queryParams.toString() ? "?" + queryParams.toString() : ""}`;
+    return apiClient.get<PaginatedData<BookingDetailResponse[]>>(
+      url,
+    ) as Promise<PaginatedResponse<BookingDetailResponse[]>>;
+  }
 
-    /**
-     * Get bookings for a user
-     */
-    static async getUserBookings(userId: number): Promise<ApiResponse<Booking[]>> {
-        return apiClient.get<Booking[]>(API_ENDPOINTS.BOOKINGS.USER(userId));
-    }
+  /**
+   * Get user's bookings
+   */
+  static async getUserBookings(
+    userId: string | number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<BookingDetailResponse[]>> {
+    const url = `${API_ENDPOINTS.BOOKINGS.USER_BOOKINGS(userId.toString())}?page=${page}&limit=${limit}`;
+    return apiClient.get<PaginatedData<BookingDetailResponse[]>>(
+      url,
+    ) as Promise<PaginatedResponse<BookingDetailResponse[]>>;
+  }
 
-    /**
-     * Create a new booking (holds seats)
-     */
-    static async create(bookingData: CreateBookingRequest): Promise<ApiResponse<Booking>> {
-        return apiClient.post<Booking>(API_ENDPOINTS.BOOKINGS.ALL, bookingData);
-    }
+  /**
+   * Get booking details by ID
+   */
+  static async getById(
+    id: string,
+  ): Promise<ApiResponse<BookingDetailResponse>> {
+    return apiClient.get<BookingDetailResponse>(
+      API_ENDPOINTS.BOOKINGS.DETAIL(id),
+    );
+  }
 
-    /**
-     * Confirm booking after payment
-     */
-    static async confirm(bookingId: number, paymentData: any): Promise<ApiResponse<Booking>> {
-        return apiClient.put<Booking>(API_ENDPOINTS.BOOKINGS.CONFIRM(bookingId), paymentData);
-    }
+  /**
+   * Create a new booking
+   */
+  static async create(
+    data: CreateBookingRequest,
+  ): Promise<ApiResponse<BookingDetailResponse>> {
+    return apiClient.post<BookingDetailResponse>(
+      API_ENDPOINTS.BOOKINGS.CREATE,
+      data,
+    );
+  }
 
-    /**
-     * Cancel a booking
-     */
-    static async cancel(bookingId: number): Promise<ApiResponse<void>> {
-        return apiClient.put<void>(API_ENDPOINTS.BOOKINGS.CANCEL(bookingId), {});
-    }
+  /**
+   * Confirm booking (after payment)
+   */
+  static async confirm(
+    id: string,
+  ): Promise<ApiResponse<{ booking_id: string }>> {
+    return apiClient.put<{ booking_id: string }>(
+      API_ENDPOINTS.BOOKINGS.CONFIRM(id),
+      {},
+    );
+  }
+
+  /**
+   * Cancel booking
+   */
+  static async cancel(
+    id: string,
+  ): Promise<ApiResponse<{ booking_id: string }>> {
+    return apiClient.put<{ booking_id: string }>(
+      API_ENDPOINTS.BOOKINGS.CANCEL(id),
+      {},
+    );
+  }
 }

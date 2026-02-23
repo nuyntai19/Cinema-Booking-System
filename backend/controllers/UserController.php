@@ -38,7 +38,7 @@ class UserController {
         $token = str_replace('Bearer ', '', $authHeader);
         $payload = JWT::decode($token, Config::$jwt_secret);
         
-        return $payload ? $payload['user_id'] : null;
+        return $payload ? $payload->user_id : null;
     }
     
     /**
@@ -56,7 +56,7 @@ class UserController {
         $payload = JWT::decode($token, Config::$jwt_secret);
         
         // role_id: 5 = Admin
-        return $payload && $payload['role_id'] == 5;
+        return $payload && $payload->role_id == 5;
     }
     
     // ============================================
