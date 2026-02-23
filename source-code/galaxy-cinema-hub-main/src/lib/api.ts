@@ -67,6 +67,12 @@ export const API_ENDPOINTS = {
   // Concessions
   CONCESSIONS: `${API_BASE_URL}/concessions`,
 
+  // Tickets
+  TICKETS: `${API_BASE_URL}/tickets`,
+  TICKET_BY_CODE: (code: string) => `${API_BASE_URL}/tickets/code/${code}`,
+  TICKET_BY_BOOKING: (bookingId: number) =>
+    `${API_BASE_URL}/tickets/booking/${bookingId}`,
+
   // Reviews
   MOVIE_REVIEWS_LIST: (movieId: number) =>
     `${API_BASE_URL}/reviews/movie/${movieId}`,

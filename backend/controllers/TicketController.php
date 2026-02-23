@@ -16,6 +16,25 @@ class TicketController
     }
 
     /**
+     * Lấy danh sách tất cả vé (Admin)
+     * GET /api/tickets
+     */
+    public function index()
+    {
+        try {
+            // Get query parameters for pagination
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
+            $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+
+            $tickets = $this->ticketModel->getAll($limit, $offset);
+
+            Response::success(['tickets' => $tickets], 'Lấy danh sách vé thành công');
+        } catch (Exception $e) {
+            Response::serverError('Lỗi khi lấy danh sách vé: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Tìm vé bằng QR code
      * GET /api/tickets/code/:code
      */

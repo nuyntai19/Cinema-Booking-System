@@ -164,6 +164,7 @@ $router->post('/api/transactions/vnpay/create', 'TransactionController@createVNP
 // ============================================
 // TICKET ROUTES
 // ============================================
+$router->get('/api/tickets', 'TicketController@index'); // Admin - Get all tickets
 $router->get('/api/tickets/code/:code', 'TicketController@getByCode'); // QR scan
 $router->get('/api/tickets/booking/:bookingId', 'TicketController@getByBooking'); // Get tickets by booking
 $router->post('/api/tickets/check', 'TicketController@check'); // Staff scan at gate
