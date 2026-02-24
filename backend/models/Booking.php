@@ -290,6 +290,24 @@ class Booking {
                 $updateVoucher->execute([':id' => $row['user_voucher_id']]);
             }
 
+            // Award loyalty points for this paid booking
+            try {
+                require_once __DIR__ . '/LoyaltyHistory.php';
+                $booking = $this->getById($id);
+                if ($booking && !empty($booking['final_price']) && !empty($booking['user_id'])) {
+                    $finalPrice = (float)$booking['final_price'];
+                    $userId = (int)$booking['user_id'];
+                    $points = LoyaltyHistory::calculatePoints($finalPrice);
+                    if ($points > 0) {
+                        $lh = new LoyaltyHistory();
+                        $lh->create($userId, $points, 'PURCHASE', 'Earned from booking #'.(int)$id, $id);
+                    }
+                }
+            } catch (Exception $e) {
+                // Log but do not prevent booking confirmation
+                error_log('Loyalty award error: ' . $e->getMessage());
+            }
+
             $this->db->commit();
             return true;
         } catch (Exception $e) {

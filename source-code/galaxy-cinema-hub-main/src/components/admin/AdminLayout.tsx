@@ -1,5 +1,5 @@
-import React from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Film,
@@ -23,8 +23,27 @@ import { useState } from "react";
 
 const AdminLayout: React.FC = () => {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Check authentication and redirect if not logged in or not admin
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    
+    // Check if user is admin (role = 'admin')
+    if (user && user.role !== 'admin') {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Don't render anything while checking authentication
+  if (!isAuthenticated || !user || user.role !== 'admin') {
+    return null;
+  }
 
   const navItems = [
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },

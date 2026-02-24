@@ -4,9 +4,16 @@
  * REST API for Cinema Booking System
  */
 
-// Error reporting for development
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+
+// Error reporting for development
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
+ini_set('log_errors', 1);     // Log errors instead
+
+// Start output buffering to catch any unexpected output
+ob_start();
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -30,7 +37,6 @@ require_once __DIR__ . '/config/Config.php';
 require_once __DIR__ . '/core/Router.php';
 require_once __DIR__ . '/core/Response.php';
 require_once __DIR__ . '/middleware/AuthMiddleware.php';
-require_once __DIR__ . '/middleware/CorsMiddleware.php';
 
 // Auto-load controllers and models
 spl_autoload_register(function ($class) {
@@ -61,20 +67,33 @@ $router->get('/api/health', function() {
 // ============================================
 // AUTH ROUTES
 // ============================================
+$router->post('/api/auth/send-verification', 'AuthController@sendVerification');
+$router->post('/api/auth/verify-email', 'AuthController@verifyEmail');
 $router->post('/api/auth/register', 'AuthController@register');
 $router->post('/api/auth/login', 'AuthController@login');
 $router->post('/api/auth/logout', 'AuthController@logout');
+$router->post('/api/auth/refresh-token', 'AuthController@refreshToken');
 $router->get('/api/auth/me', 'AuthController@getCurrentUser'); // Protected
 
 // ============================================
 // USER ROUTES
 // ============================================
-$router->get('/api/users', 'UserController@index'); // Admin only
-$router->get('/api/users/:id', 'UserController@show');
-$router->put('/api/users/:id', 'UserController@update');
+// Admin routes
+$router->get('/api/users', 'UserController@index'); // Admin only - List users
+$router->post('/api/users', 'UserController@create'); // Admin only - Create user
+$router->get('/api/users/:id', 'UserController@show'); // Admin or self
+$router->put('/api/users/:id', 'UserController@update'); // Admin or self
 $router->delete('/api/users/:id', 'UserController@delete'); // Admin only
-$router->get('/api/users/:id/profile', 'UserController@getProfile');
-$router->put('/api/users/:id/profile', 'UserController@updateProfile');
+$router->put('/api/users/:id/role', 'UserController@updateRole'); // Admin only
+
+// User profile routes
+$router->get('/api/users/:id/profile', 'UserController@getProfile'); // Self only
+$router->put('/api/users/:id/profile', 'UserController@updateProfile'); // Self only
+$router->post('/api/users/:id/change-password', 'UserController@changePassword'); // Self only
+$router->post('/api/users/:id/upload-avatar', 'UserController@uploadAvatar'); // Self only
+
+// Role routes
+$router->get('/api/roles', 'RoleController@index'); // Get all roles
 
 // ============================================
 // MOVIE ROUTES

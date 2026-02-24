@@ -32,14 +32,14 @@ class JWT {
             throw new Exception('Invalid signature');
         }
         
-        $payload = json_decode(self::base64UrlDecode($base64UrlPayload));
+        $payload = json_decode(self::base64UrlDecode($base64UrlPayload), true);
         
         if (!$payload) {
             throw new Exception('Invalid payload');
         }
         
         // Check expiration
-        if (isset($payload->exp) && $payload->exp < time()) {
+        if (isset($payload['exp']) && $payload['exp'] < time()) {
             throw new Exception('Token expired');
         }
         

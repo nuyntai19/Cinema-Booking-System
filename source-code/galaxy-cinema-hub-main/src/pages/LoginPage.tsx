@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Film, Eye, EyeOff, User, Shield, Headphones } from "lucide-react";
+import { Film, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,18 +20,20 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    const success = await login(email, password);
+    const result = await login(email, password);
 
-    if (success) {
+    if (result.success && result.user) {
       toast({
         title: "Đăng nhập thành công!",
         description: "Chào mừng bạn đến với Galaxy Cinema",
       });
 
       // Redirect based on role
-      if (email === "admin@cinema.com") {
+      if (result.user.role === "admin") {
         navigate("/admin");
-      } else if (email === "staff@cinema.com") {
+      } else if (result.user.role === "manager") {
+        navigate("/manager");
+      } else if (result.user.role === "staff") {
         navigate("/staff");
       } else {
         navigate("/");
@@ -45,16 +47,6 @@ const LoginPage: React.FC = () => {
     }
 
     setIsLoading(false);
-  };
-
-  const quickLogin = (role: "admin" | "staff" | "client") => {
-    const credentials = {
-      admin: { email: "admin@cinema.com", password: "admin123" },
-      staff: { email: "staff@cinema.com", password: "staff123" },
-      client: { email: "client@gmail.com", password: "client123" },
-    };
-    setEmail(credentials[role].email);
-    setPassword(credentials[role].password);
   };
 
   return (
@@ -96,45 +88,6 @@ const LoginPage: React.FC = () => {
               Đăng Nhập
             </h2>
             <p className="text-muted-foreground">Chào mừng bạn trở lại!</p>
-          </div>
-
-          {/* Quick Login Buttons */}
-          <div className="mb-6">
-            <p className="text-sm text-muted-foreground mb-3 text-center">
-              Demo - Chọn vai trò:
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => quickLogin("admin")}
-                className="flex flex-col items-center gap-1 h-auto py-3"
-              >
-                <Shield className="w-4 h-4 text-primary" />
-                <span className="text-xs">Admin</span>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => quickLogin("staff")}
-                className="flex flex-col items-center gap-1 h-auto py-3"
-              >
-                <Headphones className="w-4 h-4 text-primary" />
-                <span className="text-xs">Staff</span>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => quickLogin("client")}
-                className="flex flex-col items-center gap-1 h-auto py-3"
-              >
-                <User className="w-4 h-4 text-primary" />
-                <span className="text-xs">Client</span>
-              </Button>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

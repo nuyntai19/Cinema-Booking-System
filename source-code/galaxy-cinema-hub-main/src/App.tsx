@@ -35,6 +35,8 @@ import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminReviews from "./pages/admin/AdminReviews";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/AdminSettings";
+import ManagerLayout from "./components/manager/ManagerLayout";
+import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
@@ -92,6 +94,20 @@ const App = () => (
                     element={<AdminNotifications />}
                   />
                   <Route path="settings" element={<AdminSettings />} />
+                </Route>
+
+                {/* Manager Routes */}
+                <Route path="/manager" element={<ManagerLayout />}>
+                  <Route index element={<ManagerDashboard />} />
+                  <Route path="movies" element={<AdminMovies />} />
+                  <Route path="cinemas" element={<AdminCinemas />} />
+                  <Route path="scheduler" element={<AdminScheduler />} />
+                  <Route path="concessions" element={<AdminConcessions />} />
+                  <Route path="promotions" element={<AdminPromotions />} />
+                  <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="reviews" element={<AdminReviews />} />
+                  <Route path="notifications" element={<AdminNotifications />} />
+                  <Route path="staff" element={<AdminUsers />} />
                 </Route>
 
                 {/* Staff Routes */}

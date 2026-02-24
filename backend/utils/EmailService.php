@@ -168,10 +168,15 @@ class EmailService {
             $response = $this->getResponse($socket);
             error_log("STARTTLS response: " . trim($response));
             
-            if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                fclose($socket);
-                throw new Exception("TLS encryption failed");
-            }
+            // Tắt verify SSL (chỉ dùng cho môi trường dev localhost)
+stream_context_set_option($socket, 'ssl', 'verify_peer', false);
+stream_context_set_option($socket, 'ssl', 'verify_peer_name', false);
+stream_context_set_option($socket, 'ssl', 'allow_self_signed', true);
+
+if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+    fclose($socket);
+    throw new Exception("TLS encryption failed");
+}
             
             error_log("TLS enabled successfully");
         }
