@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Download,
@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 interface Transaction {
   id: string;
@@ -43,90 +44,183 @@ interface Transaction {
   transactionDate: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+}
+
+interface BookingListItem {
+  id: number;
+  user_id: number;
+}
+
+interface BookingListResponseData {
+  items: BookingListItem[];
+}
+
+interface BookingDetail {
+  id: number;
+  user_id: number;
+  movie_title?: string;
+  cinema_name?: string;
+  start_time?: string;
+  status?: "Pending" | "Paid" | "Cancelled" | "Expired";
+  final_price?: number | string;
+  total_price?: number | string;
+  created_at?: string;
+  tickets?: Array<{ id: number }>;
+  transaction?: {
+    transaction_code?: string;
+    payment_method?: string;
+    amount?: number | string;
+    status?: "Pending" | "Success" | "Failed";
+    created_at?: string;
+  } | null;
+}
+
+interface UserDetailResponse {
+  user?: {
+    id?: number;
+    email?: string;
+    profile?: {
+      full_name?: string;
+    } | null;
+  };
+}
+
 const AdminTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterDate, setFilterDate] = useState("all");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const transactions: Transaction[] = [
-    {
-      id: "1",
-      bookingCode: "GC2026012301",
-      customerName: "Nguyễn Văn A",
-      customerEmail: "client@gmail.com",
-      movieTitle: "MAI",
-      cinemaName: "Galaxy Nguyễn Du",
-      showDate: "2026-01-25",
-      showTime: "19:00",
-      seatCount: 2,
-      amount: 240000,
-      paymentMethod: "Momo",
-      status: "success",
-      transactionDate: "2026-01-23T10:30:00",
-    },
-    {
-      id: "2",
-      bookingCode: "GC2026012302",
-      customerName: "Trần Thị B",
-      customerEmail: "tran.b@gmail.com",
-      movieTitle: "Kung Fu Panda 4",
-      cinemaName: "Galaxy Tân Bình",
-      showDate: "2026-01-24",
-      showTime: "14:00",
-      seatCount: 3,
-      amount: 270000,
-      paymentMethod: "Thẻ tín dụng",
-      status: "success",
-      transactionDate: "2026-01-22T15:20:00",
-    },
-    {
-      id: "3",
-      bookingCode: "GC2026012303",
-      customerName: "Lê Văn C",
-      customerEmail: "le.c@gmail.com",
-      movieTitle: "Dune: Part Two",
-      cinemaName: "Galaxy Quang Trung",
-      showDate: "2026-01-26",
-      showTime: "20:30",
-      seatCount: 2,
-      amount: 300000,
-      paymentMethod: "Momo",
-      status: "pending",
-      transactionDate: "2026-01-23T09:15:00",
-    },
-    {
-      id: "4",
-      bookingCode: "GC2026012304",
-      customerName: "Phạm Thị D",
-      customerEmail: "pham.d@gmail.com",
-      movieTitle: "Đào, Phở và Piano",
-      cinemaName: "Galaxy Nguyễn Du",
-      showDate: "2026-01-23",
-      showTime: "16:30",
-      seatCount: 4,
-      amount: 360000,
-      paymentMethod: "Thẻ tín dụng",
-      status: "failed",
-      transactionDate: "2026-01-22T11:45:00",
-    },
-    {
-      id: "5",
-      bookingCode: "GC2026012305",
-      customerName: "Hoàng Văn E",
-      customerEmail: "hoang.e@gmail.com",
-      movieTitle: "MAI",
-      cinemaName: "Galaxy Tân Bình",
-      showDate: "2026-01-20",
-      showTime: "19:00",
-      seatCount: 2,
-      amount: 240000,
-      paymentMethod: "Momo",
-      status: "refunded",
-      transactionDate: "2026-01-18T14:30:00",
-    },
-  ];
+  useEffect(() => {
+    const normalizeStatus = (
+      transactionStatus?: "Pending" | "Success" | "Failed",
+      bookingStatus?: "Pending" | "Paid" | "Cancelled" | "Expired",
+    ): Transaction["status"] => {
+      if (transactionStatus === "Success") return "success";
+      if (transactionStatus === "Pending") return "pending";
+      if (transactionStatus === "Failed") return "failed";
+      if (bookingStatus === "Cancelled") return "refunded";
+      return "pending";
+    };
 
-  const filteredTransactions = transactions.filter((transaction) => {
+    const loadTransactions = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const bookingsRes = await apiCall<ApiResponse<BookingListResponseData>>(
+          `${API_ENDPOINTS.BOOKINGS}?page=1&limit=100`,
+        );
+
+        const bookingItems = bookingsRes.data?.items ?? [];
+        if (bookingItems.length === 0) {
+          setTransactions([]);
+          return;
+        }
+
+        const bookingDetailResults = await Promise.allSettled(
+          bookingItems.map((booking) =>
+            apiCall<ApiResponse<BookingDetail>>(
+              API_ENDPOINTS.BOOKING_DETAIL(booking.id),
+            ),
+          ),
+        );
+
+        const detailData = bookingDetailResults
+          .filter(
+            (result): result is PromiseFulfilledResult<ApiResponse<BookingDetail>> =>
+              result.status === "fulfilled" && !!result.value?.data,
+          )
+          .map((result) => result.value.data);
+
+        const uniqueUserIds = Array.from(
+          new Set(
+            detailData
+              .map((detail) => detail.user_id)
+              .filter((userId): userId is number => typeof userId === "number"),
+          ),
+        );
+
+        const userResults = await Promise.allSettled(
+          uniqueUserIds.map((userId) =>
+            apiCall<ApiResponse<UserDetailResponse>>(`${API_ENDPOINTS.USERS}/${userId}`),
+          ),
+        );
+
+        const userMap = new Map<number, { name: string; email: string }>();
+        userResults.forEach((result) => {
+          if (result.status !== "fulfilled") return;
+
+          const user = result.value.data?.user;
+          const userId = user?.id;
+          if (!userId) return;
+
+          userMap.set(userId, {
+            name: user.profile?.full_name || `User #${userId}`,
+            email: user.email || "-",
+          });
+        });
+
+        const mapped = detailData
+          .map((detail) => {
+            const startTime = detail.start_time ? new Date(detail.start_time) : null;
+            const transactionAmount =
+              detail.transaction?.amount ?? detail.final_price ?? detail.total_price ?? 0;
+            const amount =
+              typeof transactionAmount === "string"
+                ? parseFloat(transactionAmount)
+                : transactionAmount;
+
+            return {
+              id: String(detail.id),
+              bookingCode:
+                detail.transaction?.transaction_code ||
+                `BK-${String(detail.id).padStart(6, "0")}`,
+              customerName: userMap.get(detail.user_id)?.name || `User #${detail.user_id}`,
+              customerEmail: userMap.get(detail.user_id)?.email || "-",
+              movieTitle: detail.movie_title || "-",
+              cinemaName: detail.cinema_name || "-",
+              showDate: startTime ? startTime.toISOString().split("T")[0] : "",
+              showTime: startTime
+                ? startTime.toLocaleTimeString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  })
+                : "-",
+              seatCount: detail.tickets?.length ?? 0,
+              amount: Number.isFinite(amount) ? amount : 0,
+              paymentMethod: detail.transaction?.payment_method || "-",
+              status: normalizeStatus(detail.transaction?.status, detail.status),
+              transactionDate: detail.transaction?.created_at || detail.created_at || "",
+            } as Transaction;
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.transactionDate).getTime() -
+              new Date(a.transactionDate).getTime(),
+          );
+
+        setTransactions(mapped);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Không thể tải dữ liệu giao dịch";
+        setError(message);
+        setTransactions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadTransactions();
+  }, []);
+
+  const filteredTransactions = useMemo(() => transactions.filter((transaction) => {
     const matchesSearch =
       transaction.bookingCode
         .toLowerCase()
@@ -138,11 +232,11 @@ const AdminTransactions: React.FC = () => {
     const matchesStatus =
       filterStatus === "all" || transaction.status === filterStatus;
     return matchesSearch && matchesStatus;
-  });
+  }), [transactions, searchQuery, filterStatus]);
 
-  const totalRevenue = transactions
+  const totalRevenue = useMemo(() => transactions
     .filter((t) => t.status === "success")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + t.amount, 0), [transactions]);
 
   const getStatusBadge = (status: string) => {
     const configs = {
@@ -308,46 +402,72 @@ const AdminTransactions: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell className="font-mono font-medium">
-                    {transaction.bookingCode}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">
-                        {transaction.customerName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {transaction.customerEmail}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {transaction.movieTitle}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{transaction.cinemaName}</div>
-                      <div className="text-muted-foreground">
-                        {formatDate(transaction.showDate)} -{" "}
-                        {transaction.showTime}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {transaction.seatCount}
-                  </TableCell>
-                  <TableCell className="font-bold text-primary">
-                    {transaction.amount.toLocaleString("vi-VN")}đ
-                  </TableCell>
-                  <TableCell>{transaction.paymentMethod}</TableCell>
-                  <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDateTime(transaction.transactionDate)}
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    Đang tải dữ liệu giao dịch...
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              {!isLoading && error && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-red-500">
+                    {error}
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && !error && filteredTransactions.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    Không có giao dịch phù hợp
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading &&
+                !error &&
+                filteredTransactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell className="font-mono font-medium">
+                      {transaction.bookingCode}
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {transaction.customerName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {transaction.customerEmail}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {transaction.movieTitle}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>{transaction.cinemaName}</div>
+                        <div className="text-muted-foreground">
+                          {transaction.showDate
+                            ? `${formatDate(transaction.showDate)} - ${transaction.showTime}`
+                            : "-"}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {transaction.seatCount}
+                    </TableCell>
+                    <TableCell className="font-bold text-primary">
+                      {transaction.amount.toLocaleString("vi-VN")}đ
+                    </TableCell>
+                    <TableCell>{transaction.paymentMethod}</TableCell>
+                    <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {transaction.transactionDate
+                        ? formatDateTime(transaction.transactionDate)
+                        : "-"}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>
