@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Galaxy Cinema Backend - Entry Point
  * REST API for Cinema Booking System
@@ -14,6 +15,7 @@ ini_set('log_errors', 1);     // Log errors instead
 
 // Start output buffering to catch any unexpected output
 ob_start();
+file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -47,7 +49,7 @@ spl_autoload_register(function ($class) {
         __DIR__ . '/utils/' . $class . '.php',
         __DIR__ . '/service/' . $class . '.php'
     ];
-    
+
     foreach ($paths as $path) {
         if (file_exists($path)) {
             require_once $path;
@@ -60,9 +62,18 @@ spl_autoload_register(function ($class) {
 $router = new Router();
 
 // Health check endpoint
-$router->get('/api/health', function() {
+$router->get('/api/health', function () {
     Response::success(['status' => 'OK', 'message' => 'Galaxy Cinema API is running']);
 });
+
+// ============================================
+// HALL ROUTES
+// ============================================
+$router->post('/api/halls', 'HallController@create'); // Admin
+$router->get('/api/halls/:id', 'HallController@show'); // Admin
+$router->put('/api/halls/:id', 'HallController@update'); // Admin
+$router->delete('/api/halls/:id', 'HallController@delete'); // Admin
+$router->post('/api/halls/:id/layout', 'HallController@saveLayout'); // Admin
 
 // ============================================
 // AUTH ROUTES
@@ -115,6 +126,8 @@ $router->post('/api/cinemas', 'CinemaController@create'); // Admin
 $router->put('/api/cinemas/:id', 'CinemaController@update'); // Admin
 $router->delete('/api/cinemas/:id', 'CinemaController@delete'); // Admin
 $router->get('/api/cinemas/:id/halls', 'CinemaController@getHalls');
+$router->get('/api/cinemas/:id/showtimes', 'CinemaController@getShowtimes');
+
 
 // ============================================
 // SHOWTIME ROUTES
@@ -125,6 +138,7 @@ $router->post('/api/showtimes', 'ShowtimeController@create'); // Manager
 $router->put('/api/showtimes/:id', 'ShowtimeController@update'); // Manager
 $router->delete('/api/showtimes/:id', 'ShowtimeController@delete'); // Manager
 $router->get('/api/showtimes/:id/seats', 'ShowtimeController@getAvailableSeats');
+$router->get('/api/showtimes/:id/seat-map', 'ShowtimeController@getSeatMap');
 
 // ============================================
 // BOOKING ROUTES
@@ -150,9 +164,12 @@ $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayme
 // ============================================
 // TICKET ROUTES
 // ============================================
-$router->get('/api/tickets/:code', 'TicketController@getByCode'); // QR scan
-$router->put('/api/tickets/:id/use', 'TicketController@markAsUsed'); // Staff scan
-$router->put('/api/tickets/:id/refund', 'TicketController@refund');
+$router->get('/api/tickets/code/:code', 'TicketController@getByCode'); // QR scan
+$router->get('/api/tickets/booking/:bookingId', 'TicketController@getByBooking'); // Get tickets by booking
+$router->post('/api/tickets/check', 'TicketController@check'); // Staff scan at gate
+$router->put('/api/tickets/:id/use', 'TicketController@markAsUsed'); // Mark as used
+$router->post('/api/tickets/:id/refund', 'TicketController@refund'); // Refund ticket
+$router->post('/api/tickets/:id/send-email', 'TicketController@sendEmail'); // Send email
 
 // ============================================
 // LOYALTY & MEMBERSHIP ROUTES
@@ -177,6 +194,7 @@ $router->post('/api/vouchers/apply', 'VoucherController@applyVoucher');
 // CONCESSION ROUTES
 // ============================================
 $router->get('/api/concessions', 'ConcessionController@index');
+$router->get('/api/concessions/available', 'ConcessionController@getAvailable'); // Get available concessions
 $router->get('/api/concessions/:id', 'ConcessionController@show');
 $router->post('/api/concessions', 'ConcessionController@create'); // Admin
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin

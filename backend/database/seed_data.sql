@@ -53,13 +53,13 @@ INSERT INTO genres (name) VALUES
 ('Tâm Lý'),
 ('Tài Liệu');
 
-INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, release_date, status) VALUES
-('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', '2024-02-10', 'Now Showing'),
-('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', '2024-02-25', 'Now Showing'),
-('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', '2024-03-08', 'Now Showing'),
-('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', '2024-03-01', 'Now Showing'),
-('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', '2024-03-29', 'Coming Soon'),
-('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', '2024-04-26', 'Coming Soon');
+INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, director, cast, release_date, status) VALUES
+('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', 'Trấn Thành', 'Phương Anh Đào, Tuấn Trần, Hồng Đào, Uyển Ân', '2024-02-10', 'Now Showing'),
+('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', 'Phi Tiến Sơn', 'Doãn Quốc Đam, Cao Thái Hà, Trọng Khang', '2024-02-25', 'Now Showing'),
+('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', 'Mike Mitchell', 'Jack Black, Awkwafina, Viola Davis, Dustin Hoffman', '2024-03-08', 'Now Showing'),
+('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', 'Denis Villeneuve', 'Timothée Chalamet, Zendaya, Rebecca Ferguson, Austin Butler', '2024-03-01', 'Now Showing'),
+('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', 'Adam Wingard', 'Rebecca Hall, Dan Stevens, Brian Tyree Henry', '2024-03-29', 'Coming Soon'),
+('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', 'Lý Hải', 'Lý Hải, Minh Hà, Trương Minh Quốc Thái, Trần Kim Hào', '2024-04-26', 'Coming Soon');
 
 INSERT INTO movie_genres (movie_id, genre_id) VALUES
 (1, 3), (1, 7), -- MAI: Tình cảm, Tâm lý
@@ -72,10 +72,10 @@ INSERT INTO movie_genres (movie_id, genre_id) VALUES
 -- ============================================
 -- 4. CINEMAS, HALLS, SEAT TYPES, SEATS
 -- ============================================
-INSERT INTO cinemas (name, address, manager_id) VALUES
-('Galaxy Nguyễn Du', '116 Nguyễn Du, Q.1, TP.HCM', 2),
-('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Q.Tân Bình, TP.HCM', 2),
-('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Q.6, TP.HCM', NULL);
+INSERT INTO cinemas (name, address, street, district, city, lat, lng, hotline, status, manager_id) VALUES
+('Galaxy Nguyễn Du', '116 Nguyễn Du, Quận 1, TP.HCM', '116 Nguyễn Du', 'Quận 1', 'Hồ Chí Minh', 10.78283500, 106.69521300, '1900 2224', 'active', 2),
+('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Quận Tân Bình, TP.HCM', '246 Nguyễn Hồng Đào', 'Quận Tân Bình', 'Hồ Chí Minh', 10.80132700, 106.65274200, '1900 2225', 'active', 2),
+('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Quận 6, TP.HCM', '718bis Kinh Dương Vương', 'Quận 6', 'Hồ Chí Minh', 10.74751800, 106.63580900, '1900 2226', 'active', NULL);
 
 INSERT INTO cinema_halls (cinema_id, name, total_seats) VALUES
 (1, 'Phòng 1', 120),
@@ -102,7 +102,11 @@ SELECT
         WHEN row_code = 'H' AND number BETWEEN 5 AND 6 THEN 3 -- Sweetbox
         ELSE 1 -- Standard
     END as seat_type_id,
-    'Active' as status
+    CASE
+        WHEN row_code = 'A' AND number IN (1, 10) THEN 'Inactive' -- Khu vực không ngồi
+        WHEN row_code = 'B' AND number = 5 THEN 'Broken' -- Ghế hỏng
+        ELSE 'Active'
+    END as status
 FROM 
     (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
      UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H') AS row_codes
@@ -114,20 +118,20 @@ ORDER BY row_code, number;
 -- ============================================
 -- 5. SHOWTIMES
 -- ============================================
-INSERT INTO showtimes (movie_id, cinema_hall_id, start_time, end_time) VALUES
+INSERT INTO showtimes (movie_id, cinema_hall_id, start_time, end_time, base_price) VALUES
 -- MAI tại Galaxy Nguyễn Du
-(1, 1, '2026-01-25 10:00:00', '2026-01-25 12:30:00'),
-(1, 1, '2026-01-25 14:00:00', '2026-01-25 16:30:00'),
-(1, 1, '2026-01-25 19:00:00', '2026-01-25 21:30:00'),
-(1, 2, '2026-01-25 20:00:00', '2026-01-25 22:30:00'),
+(1, 1, '2026-01-25 10:00:00', '2026-01-25 12:30:00', 75000),
+(1, 1, '2026-01-25 14:00:00', '2026-01-25 16:30:00', 90000),
+(1, 1, '2026-01-25 19:00:00', '2026-01-25 21:30:00', 100000),
+(1, 2, '2026-01-25 20:00:00', '2026-01-25 22:30:00', 100000),
 
 -- Kung Fu Panda 4
-(3, 1, '2026-01-26 09:00:00', '2026-01-26 11:00:00'),
-(3, 4, '2026-01-26 14:30:00', '2026-01-26 16:30:00'),
+(3, 1, '2026-01-26 09:00:00', '2026-01-26 11:00:00', 70000),
+(3, 4, '2026-01-26 14:30:00', '2026-01-26 16:30:00', 90000),
 
 -- Dune: Part Two tại IMAX
-(4, 3, '2026-01-26 15:00:00', '2026-01-26 18:00:00'),
-(4, 3, '2026-01-26 20:00:00', '2026-01-26 23:00:00');
+(4, 3, '2026-01-26 15:00:00', '2026-01-26 18:00:00', 150000),
+(4, 3, '2026-01-26 20:00:00', '2026-01-26 23:00:00', 150000);
 
 -- ============================================
 -- 6. PRICING RULES

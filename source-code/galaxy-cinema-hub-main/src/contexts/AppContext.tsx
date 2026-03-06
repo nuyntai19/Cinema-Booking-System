@@ -30,23 +30,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-
-  // Load user from localStorage on mount
-  useEffect(() => {
+  // Initialize user synchronously from localStorage to prevent race conditions
+  // (e.g., AdminLayout checking isAuthenticated before useEffect runs)
+  const [user, setUser] = useState<User | null>(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-
     if (token && savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        return JSON.parse(savedUser);
       } catch (error) {
         console.error('Failed to parse saved user:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        return null;
       }
     }
-  }, []);
+    return null;
+  });
 
   // Helper function to map role_id to role
   const mapRoleIdToRole = (roleId: number): UserRole => {

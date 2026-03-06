@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Clock, X, AlertCircle, Shield } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Clock, X, AlertCircle, Shield, Loader } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { useAuth, useBooking } from "@/contexts/AppContext";
 import {
-  movies,
-  cinemas,
-  generateSeatMap,
   systemConfig,
 } from "@/data/mockData";
 import { Seat } from "@/types/cinema";
@@ -23,9 +20,41 @@ import {
 import AgeWarningDialog from "@/components/booking/AgeWarningDialog";
 import CurfewWarningDialog from "@/components/booking/CurfewWarningDialog";
 import { Badge } from "@/components/ui/badge";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
+
+interface SeatFromAPI {
+  id: number;
+  row_code: string;
+  number: number;
+  seat_type: string;
+  price_multiplier: number;
+  status: string;
+  calculated_price: number;
+}
+
+interface SeatMapResponse {
+  showtime: {
+    id: number;
+    movie_title: string;
+    hall_name: string;
+    cinema_name: string;
+    start_time: string;
+  };
+  seat_map: {
+    [key: string]: SeatFromAPI[];
+  };
+  summary: {
+    total_seats: number;
+    available: number;
+    holding: number;
+    sold: number;
+    maintenance: number;
+  };
+}
 
 const SeatSelectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
   const {
@@ -35,6 +64,8 @@ const SeatSelectionPage: React.FC = () => {
     addSeat,
     removeSeat,
     clearBooking,
+    setSelectedMovie,
+    setSelectedShowtime,
   } = useBooking();
 
   const [seatMap, setSeatMap] = useState<Seat[][]>([]);
@@ -43,16 +74,133 @@ const SeatSelectionPage: React.FC = () => {
   const [curfewWarningOpen, setCurfewWarningOpen] = useState(false);
   const [ageValidation, setAgeValidation] = useState<any>(null);
   const [curfewValidation, setCurfewValidation] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const movie = movies.find((m) => m.id === selectedMovie);
+  const [movie, setMovie] = useState<any>(null);
+
+  // Initialize from query params if context is empty
+  useEffect(() => {
+    const movieParam = searchParams.get("movie");
+    const showtimeParam = searchParams.get("showtime");
+
+    if (movieParam && !selectedMovie) {
+      setSelectedMovie(movieParam);
+    }
+
+    if (showtimeParam && !selectedShowtime) {
+      // We don't have the full showtime object yet, but we'll fetch its data
+      // For now, minimal object to satisfy the context check
+      setSelectedShowtime({ id: showtimeParam } as any);
+    }
+  }, [searchParams, selectedMovie, selectedShowtime, setSelectedMovie, setSelectedShowtime]);
+
+  // Fetch movie data from API
+  useEffect(() => {
+    const movieId = selectedMovie || searchParams.get("movie");
+    if (!movieId) return;
+
+    const fetchMovie = async () => {
+      try {
+        const response = await apiCall<{ success: boolean; data: { movie: any } }>(
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId))
+        );
+        if (response.success && response.data?.movie) {
+          const m = response.data.movie;
+          setMovie({
+            id: String(m.id),
+            title: m.title,
+            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
+            duration: m.duration || m.duration_minutes,
+            ageRating: m.age_rating || 'P',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch movie:', error);
+      }
+    };
+    fetchMovie();
+  }, [selectedMovie, searchParams]);
+
+  // Convert API response to component format
+  const convertSeatMap = (apiResponse: SeatMapResponse): Seat[][] => {
+    const rows = Object.keys(apiResponse.seat_map).sort();
+    return rows.map((rowCode) => {
+      return apiResponse.seat_map[rowCode].map((seat) => {
+        const seatTypeLower = seat.seat_type.toLowerCase();
+        let type: 'standard' | 'vip' | 'couple' = 'standard';
+        if (seatTypeLower === 'vip') type = 'vip';
+        else if (seatTypeLower === 'sweetbox' || seatTypeLower === 'couple') type = 'couple';
+
+        return ({
+          id: `${seat.row_code}${seat.number}`,
+          row: seat.row_code,
+          number: seat.number,
+          type,
+          status: seat.status === 'Available' ? 'available' :
+            seat.status === 'HOLDING' ? 'held' :
+              seat.status === 'SOLD' ? 'sold' :
+                seat.status === 'Maintenance' ? 'maintenance' : 'available',
+          price: seat.calculated_price,
+        });
+      });
+    });
+  };
 
   useEffect(() => {
-    if (!selectedMovie || !selectedShowtime) {
-      navigate("/");
-      return;
+    const movieId = selectedMovie || searchParams.get("movie");
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
+
+    if (!movieId || !showtimeId) {
+      // Only redirect if both are missing after initialization
+      const timer = setTimeout(() => {
+        if (!selectedMovie && !searchParams.get("movie")) {
+          navigate("/");
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
-    setSeatMap(generateSeatMap(8, 12));
-  }, [selectedMovie, selectedShowtime, navigate]);
+
+    const fetchSeatMap = async () => {
+      try {
+        setLoading(true);
+        const response = await apiCall<{ success: boolean; data: SeatMapResponse }>(
+          API_ENDPOINTS.SHOWTIME_SEAT_MAP(parseInt(showtimeId))
+        );
+
+        const seatMapData = response.data || response as unknown as SeatMapResponse;
+
+        // If we initialized from query params, update the showtime object in context with real data
+        if (seatMapData.showtime && (!selectedShowtime || !selectedShowtime.start_time)) {
+          setSelectedShowtime({
+            id: String(seatMapData.showtime.id),
+            time: new Date(seatMapData.showtime.start_time).toLocaleTimeString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            date: seatMapData.showtime.start_time.split(' ')[0],
+            start_time: seatMapData.showtime.start_time,
+            hall: seatMapData.showtime.hall_name,
+            cinema: seatMapData.showtime.cinema_name,
+          } as any);
+        }
+
+        const convertedSeatMap = convertSeatMap(seatMapData);
+        setSeatMap(convertedSeatMap);
+      } catch (error) {
+        console.error("Failed to fetch seat map:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải sơ đồ ghế. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+        navigate("/schedule");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSeatMap();
+  }, [selectedMovie, selectedShowtime, searchParams, navigate, toast, setSelectedShowtime]);
 
   // Countdown timer
   useEffect(() => {
@@ -82,30 +230,46 @@ const SeatSelectionPage: React.FC = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleSeatClick = (seat: Seat) => {
-    if (seat.status === "sold" || seat.status === "held") return;
+  const handleSeatClick = (seat: Seat | Seat[]) => {
+    const seats = Array.isArray(seat) ? seat : [seat];
+    if (seats.some(s => s.status === "sold" || s.status === "held" || s.status === "maintenance")) return;
 
-    const isSelected = selectedSeats.find((s) => s.id === seat.id);
-    if (isSelected) {
-      removeSeat(seat.id);
+    const anySelected = seats.some(s => selectedSeats.find((ss) => ss.id === s.id));
+    if (anySelected) {
+      seats.forEach(s => removeSeat(s.id));
     } else {
-      addSeat({ ...seat, status: "selected" });
+      seats.forEach(s => addSeat({ ...s, status: "selected" }));
     }
   };
 
-  const handleHoldSeats = () => {
+  const getSeatClass = (seat: Seat | Seat[]) => {
+    const seats = Array.isArray(seat) ? seat : [seat];
+    const isMerged = Array.isArray(seat);
+    const isSelected = seats.some(s => selectedSeats.find((ss) => ss.id === s.id));
 
+    if (isSelected) return cn("seat seat-selected", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "sold")) return cn("seat seat-sold", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "held")) return cn("seat seat-held", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "maintenance")) return cn("seat seat-maintenance", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.type === "vip")) return cn("seat seat-vip seat-available", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.type === "couple")) return cn("seat seat-couple seat-available", isMerged && "seat-couple-merged");
+    return cn("seat seat-available", isMerged && "seat-couple-merged");
   };
 
-  const getSeatClass = (seat: Seat) => {
-    const isSelected = selectedSeats.find((s) => s.id === seat.id);
+  const groupSeats = (row: Seat[]) => {
+    const grouped: (Seat | Seat[])[] = [];
+    for (let i = 0; i < row.length; i++) {
+      const current = row[i];
+      const next = row[i + 1];
 
-    if (isSelected) return "seat seat-selected";
-    if (seat.status === "sold") return "seat seat-sold";
-    if (seat.status === "held") return "seat seat-held";
-    if (seat.type === "vip") return "seat seat-vip seat-available";
-    if (seat.type === "couple") return "seat seat-couple seat-available";
-    return "seat seat-available";
+      if (current.type === 'couple' && next && next.type === 'couple') {
+        grouped.push([current, next]);
+        i++; // skip next
+      } else {
+        grouped.push(current);
+      }
+    }
+    return grouped;
   };
 
   const totalPrice = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
@@ -151,6 +315,37 @@ const SeatSelectionPage: React.FC = () => {
 
   if (!movie || !selectedShowtime) {
     return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Đang tải sơ đồ ghế...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (seatMap.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+            <p className="text-muted-foreground mb-4">Không thể tải sơ đồ ghế</p>
+            <Button onClick={() => navigate("/schedule")}>
+              Quay lại
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -222,29 +417,38 @@ const SeatSelectionPage: React.FC = () => {
                     {row[0]?.row}
                   </span>
                   <div className="flex gap-0.5 md:gap-1">
-                    {row.map((seat) => (
-                      <button
-                        key={seat.id}
-                        onClick={() => handleSeatClick(seat)}
-                        disabled={
-                          seat.status === "sold" || seat.status === "held"
-                        }
-                        className={cn(
-                          getSeatClass(seat),
-                          seat.type === "couple"
-                            ? "w-12 md:w-16"
-                            : "w-6 md:w-8",
-                          "text-[10px] md:text-xs",
-                        )}
-                        title={`${seat.id} - ${seat.price.toLocaleString("vi-VN")}đ`}
-                      >
-                        {seat.status === "sold" ? (
-                          <X className="w-2 h-2 md:w-3 md:h-3" />
-                        ) : (
-                          seat.number
-                        )}
-                      </button>
-                    ))}
+                    {groupSeats(row).map((seat, seatIdx) => {
+                      const isMerged = Array.isArray(seat);
+                      const seats = isMerged ? seat : [seat];
+                      const firstSeat = seats[0];
+                      const isSold = seats.some(s => s.status === "sold");
+                      const isMaintenance = seats.some(s => s.status === "maintenance");
+                      const seatNumbers = isMerged ? `${seats[0].number}-${seats[1].number}` : firstSeat.number;
+                      const seatIds = isMerged ? `${seats[0].id},${seats[1].id}` : firstSeat.id;
+                      const price = isMerged ? seats[0].price + seats[1].price : firstSeat.price;
+
+                      return (
+                        <button
+                          key={isMerged ? `merged-${seats[0].id}` : firstSeat.id}
+                          onClick={() => handleSeatClick(seat)}
+                          disabled={
+                            isSold || seats.some(s => s.status === "held") || isMaintenance
+                          }
+                          className={cn(
+                            getSeatClass(seat),
+                            !isMerged && "w-6 md:w-8",
+                            "text-[10px] md:text-xs",
+                          )}
+                          title={isMaintenance ? "Khu vực không ngồi" : `${seatIds} - ${price.toLocaleString("vi-VN")}đ`}
+                        >
+                          {isSold ? (
+                            <X className="w-2 h-2 md:w-3 md:h-3" />
+                          ) : isMaintenance ? null : (
+                            seatNumbers
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                   <span className="w-5 md:w-6 text-center text-xs md:text-sm font-medium text-muted-foreground">
                     {row[0]?.row}
@@ -278,7 +482,7 @@ const SeatSelectionPage: React.FC = () => {
                 <span className="text-sm">VIP</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="seat seat-couple seat-available w-10 h-6" />
+                <div className="seat seat-couple seat-available seat-couple-merged !w-12 !h-5" />
                 <span className="text-sm">Couple</span>
               </div>
             </div>

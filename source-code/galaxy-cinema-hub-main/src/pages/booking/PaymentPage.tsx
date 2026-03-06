@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useBooking } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AppContext';
 import { movies } from '@/data/mockData';
+import { API_ENDPOINTS, apiCall } from '@/lib/api';
 import { PaymentMethod } from '@/types/cinema';
 import { cn } from '@/lib/utils';
 import { BookingService } from '@/services/booking.service';
@@ -35,7 +36,30 @@ const PaymentPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
 
-  const movie = movies.find(m => m.id === selectedMovie);
+  const [movie, setMovie] = useState<any>(null);
+
+  // Fetch movie from API
+  useEffect(() => {
+    const fetchMovie = async () => {
+      if (!selectedMovie) return;
+      try {
+        const response = await apiCall<{ success: boolean; data: { movie: any } }>(
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie))
+        );
+        if (response.success && response.data?.movie) {
+          const m = response.data.movie;
+          setMovie({
+            id: String(m.id),
+            title: m.title,
+            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch movie:', error);
+      }
+    };
+    fetchMovie();
+  }, [selectedMovie]);
 
   const { user } = useAuth();
 
