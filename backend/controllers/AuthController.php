@@ -249,11 +249,21 @@ class AuthController {
                 return Response::error('Email hoặc mật khẩu không đúng', 401);
             }
             
+            $roleMap = [
+                1 => 'Guest',
+                2 => 'Member',
+                3 => 'Staff',
+                4 => 'Manager',
+                5 => 'Admin',
+            ];
+            $roleName = $roleMap[(int)$user['role_id']] ?? 'Guest';
+
             // Generate JWT token
             $token = JWT::encode([
                 'user_id' => $user['id'],
                 'email' => $user['email'],
                 'role_id' => $user['role_id'],
+                'role' => $roleName,
                 'exp' => time() + Config::$jwt_expiration
             ], Config::$jwt_secret);
             
@@ -267,6 +277,7 @@ class AuthController {
                     'id' => $user['id'],
                     'email' => $user['email'],
                     'role_id' => $user['role_id'],
+                    'role' => $roleName,
                     'full_name' => $profile['full_name'] ?? '',
                     'avatar' => $profile['avatar'] ?? null,
                     'current_points' => $user['current_points']
@@ -306,7 +317,11 @@ class AuthController {
             $token = str_replace('Bearer ', '', $authHeader);
             
             // Decode JWT
-            $payload = JWT::decode($token, Config::$jwt_secret);
+            try {
+                $payload = JWT::decode($token, Config::$jwt_secret);
+            } catch (Exception $e) {
+                return Response::error('Token không hợp lệ hoặc đã hết hạn', 401);
+            }
             
             if (!$payload) {
                 return Response::error('Token không hợp lệ', 401);

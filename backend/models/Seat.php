@@ -125,12 +125,14 @@ class Seat
     public function getSeatStatus($seatId, $showtimeId)
     {
         try {
+            // Check if seat is sold (paid booking)
             $sql = "SELECT t.status
                     FROM tickets t
                     JOIN bookings b ON t.booking_id = b.id
                     WHERE t.seat_id = :seat_id 
                     AND b.showtime_id = :showtime_id
-                    AND t.status IN ('HOLDING', 'SOLD', 'USED')
+                    AND b.status IN ('Paid', 'Confirmed')
+                    AND t.status IN ('SOLD', 'USED')
                     ORDER BY t.created_at DESC
                     LIMIT 1";
 
@@ -140,7 +142,35 @@ class Seat
             $stmt->execute();
 
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            return $result ? $result['status'] : 'Available';
+            if ($result) {
+                return 'SOLD';
+            }
+
+            // Check if seat is being held (pending booking not expired)
+            $holdDuration = Config::$seat_hold_duration; // 600 seconds = 10 minutes
+            $sql = "SELECT t.status
+                    FROM tickets t
+                    JOIN bookings b ON t.booking_id = b.id
+                    WHERE t.seat_id = :seat_id 
+                    AND b.showtime_id = :showtime_id
+                    AND b.status = 'Pending'
+                    AND t.status = 'HOLDING'
+                    AND TIMESTAMPDIFF(SECOND, b.created_at, NOW()) < :hold_duration
+                    ORDER BY t.created_at DESC
+                    LIMIT 1";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':seat_id', $seatId, PDO::PARAM_INT);
+            $stmt->bindParam(':showtime_id', $showtimeId, PDO::PARAM_INT);
+            $stmt->bindParam(':hold_duration', $holdDuration, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return 'HOLDING';
+            }
+
+            return 'Available';
         } catch (PDOException $e) {
             error_log("Seat getSeatStatus Error: " . $e->getMessage());
             return 'Available';

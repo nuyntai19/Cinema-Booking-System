@@ -1,4 +1,4 @@
-<?php
+ <?php
 require_once __DIR__ . '/../models/UserVoucher.php';
 require_once __DIR__ . '/../models/Promotion.php';
 require_once __DIR__ . '/../models/User.php';

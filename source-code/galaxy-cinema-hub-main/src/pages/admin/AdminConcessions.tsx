@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Coffee,
   Plus,
@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Package,
   DollarSign,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,17 +42,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 
 interface Concession {
   id: number;
   name: string;
-  description: string;
-  category: "combo" | "popcorn" | "drink" | "snack";
   price: number;
-  imageUrl: string;
-  stock: number;
-  soldCount: number;
-  status: "available" | "out-of-stock";
+  image_url: string | null;
+  category: string | null;
+  is_available: boolean;
+  created_at?: string;
 }
 
 const AdminConcessions: React.FC = () => {
@@ -61,125 +61,53 @@ const AdminConcessions: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<Concession | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [concessions, setConcessions] = useState<Concession[]>([
-    {
-      id: 1,
-      name: "Combo Couple",
-      description: "2 Bắp Lớn + 2 Nước Lớn",
-      category: "combo",
-      price: 189000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1578849278619-e73505e9610f?w=400",
-      stock: 50,
-      soldCount: 234,
-      status: "available",
-    },
-    {
-      id: 2,
-      name: "Combo Solo",
-      description: "1 Bắp Vừa + 1 Nước Vừa",
-      category: "combo",
-      price: 99000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=400",
-      stock: 80,
-      soldCount: 567,
-      status: "available",
-    },
-    {
-      id: 3,
-      name: "Bắp Ngọt Lớn",
-      description: "Bắp rang bơ size L",
-      category: "popcorn",
-      price: 70000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=400",
-      stock: 120,
-      soldCount: 892,
-      status: "available",
-    },
-    {
-      id: 4,
-      name: "Pepsi Lớn",
-      description: "Pepsi size L (32oz)",
-      category: "drink",
-      price: 45000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400",
-      stock: 200,
-      soldCount: 1245,
-      status: "available",
-    },
-    {
-      id: 5,
-      name: "Nước Cam Ép",
-      description: "Nước cam tươi ép 100%",
-      category: "drink",
-      price: 55000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400",
-      stock: 0,
-      soldCount: 456,
-      status: "out-of-stock",
-    },
-    {
-      id: 6,
-      name: "Nachos Phô Mai",
-      description: "Nachos với sốt phô mai",
-      category: "snack",
-      price: 65000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1582169296194-e4d644c48063?w=400",
-      stock: 45,
-      soldCount: 334,
-      status: "available",
-    },
-    {
-      id: 7,
-      name: "Hot Dog",
-      description: "Xúc xích nướng kẹp bánh mì",
-      category: "snack",
-      price: 50000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1612392062798-2e264e5a2789?w=400",
-      stock: 60,
-      soldCount: 278,
-      status: "available",
-    },
-    {
-      id: 8,
-      name: "Combo Gia Đình",
-      description: "3 Bắp Lớn + 3 Nước Lớn + 1 Nachos",
-      category: "combo",
-      price: 299000,
-      imageUrl:
-        "https://images.unsplash.com/photo-1578849278619-e73505e9610f?w=400",
-      stock: 30,
-      soldCount: 145,
-      status: "available",
-    },
-  ]);
+  const [concessions, setConcessions] = useState<Concession[]>([]);
+
+  // Fetch concessions from API
+  useEffect(() => {
+    fetchConcessions();
+  }, []);
+
+  const fetchConcessions = async () => {
+    try {
+      setLoading(true);
+      const response = await apiCall<{
+        success: boolean;
+        data: Concession[];
+      }>(API_ENDPOINTS.CONCESSIONS, {
+        method: "GET",
+      });
+      if (response.success && response.data) {
+        setConcessions(response.data);
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Không thể tải danh sách bắp nước";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
-    category: "combo" as Concession["category"],
+    category: "combo" as string,
     price: 0,
-    imageUrl: "",
-    stock: 0,
+    image_url: "",
+    is_available: true,
   });
 
   // Statistics
   const totalItems = concessions.length;
-  const availableItems = concessions.filter(
-    (c) => c.status === "available",
-  ).length;
-  const totalSold = concessions.reduce((sum, c) => sum + c.soldCount, 0);
-  const totalRevenue = concessions.reduce(
-    (sum, c) => sum + c.soldCount * c.price,
-    0,
-  );
+  const availableItems = concessions.filter((c) => c.is_available).length;
 
   // Filter
   const filteredConcessions = concessions.filter((item) => {
@@ -188,7 +116,8 @@ const AdminConcessions: React.FC = () => {
       .includes(searchQuery.toLowerCase());
 
     const matchesCategory =
-      filterCategory === "all" || item.category === filterCategory;
+      filterCategory === "all" ||
+      item.category?.toLowerCase() === filterCategory.toLowerCase();
 
     return matchesSearch && matchesCategory;
   });
@@ -197,40 +126,48 @@ const AdminConcessions: React.FC = () => {
     setSelectedItem(item);
     setFormData({
       name: item.name,
-      description: item.description,
-      category: item.category,
+      category: item.category || "combo",
       price: item.price,
-      imageUrl: item.imageUrl,
-      stock: item.stock,
+      image_url: item.image_url || "",
+      is_available: item.is_available,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateItem = () => {
+  const handleUpdateItem = async () => {
     if (!selectedItem) return;
 
-    setConcessions(
-      concessions.map((c) =>
-        c.id === selectedItem.id
-          ? {
-              ...c,
-              ...formData,
-              status: formData.stock > 0 ? "available" : "out-of-stock",
-            }
-          : c,
-      ),
-    );
+    try {
+      setLoading(true);
+      await apiCall(API_ENDPOINTS.CONCESSIONS + `/${selectedItem.id}`, {
+        method: "PUT",
+        body: JSON.stringify(formData),
+      });
 
-    toast({
-      title: "Cập nhật thành công",
-      description: `Đã cập nhật ${formData.name}`,
-    });
+      toast({
+        title: "Cập nhật thành công",
+        description: `Đã cập nhật ${formData.name}`,
+      });
 
-    setIsEditDialogOpen(false);
-    setSelectedItem(null);
+      setIsEditDialogOpen(false);
+      setSelectedItem(null);
+      fetchConcessions(); // Reload data
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật sản phẩm";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCreateItem = () => {
+  const handleCreateItem = async () => {
     if (!formData.name || !formData.price) {
       toast({
         title: "Lỗi",
@@ -240,48 +177,76 @@ const AdminConcessions: React.FC = () => {
       return;
     }
 
-    const newItem: Concession = {
-      id: concessions.length + 1,
-      ...formData,
-      soldCount: 0,
-      status: formData.stock > 0 ? "available" : "out-of-stock",
-    };
+    try {
+      setLoading(true);
+      await apiCall(API_ENDPOINTS.CONCESSIONS, {
+        method: "POST",
+        body: JSON.stringify(formData),
+      });
 
-    setConcessions([...concessions, newItem]);
+      toast({
+        title: "Tạo thành công",
+        description: `Đã thêm ${formData.name}`,
+      });
 
-    toast({
-      title: "Tạo thành công",
-      description: `Đã thêm ${formData.name}`,
-    });
-
-    setIsCreateDialogOpen(false);
-    setFormData({
-      name: "",
-      description: "",
-      category: "combo",
-      price: 0,
-      imageUrl: "",
-      stock: 0,
-    });
+      setIsCreateDialogOpen(false);
+      setFormData({
+        name: "",
+        category: "combo",
+        price: 0,
+        image_url: "",
+        is_available: true,
+      });
+      fetchConcessions(); // Reload data
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Không thể tạo sản phẩm";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteItem = (item: Concession) => {
-    setConcessions(concessions.filter((c) => c.id !== item.id));
+  const handleDeleteItem = async (item: Concession) => {
+    try {
+      setLoading(true);
+      await apiCall(API_ENDPOINTS.CONCESSIONS + `/${item.id}`, {
+        method: "DELETE",
+      });
 
-    toast({
-      title: "Đã xóa",
-      description: `Đã xóa ${item.name}`,
-    });
+      toast({
+        title: "Đã xóa",
+        description: `Đã xóa ${item.name}`,
+      });
+
+      fetchConcessions(); // Reload data
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể xóa sản phẩm";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getCategoryBadge = (category: string) => {
+  const getCategoryBadge = (category: string | null) => {
     const configs: Record<string, { color: string; label: string }> = {
       combo: { color: "bg-purple-500", label: "Combo" },
       popcorn: { color: "bg-yellow-500", label: "Bắp" },
       drink: { color: "bg-blue-500", label: "Nước" },
       snack: { color: "bg-orange-500", label: "Snack" },
     };
-    const config = configs[category];
+    const config = configs[category?.toLowerCase() || "combo"];
     return (
       <Badge className={`${config.color} text-white`}>{config.label}</Badge>
     );
@@ -297,14 +262,14 @@ const AdminConcessions: React.FC = () => {
             Quản lý sản phẩm và tồn kho concessions
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
+        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
           <Plus className="w-4 h-4 mr-2" />
           Thêm Sản Phẩm
         </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tổng Sản Phẩm</CardTitle>
@@ -324,32 +289,6 @@ const AdminConcessions: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{availableItems}</div>
             <p className="text-xs text-muted-foreground">Available items</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đã Bán</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {totalSold.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">Total sold</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Doanh Thu</CardTitle>
-            <DollarSign className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {(totalRevenue / 1000000).toFixed(1)}M
-            </div>
-            <p className="text-xs text-muted-foreground">Total revenue</p>
           </CardContent>
         </Card>
       </div>
@@ -390,14 +329,14 @@ const AdminConcessions: React.FC = () => {
           <Card key={item.id} className="overflow-hidden">
             <div className="relative h-48 bg-muted">
               <img
-                src={item.imageUrl}
+                src={getImageUrl(item.image_url) || "https://via.placeholder.com/400x300?text=No+Image"}
                 alt={item.name}
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-2 right-2">
                 {getCategoryBadge(item.category)}
               </div>
-              {item.status === "out-of-stock" && (
+              {!item.is_available && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                   <Badge variant="destructive" className="text-lg">
                     Hết Hàng
@@ -411,7 +350,7 @@ const AdminConcessions: React.FC = () => {
                 <div>
                   <h3 className="font-bold text-lg">{item.name}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {item.description}
+                    Danh mục: {item.category || "Không xác định"}
                   </p>
                 </div>
 
@@ -419,17 +358,9 @@ const AdminConcessions: React.FC = () => {
                   <span className="text-xl font-bold text-primary">
                     {item.price.toLocaleString("vi-VN")}đ
                   </span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Tồn kho:</span>
-                    <span className="font-medium">{item.stock}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Đã bán:</span>
-                    <span className="font-medium">{item.soldCount}</span>
-                  </div>
+                  <Badge variant={item.is_available ? "default" : "destructive"}>
+                    {item.is_available ? "Còn hàng" : "Hết hàng"}
+                  </Badge>
                 </div>
 
                 <div className="flex gap-2">
@@ -491,24 +422,13 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Mô Tả</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="edit-category">Danh Mục</Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
-                    category: value as Concession["category"],
+                    category: value,
                   })
                 }
               >
@@ -524,42 +444,49 @@ const AdminConcessions: React.FC = () => {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-price">Giá (đ) *</Label>
-                <Input
-                  id="edit-price"
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, price: Number(e.target.value) })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-stock">Tồn Kho</Label>
-                <Input
-                  id="edit-stock"
-                  type="number"
-                  value={formData.stock}
-                  onChange={(e) =>
-                    setFormData({ ...formData, stock: Number(e.target.value) })
-                  }
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-price">Giá (đ) *</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                value={formData.price}
+                onChange={(e) =>
+                  setFormData({ ...formData, price: Number(e.target.value) })
+                }
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-imageUrl">URL Hình Ảnh</Label>
+              <Label htmlFor="edit-image_url">URL Hình Ảnh</Label>
               <Input
-                id="edit-imageUrl"
-                value={formData.imageUrl}
+                id="edit-image_url"
+                value={formData.image_url}
                 onChange={(e) =>
-                  setFormData({ ...formData, imageUrl: e.target.value })
+                  setFormData({ ...formData, image_url: e.target.value })
                 }
                 placeholder="https://..."
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-is_available">Trạng thái</Label>
+              <Select
+                value={formData.is_available ? "true" : "false"}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    is_available: value === "true",
+                  })
+                }
+              >
+                <SelectTrigger id="edit-is_available">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Còn hàng</SelectItem>
+                  <SelectItem value="false">Hết hàng</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -597,25 +524,13 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-description">Mô Tả</Label>
-              <Textarea
-                id="create-description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="1 Bắp + 1 Nước..."
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="create-category">Danh Mục</Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
-                    category: value as Concession["category"],
+                    category: value,
                   })
                 }
               >
@@ -631,42 +546,49 @@ const AdminConcessions: React.FC = () => {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="create-price">Giá (đ) *</Label>
-                <Input
-                  id="create-price"
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, price: Number(e.target.value) })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="create-stock">Tồn Kho</Label>
-                <Input
-                  id="create-stock"
-                  type="number"
-                  value={formData.stock}
-                  onChange={(e) =>
-                    setFormData({ ...formData, stock: Number(e.target.value) })
-                  }
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-price">Giá (đ) *</Label>
+              <Input
+                id="create-price"
+                type="number"
+                value={formData.price}
+                onChange={(e) =>
+                  setFormData({ ...formData, price: Number(e.target.value) })
+                }
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-imageUrl">URL Hình Ảnh</Label>
+              <Label htmlFor="create-image_url">URL Hình Ảnh</Label>
               <Input
-                id="create-imageUrl"
-                value={formData.imageUrl}
+                id="create-image_url"
+                value={formData.image_url}
                 onChange={(e) =>
-                  setFormData({ ...formData, imageUrl: e.target.value })
+                  setFormData({ ...formData, image_url: e.target.value })
                 }
                 placeholder="https://..."
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-is_available">Trạng thái</Label>
+              <Select
+                value={formData.is_available ? "true" : "false"}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    is_available: value === "true",
+                  })
+                }
+              >
+                <SelectTrigger id="create-is_available">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Còn hàng</SelectItem>
+                  <SelectItem value="false">Hết hàng</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

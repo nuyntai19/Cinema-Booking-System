@@ -1,1 +1,13 @@
-[]
+{
+    "dunguyendangkhoa12a8@gmail.com": {
+        "code": "370222",
+        "data": {
+            "email": "dunguyendangkhoa12a8@gmail.com",
+            "fullName": "D\u01b0 Nguy\u1ec5n \u0110\u0103ng Khoa",
+            "phone": "0909853845",
+            "dob": "2004-09-20",
+            "password": "12345678"
+        },
+        "expires_at": 1771852056
+    }
+}

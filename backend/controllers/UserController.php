@@ -28,35 +28,45 @@ class UserController {
      * Helper: Get current user from JWT token
      */
     private function getCurrentUserId() {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
-        
-        if (empty($authHeader)) {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
+            
+            if (empty($authHeader)) {
+                return null;
+            }
+            
+            $token = str_replace('Bearer ', '', $authHeader);
+            $payload = JWT::decode($token, Config::$jwt_secret);
+            
+            return $payload ? $payload['user_id'] : null;
+        } catch (Exception $e) {
+            error_log("JWT decode error in getCurrentUserId: " . $e->getMessage());
             return null;
         }
-        
-        $token = str_replace('Bearer ', '', $authHeader);
-        $payload = JWT::decode($token, Config::$jwt_secret);
-        
-        return $payload ? $payload['user_id'] : null;
     }
     
     /**
      * Helper: Check if user is admin
      */
     private function isAdmin() {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
-        
-        if (empty($authHeader)) {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
+            
+            if (empty($authHeader)) {
+                return false;
+            }
+            
+            $token = str_replace('Bearer ', '', $authHeader);
+            $payload = JWT::decode($token, Config::$jwt_secret);
+            
+            // role_id: 5 = Admin
+            return $payload && $payload['role_id'] == 5;
+        } catch (Exception $e) {
+            error_log("JWT decode error in isAdmin: " . $e->getMessage());
             return false;
         }
-        
-        $token = str_replace('Bearer ', '', $authHeader);
-        $payload = JWT::decode($token, Config::$jwt_secret);
-        
-        // role_id: 5 = Admin
-        return $payload && $payload['role_id'] == 5;
     }
     
     // ============================================

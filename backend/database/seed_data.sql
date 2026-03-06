@@ -53,13 +53,13 @@ INSERT INTO genres (name) VALUES
 ('Tâm Lý'),
 ('Tài Liệu');
 
-INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, director, cast, release_date, status) VALUES
-('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', 'Trấn Thành', 'Phương Anh Đào, Tuấn Trần, Hồng Đào, Uyển Ân', '2024-02-10', 'Now Showing'),
-('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', 'Phi Tiến Sơn', 'Doãn Quốc Đam, Cao Thái Hà, Trọng Khang', '2024-02-25', 'Now Showing'),
-('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', 'Mike Mitchell', 'Jack Black, Awkwafina, Viola Davis, Dustin Hoffman', '2024-03-08', 'Now Showing'),
-('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', 'Denis Villeneuve', 'Timothée Chalamet, Zendaya, Rebecca Ferguson, Austin Butler', '2024-03-01', 'Now Showing'),
-('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', 'Adam Wingard', 'Rebecca Hall, Dan Stevens, Brian Tyree Henry', '2024-03-29', 'Coming Soon'),
-('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', 'Lý Hải', 'Lý Hải, Minh Hà, Trương Minh Quốc Thái, Trần Kim Hào', '2024-04-26', 'Coming Soon');
+INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, release_date, status) VALUES
+('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', '2026-02-10', 'Now Showing'),
+('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', '2026-02-25', 'Now Showing'),
+('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', '2026-03-08', 'Now Showing'),
+('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', '2026-03-01', 'Now Showing'),
+('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', '2026-03-29', 'Coming Soon'),
+('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', '2026-04-26', 'Coming Soon');
 
 INSERT INTO movie_genres (movie_id, genre_id) VALUES
 (1, 3), (1, 7), -- MAI: Tình cảm, Tâm lý
@@ -72,10 +72,10 @@ INSERT INTO movie_genres (movie_id, genre_id) VALUES
 -- ============================================
 -- 4. CINEMAS, HALLS, SEAT TYPES, SEATS
 -- ============================================
-INSERT INTO cinemas (name, address, street, district, city, lat, lng, hotline, status, manager_id) VALUES
-('Galaxy Nguyễn Du', '116 Nguyễn Du, Quận 1, TP.HCM', '116 Nguyễn Du', 'Quận 1', 'Hồ Chí Minh', 10.78283500, 106.69521300, '1900 2224', 'active', 2),
-('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Quận Tân Bình, TP.HCM', '246 Nguyễn Hồng Đào', 'Quận Tân Bình', 'Hồ Chí Minh', 10.80132700, 106.65274200, '1900 2225', 'active', 2),
-('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Quận 6, TP.HCM', '718bis Kinh Dương Vương', 'Quận 6', 'Hồ Chí Minh', 10.74751800, 106.63580900, '1900 2226', 'active', NULL);
+INSERT INTO cinemas (name, address, manager_id) VALUES
+('Galaxy Nguyễn Du', '116 Nguyễn Du, Q.1, TP.HCM', 2),
+('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Q.Tân Bình, TP.HCM', 2),
+('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Q.6, TP.HCM', NULL);
 
 INSERT INTO cinema_halls (cinema_id, name, total_seats) VALUES
 (1, 'Phòng 1', 120),
@@ -90,8 +90,11 @@ INSERT INTO seat_types (name, price_multiplier) VALUES
 ('VIP', 1.50),
 ('Sweetbox', 2.00);
 
--- Generate seats for Phòng 1 (Cinema 1)
--- Rows A-H, 10 seats per row
+-- ============================================
+-- GENERATE SEATS FOR ALL HALLS
+-- ============================================
+
+-- Hall 1: Phòng 1 - Galaxy Nguyễn Du (120 seats: 12 rows x 10 seats)
 INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
 SELECT 
     1 as cinema_hall_id,
@@ -102,11 +105,88 @@ SELECT
         WHEN row_code = 'H' AND number BETWEEN 5 AND 6 THEN 3 -- Sweetbox
         ELSE 1 -- Standard
     END as seat_type_id,
-    CASE
-        WHEN row_code = 'A' AND number IN (1, 10) THEN 'Inactive' -- Khu vực không ngồi
-        WHEN row_code = 'B' AND number = 5 THEN 'Broken' -- Ghế hỏng
-        ELSE 'Active'
-    END as status
+    'Active' as status
+FROM 
+    (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
+     UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H'
+     UNION SELECT 'I' UNION SELECT 'J' UNION SELECT 'K' UNION SELECT 'L') AS row_codes
+CROSS JOIN
+    (SELECT 1 as number UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+     UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
+ORDER BY row_code, number;
+
+-- Hall 2: Phòng 2 - Galaxy Nguyễn Du (120 seats: 12 rows x 10 seats)
+INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
+SELECT 
+    2 as cinema_hall_id,
+    row_code,
+    number,
+    CASE 
+        WHEN row_code IN ('G', 'H') AND number BETWEEN 3 AND 8 THEN 2 -- VIP
+        ELSE 1 -- Standard
+    END as seat_type_id,
+    'Active' as status
+FROM 
+    (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
+     UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H'
+     UNION SELECT 'I' UNION SELECT 'J' UNION SELECT 'K' UNION SELECT 'L') AS row_codes
+CROSS JOIN
+    (SELECT 1 as number UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+     UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
+ORDER BY row_code, number;
+
+-- Hall 3: IMAX - Galaxy Nguyễn Du (150 seats: 15 rows x 10 seats)
+INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
+SELECT 
+    3 as cinema_hall_id,
+    row_code,
+    number,
+    CASE 
+        WHEN row_code IN ('H', 'I', 'J', 'K') AND number BETWEEN 3 AND 8 THEN 2 -- VIP (IMAX Premium)
+        ELSE 1 -- Standard
+    END as seat_type_id,
+    'Active' as status
+FROM 
+    (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
+     UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H'
+     UNION SELECT 'I' UNION SELECT 'J' UNION SELECT 'K' UNION SELECT 'L'
+     UNION SELECT 'M' UNION SELECT 'N' UNION SELECT 'O') AS row_codes
+CROSS JOIN
+    (SELECT 1 as number UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+     UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
+ORDER BY row_code, number;
+
+-- Hall 4: Phòng 1 - Galaxy Tân Bình (100 seats: 10 rows x 10 seats)
+INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
+SELECT 
+    4 as cinema_hall_id,
+    row_code,
+    number,
+    CASE 
+        WHEN row_code IN ('E', 'F', 'G') AND number BETWEEN 4 AND 7 THEN 2 -- VIP
+        ELSE 1 -- Standard
+    END as seat_type_id,
+    'Active' as status
+FROM 
+    (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
+     UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H'
+     UNION SELECT 'I' UNION SELECT 'J') AS row_codes
+CROSS JOIN
+    (SELECT 1 as number UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+     UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
+ORDER BY row_code, number;
+
+-- Hall 5: 4DX - Galaxy Tân Bình (80 seats: 8 rows x 10 seats)
+INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
+SELECT 
+    5 as cinema_hall_id,
+    row_code,
+    number,
+    CASE 
+        WHEN row_code IN ('E', 'F') AND number BETWEEN 3 AND 8 THEN 2 -- VIP (4DX Premium)
+        ELSE 1 -- Standard
+    END as seat_type_id,
+    'Active' as status
 FROM 
     (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
      UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H') AS row_codes
@@ -115,23 +195,161 @@ CROSS JOIN
      UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
 ORDER BY row_code, number;
 
+-- Hall 6: Phòng 1 - Galaxy Kinh Dương Vương (120 seats: 12 rows x 10 seats)
+INSERT INTO seats (cinema_hall_id, row_code, number, seat_type_id, status)
+SELECT 
+    6 as cinema_hall_id,
+    row_code,
+    number,
+    CASE 
+        WHEN row_code IN ('F', 'G', 'H') AND number BETWEEN 4 AND 7 THEN 2 -- VIP
+        WHEN row_code = 'I' AND number BETWEEN 5 AND 6 THEN 3 -- Sweetbox
+        ELSE 1 -- Standard
+    END as seat_type_id,
+    'Active' as status
+FROM 
+    (SELECT 'A' as row_code UNION SELECT 'B' UNION SELECT 'C' UNION SELECT 'D' 
+     UNION SELECT 'E' UNION SELECT 'F' UNION SELECT 'G' UNION SELECT 'H'
+     UNION SELECT 'I' UNION SELECT 'J' UNION SELECT 'K' UNION SELECT 'L') AS row_codes
+CROSS JOIN
+    (SELECT 1 as number UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+     UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) AS seat_numbers
+ORDER BY row_code, number;
+
 -- ============================================
 -- 5. SHOWTIMES
 -- ============================================
-INSERT INTO showtimes (movie_id, cinema_hall_id, start_time, end_time, base_price) VALUES
--- MAI tại Galaxy Nguyễn Du
-(1, 1, '2026-01-25 10:00:00', '2026-01-25 12:30:00', 75000),
-(1, 1, '2026-01-25 14:00:00', '2026-01-25 16:30:00', 90000),
-(1, 1, '2026-01-25 19:00:00', '2026-01-25 21:30:00', 100000),
-(1, 2, '2026-01-25 20:00:00', '2026-01-25 22:30:00', 100000),
+INSERT INTO showtimes (movie_id, cinema_hall_id, start_time, end_time) VALUES
+-- ===== GALAXY NGUYỄN DU (Cinema 1) =====
+-- Phòng 1 (Hall 1)
+-- MAI - Hôm nay (23/02/2026)
+(1, 1, '2026-02-23 10:00:00', '2026-02-23 12:15:00'),
+(1, 1, '2026-02-23 14:30:00', '2026-02-23 16:45:00'),
+(1, 1, '2026-02-23 19:00:00', '2026-02-23 21:15:00'),
+(1, 1, '2026-02-23 21:30:00', '2026-02-23 23:45:00'),
 
--- Kung Fu Panda 4
-(3, 1, '2026-01-26 09:00:00', '2026-01-26 11:00:00', 70000),
-(3, 4, '2026-01-26 14:30:00', '2026-01-26 16:30:00', 90000),
+-- Kung Fu Panda 4 - Hôm nay
+(3, 1, '2026-02-23 09:00:00', '2026-02-23 10:35:00'),
+(3, 1, '2026-02-23 13:00:00', '2026-02-23 14:35:00'),
+(3, 1, '2026-02-23 17:00:00', '2026-02-23 18:35:00'),
 
--- Dune: Part Two tại IMAX
-(4, 3, '2026-01-26 15:00:00', '2026-01-26 18:00:00', 150000),
-(4, 3, '2026-01-26 20:00:00', '2026-01-26 23:00:00', 150000);
+-- MAI - Ngày mai (24/02/2026)
+(1, 1, '2026-02-24 10:30:00', '2026-02-24 12:45:00'),
+(1, 1, '2026-02-24 15:00:00', '2026-02-24 17:15:00'),
+(1, 1, '2026-02-24 20:00:00', '2026-02-24 22:15:00'),
+
+-- Đào, Phở và Piano - Ngày mai
+(2, 1, '2026-02-24 09:00:00', '2026-02-24 10:50:00'),
+(2, 1, '2026-02-24 13:00:00', '2026-02-24 14:50:00'),
+(2, 1, '2026-02-24 18:00:00', '2026-02-24 19:50:00'),
+
+-- Phòng 2 (Hall 2)
+-- Dune: Part Two - Hôm nay
+(4, 2, '2026-02-23 10:00:00', '2026-02-23 12:46:00'),
+(4, 2, '2026-02-23 14:00:00', '2026-02-23 16:46:00'),
+(4, 2, '2026-02-23 18:00:00', '2026-02-23 20:46:00'),
+(4, 2, '2026-02-23 21:00:00', '2026-02-23 23:46:00'),
+
+-- Kung Fu Panda 4 - Ngày mai
+(3, 2, '2026-02-24 09:30:00', '2026-02-24 11:05:00'),
+(3, 2, '2026-02-24 13:30:00', '2026-02-24 15:05:00'),
+(3, 2, '2026-02-24 17:30:00', '2026-02-24 19:05:00'),
+(3, 2, '2026-02-24 20:30:00', '2026-02-24 22:05:00'),
+
+-- IMAX (Hall 3)
+-- Dune: Part Two - Hôm nay & ngày mai (chiếu đặc biệt IMAX)
+(4, 3, '2026-02-23 11:00:00', '2026-02-23 13:46:00'),
+(4, 3, '2026-02-23 15:00:00', '2026-02-23 17:46:00'),
+(4, 3, '2026-02-23 19:00:00', '2026-02-23 21:46:00'),
+(4, 3, '2026-02-24 12:00:00', '2026-02-24 14:46:00'),
+(4, 3, '2026-02-24 16:00:00', '2026-02-24 18:46:00'),
+(4, 3, '2026-02-24 20:00:00', '2026-02-24 22:46:00'),
+
+-- ===== GALAXY TÂN BÌNH (Cinema 2) =====
+-- Phòng 1 (Hall 4)
+-- MAI - Hôm nay
+(1, 4, '2026-02-23 10:30:00', '2026-02-23 12:45:00'),
+(1, 4, '2026-02-23 15:00:00', '2026-02-23 17:15:00'),
+(1, 4, '2026-02-23 19:30:00', '2026-02-23 21:45:00'),
+
+-- Đào, Phở và Piano - Hôm nay
+(2, 4, '2026-02-23 09:00:00', '2026-02-23 10:50:00'),
+(2, 4, '2026-02-23 13:00:00', '2026-02-23 14:50:00'),
+(2, 4, '2026-02-23 17:30:00', '2026-02-23 19:20:00'),
+
+-- Kung Fu Panda 4 - Ngày mai
+(3, 4, '2026-02-24 09:00:00', '2026-02-24 10:35:00'),
+(3, 4, '2026-02-24 11:00:00', '2026-02-24 12:35:00'),
+(3, 4, '2026-02-24 14:00:00', '2026-02-24 15:35:00'),
+(3, 4, '2026-02-24 16:00:00', '2026-02-24 17:35:00'),
+
+-- 4DX (Hall 5)
+-- Dune: Part Two - Hôm nay (4DX Special)
+(4, 5, '2026-02-23 11:00:00', '2026-02-23 13:46:00'),
+(4, 5, '2026-02-23 15:00:00', '2026-02-23 17:46:00'),
+(4, 5, '2026-02-23 19:00:00', '2026-02-23 21:46:00'),
+
+-- Kung Fu Panda 4 - Ngày mai (4DX Special)
+(3, 5, '2026-02-24 10:00:00', '2026-02-24 11:35:00'),
+(3, 5, '2026-02-24 13:00:00', '2026-02-24 14:35:00'),
+(3, 5, '2026-02-24 15:30:00', '2026-02-24 17:05:00'),
+(3, 5, '2026-02-24 18:00:00', '2026-02-24 19:35:00'),
+
+-- ===== GALAXY KINH DƯƠNG VƯƠNG (Cinema 3) =====
+-- Phòng 1 (Hall 6)
+-- MAI - Hôm nay
+(1, 6, '2026-02-23 10:00:00', '2026-02-23 12:15:00'),
+(1, 6, '2026-02-23 14:00:00', '2026-02-23 16:15:00'),
+(1, 6, '2026-02-23 18:00:00', '2026-02-23 20:15:00'),
+(1, 6, '2026-02-23 21:00:00', '2026-02-23 23:15:00'),
+
+-- Đào, Phở và Piano - Ngày mai
+(2, 6, '2026-02-24 09:30:00', '2026-02-24 11:20:00'),
+(2, 6, '2026-02-24 13:30:00', '2026-02-24 15:20:00'),
+(2, 6, '2026-02-24 17:30:00', '2026-02-24 19:20:00'),
+(2, 6, '2026-02-24 20:30:00', '2026-02-24 22:20:00'),
+
+-- Dune: Part Two - Ngày 25/02
+(4, 6, '2026-02-25 11:00:00', '2026-02-25 13:46:00'),
+(4, 6, '2026-02-25 15:00:00', '2026-02-25 17:46:00'),
+(4, 6, '2026-02-25 19:00:00', '2026-02-25 21:46:00'),
+
+-- Kung Fu Panda 4 - Ngày 25/02
+(3, 6, '2026-02-25 09:00:00', '2026-02-25 10:35:00'),
+(3, 6, '2026-02-25 13:00:00', '2026-02-25 14:35:00'),
+(3, 6, '2026-02-25 17:00:00', '2026-02-25 18:35:00'),
+
+-- ===== SUẤT CHIẾU CUỐI TUẦN (26-27/02) =====
+-- Galaxy Nguyễn Du
+(1, 1, '2026-02-26 09:00:00', '2026-02-26 11:15:00'),
+(1, 1, '2026-02-26 12:00:00', '2026-02-26 14:15:00'),
+(1, 1, '2026-02-26 15:00:00', '2026-02-26 17:15:00'),
+(1, 1, '2026-02-26 18:00:00', '2026-02-26 20:15:00'),
+(1, 1, '2026-02-26 21:00:00', '2026-02-26 23:15:00'),
+
+(3, 2, '2026-02-26 09:00:00', '2026-02-26 10:35:00'),
+(3, 2, '2026-02-26 11:00:00', '2026-02-26 12:35:00'),
+(3, 2, '2026-02-26 13:00:00', '2026-02-26 14:35:00'),
+(3, 2, '2026-02-26 15:00:00', '2026-02-26 16:35:00'),
+(3, 2, '2026-02-26 17:00:00', '2026-02-26 18:35:00'),
+(3, 2, '2026-02-26 19:00:00', '2026-02-26 20:35:00'),
+
+(4, 3, '2026-02-26 10:00:00', '2026-02-26 12:46:00'),
+(4, 3, '2026-02-26 14:00:00', '2026-02-26 16:46:00'),
+(4, 3, '2026-02-26 18:00:00', '2026-02-26 20:46:00'),
+(4, 3, '2026-02-26 22:00:00', '2026-02-27 00:46:00'),
+
+-- Chủ nhật 27/02
+(2, 1, '2026-02-27 09:00:00', '2026-02-27 10:50:00'),
+(2, 1, '2026-02-27 11:30:00', '2026-02-27 13:20:00'),
+(2, 1, '2026-02-27 14:00:00', '2026-02-27 15:50:00'),
+(2, 1, '2026-02-27 16:30:00', '2026-02-27 18:20:00'),
+(2, 1, '2026-02-27 19:00:00', '2026-02-27 20:50:00'),
+
+(4, 2, '2026-02-27 10:00:00', '2026-02-27 12:46:00'),
+(4, 2, '2026-02-27 13:30:00', '2026-02-27 16:16:00'),
+(4, 2, '2026-02-27 17:00:00', '2026-02-27 19:46:00'),
+(4, 2, '2026-02-27 20:30:00', '2026-02-27 23:16:00');
 
 -- ============================================
 -- 6. PRICING RULES
@@ -145,16 +363,16 @@ INSERT INTO pricing_rules (condition_type, adjustment_amount, is_active) VALUES
 -- 7. PROMOTIONS
 -- ============================================
 INSERT INTO promotions (code, description, discount_amount, discount_type, min_order_value, start_date, end_date, is_auto_apply, usage_limit) VALUES
-('WELCOME2024', 'Giảm 50K cho khách hàng mới', 50000, 'FIXED', 200000, '2024-01-01', '2024-12-31', FALSE, NULL),
-('BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20, 'PERCENT', 100000, '2024-01-01', '2024-12-31', TRUE, 1),
-('WEEKEND20', 'Giảm 20% cuối tuần', 20, 'PERCENT', 150000, '2024-01-01', '2024-12-31', FALSE, NULL),
-('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2024-01-01', '2024-12-31', FALSE, NULL);
+('WELCOME2026', 'Giảm 50K cho khách hàng mới', 50000, 'FIXED', 200000, '2026-01-01', '2026-12-31', FALSE, NULL),
+('BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20, 'PERCENT', 100000, '2026-01-01', '2026-12-31', TRUE, 1),
+('WEEKEND20', 'Giảm 20% cuối tuần', 20, 'PERCENT', 150000, '2026-01-01', '2026-12-31', FALSE, NULL),
+('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2026-01-01', '2026-12-31', FALSE, NULL);
 
 -- ============================================
 -- 8. USER VOUCHERS (Assign vouchers cho users)
 -- ============================================
 INSERT INTO user_vouchers (user_id, promotion_id, status) VALUES
-(4, 1, 'ACTIVE'), -- Nguyễn Văn A có voucher WELCOME2024
+(4, 1, 'ACTIVE'), -- Nguyễn Văn A có voucher WELCOME2026
 (5, 3, 'ACTIVE'), -- Trần Thị B có voucher WEEKEND20
 (6, 4, 'ACTIVE'); -- Lê Văn C có voucher MEMBER100
 
@@ -175,8 +393,8 @@ INSERT INTO concessions (name, price, category, image_url) VALUES
 -- 10. SAMPLE BOOKINGS
 -- ============================================
 -- Booking 1: User 4 đặt vé xem MAI
-INSERT INTO bookings (user_id, showtime_id, total_price, discount_amount, final_price, status) VALUES
-(4, 1, 180000, 0, 180000, 'Paid');
+INSERT INTO bookings (user_id, showtime_id, booking_code, total_price, discount_amount, final_price, status) VALUES
+(4, 1, 'GXY-2026-A1B2C', 180000, 0, 180000, 'Paid');
 
 SET @booking_id = LAST_INSERT_ID();
 
@@ -200,11 +418,11 @@ INSERT INTO loyalty_history (user_id, points_change, type, description, related_
 -- ============================================
 -- 11. REVIEWS
 -- ============================================
-INSERT INTO reviews (user_id, movie_id, rating, comment) VALUES
-(4, 1, 5, 'Phim hay, diễn xuất xuất sắc!'),
-(5, 1, 4, 'Cảm động, đáng xem'),
-(6, 3, 5, 'Con cái rất thích, hoạt hình đẹp'),
-(4, 4, 5, 'Dune 2 siêu phẩm, hình ảnh choáng ngợp!');
+INSERT INTO reviews (user_id, movie_id, rating, comment, status) VALUES
+(4, 1, 5, 'Phim hay, diễn xuất xuất sắc!', 'Approved'),
+(5, 1, 4, 'Cảm động, đáng xem', 'Approved'),
+(6, 3, 5, 'Con cái rất thích, hoạt hình đẹp', 'Approved'),
+(4, 4, 5, 'Dune 2 siêu phẩm, hình ảnh choáng ngợp!', 'Approved');
 
 -- ============================================
 -- 12. NOTIFICATIONS

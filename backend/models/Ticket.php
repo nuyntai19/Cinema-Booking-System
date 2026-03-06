@@ -153,6 +153,47 @@ class Ticket
     }
 
     /**
+     * Lấy tất cả vé với thông tin chi tiết (Admin)
+     * @param int $limit - Số lượng vé tối đa (default: 100)
+     * @param int $offset - Vị trí bắt đầu (default: 0)
+     * @return array
+     */
+    public function getAll($limit = 100, $offset = 0)
+    {
+        $stmt = $this->db->prepare("
+            SELECT 
+                t.*,
+                s.seat_number,
+                s.row_number,
+                st.name AS seat_type_name,
+                sh.start_time AS showtime_start,
+                sh.end_time AS showtime_end,
+                m.title AS movie_title,
+                m.age_rating,
+                r.name AS room_name,
+                c.name AS cinema_name,
+                b.total_amount AS booking_amount,
+                b.booking_code,
+                u.email AS user_email,
+                u.full_name AS user_name
+            FROM tickets t
+            JOIN seats s ON t.seat_id = s.id
+            JOIN seat_types st ON s.seat_type_id = st.id
+            JOIN bookings b ON t.booking_id = b.id
+            JOIN showtimes sh ON b.showtime_id = sh.id
+            JOIN movies m ON sh.movie_id = m.id
+            JOIN rooms r ON sh.room_id = r.id
+            JOIN cinemas c ON r.cinema_id = c.id
+            LEFT JOIN users u ON b.user_id = u.id
+            ORDER BY t.created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+
+        $stmt->execute([$limit, $offset]);
+        return $stmt->fetchAll();
+    }
+
+    /**
      * Generate unique ticket code
      * @return string
      */

@@ -17,17 +17,18 @@ ini_set('log_errors', 1);     // Log errors instead
 ob_start();
 file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
-// CORS Headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-header('Content-Type: application/json; charset=UTF-8');
+// CORS is handled by .htaccess to avoid duplicate headers
+// Load CorsMiddleware for OPTIONS handling only
+require_once __DIR__ . '/middleware/CorsMiddleware.php';
 
-// Handle preflight OPTIONS request
+// Handle OPTIONS preflight requests (CORS headers already set by .htaccess)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
+
+// Set content type
+header('Content-Type: application/json; charset=UTF-8');
 
 // Load .env before configs
 require_once __DIR__ . '/config/Env.php';
@@ -114,8 +115,15 @@ $router->get('/api/movies/:id', 'MovieController@show');
 $router->post('/api/movies', 'MovieController@create'); // Admin
 $router->put('/api/movies/:id', 'MovieController@update'); // Admin
 $router->delete('/api/movies/:id', 'MovieController@delete'); // Admin
+$router->post('/api/movies/:id/upload-poster', 'MovieController@uploadPoster'); // Admin - Upload poster
 $router->get('/api/movies/:id/showtimes', 'MovieController@getShowtimes');
 $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
+
+// ============================================
+// GENRE ROUTES
+// ============================================
+$router->get('/api/genres', 'GenreController@index');
+$router->get('/api/genres/:id', 'GenreController@show');
 
 // ============================================
 // CINEMA ROUTES
@@ -158,12 +166,13 @@ $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getB
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
-$router->post('/api/transactions/momo/create', 'TransactionController@createMoMoPayment');
-$router->post('/api/transactions/vnpay/create', 'TransactionController@createVNPayPayment');
+$router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
+$router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
 
 // ============================================
 // TICKET ROUTES
 // ============================================
+$router->get('/api/tickets', 'TicketController@index'); // Admin - Get all tickets
 $router->get('/api/tickets/code/:code', 'TicketController@getByCode'); // QR scan
 $router->get('/api/tickets/booking/:bookingId', 'TicketController@getByBooking'); // Get tickets by booking
 $router->post('/api/tickets/check', 'TicketController@check'); // Staff scan at gate
@@ -203,10 +212,13 @@ $router->delete('/api/concessions/:id', 'ConcessionController@delete'); // Admin
 // ============================================
 // REVIEW ROUTES
 // ============================================
+$router->get('/api/reviews', 'ReviewController@index'); // Admin - List all reviews
 $router->get('/api/reviews/movie/:movieId', 'ReviewController@getMovieReviews');
 $router->post('/api/reviews', 'ReviewController@create');
 $router->put('/api/reviews/:id', 'ReviewController@update');
 $router->delete('/api/reviews/:id', 'ReviewController@delete');
+$router->put('/api/reviews/:id/approve', 'ReviewController@approve'); // Admin - Approve review
+$router->put('/api/reviews/:id/reject', 'ReviewController@reject'); // Admin - Reject review
 
 // ============================================
 // NOTIFICATION ROUTES

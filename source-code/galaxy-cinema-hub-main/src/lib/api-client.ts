@@ -33,7 +33,10 @@ class ApiClient {
      * Get authentication token from localStorage
      */
     private getAuthToken(): string | null {
-        return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+        return (
+            localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) ||
+            localStorage.getItem('token')
+        );
     }
 
     /**
@@ -41,6 +44,7 @@ class ApiClient {
      */
     public setAuthToken(token: string): void {
         localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+        localStorage.setItem('token', token);
     }
 
     /**
@@ -48,6 +52,7 @@ class ApiClient {
      */
     public clearAuthToken(): void {
         localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+        localStorage.removeItem('token');
         localStorage.removeItem(STORAGE_KEYS.USER);
     }
 

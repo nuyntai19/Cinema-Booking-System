@@ -14,7 +14,8 @@ class PaymentService
         $secretKey   = self::requiredConfig('MOMO_SECRET_KEY');
 
         $requestId = uniqid();
-        $requestType = 'payWithATM';
+        // captureWallet returns qrCodeUrl for QR-based flow.
+        $requestType = 'captureWallet';
         $extraData = '';
 
         $raw = "accessKey=$accessKey"
@@ -48,11 +49,14 @@ class PaymentService
         if (!is_array($response)) {
             throw new Exception('MoMo response is invalid', 502);
         }
-        if (!empty($response['payUrl'])) {
-            return $response['payUrl'];
+        if (!empty($response['qrCodeUrl']) || !empty($response['payUrl'])) {
+            return [
+                'pay_url' => $response['payUrl'] ?? null,
+                'qr_code_url' => $response['qrCodeUrl'] ?? null,
+            ];
         }
 
-        $message = $response['message'] ?? 'MoMo did not return payUrl';
+        $message = $response['message'] ?? 'MoMo did not return payment url';
         throw new Exception('MoMo error: ' . $message, 502);
     }
 

@@ -1,18 +1,29 @@
-import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
-import { QrCode, Check, Calendar, MapPin, Clock, Download, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { useLocation, Link } from "react-router-dom";
+import {
+  QrCode,
+  Check,
+  Calendar,
+  MapPin,
+  Clock,
+  Download,
+  Home,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const BookingSuccessPage: React.FC = () => {
   const location = useLocation();
-  const { ticketCode, movie, seats, total, discount, promoCode } = location.state || {};
+  const { ticketCode, movie, seats, total, discount, promoCode } =
+    location.state || {};
 
   if (!ticketCode) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Không tìm thấy thông tin vé</h1>
+          <h1 className="text-2xl font-bold mb-4">
+            Không tìm thấy thông tin vé
+          </h1>
           <Link to="/">
             <Button>Về trang chủ</Button>
           </Link>
@@ -30,7 +41,9 @@ const BookingSuccessPage: React.FC = () => {
           <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center glow-success mb-4">
             <Check className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Đặt Vé Thành Công!</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            Đặt Vé Thành Công!
+          </h1>
           <p className="text-white/70">Vé của bạn đã được xác nhận</p>
         </div>
 
@@ -59,7 +72,9 @@ const BookingSuccessPage: React.FC = () => {
           {/* Ticket Code */}
           <div className="text-center pb-4">
             <p className="text-white/60 text-sm mb-1">Mã vé</p>
-            <p className="text-white text-xl font-mono font-bold tracking-wider">{ticketCode}</p>
+            <p className="text-white text-xl font-mono font-bold tracking-wider">
+              {ticketCode}
+            </p>
           </div>
 
           {/* Valid Badge */}
@@ -91,11 +106,11 @@ const BookingSuccessPage: React.FC = () => {
               <div>
                 <p className="text-white/60 text-xs">Ngày chiếu</p>
                 <p className="text-white font-medium">
-                  {new Date().toLocaleDateString('vi-VN', {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
+                  {new Date().toLocaleDateString("vi-VN", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
                   })}
                 </p>
               </div>
@@ -116,7 +131,7 @@ const BookingSuccessPage: React.FC = () => {
               <div>
                 <p className="text-white/60 text-xs">Ghế</p>
                 <p className="text-white font-medium">
-                  {seats?.map((s: any) => s.id).join(', ')}
+                  {seats?.map((s: any) => s.id).join(", ")}
                 </p>
               </div>
             </div>
@@ -128,12 +143,13 @@ const BookingSuccessPage: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-white/70">Tổng thanh toán</span>
                 <span className="text-2xl font-bold text-primary">
-                  {total?.toLocaleString('vi-VN')}đ
+                  {total?.toLocaleString("vi-VN")}đ
                 </span>
               </div>
               {discount > 0 && (
                 <p className="text-green-400 text-sm mt-1">
-                  🎉 Bạn đã tiết kiệm {discount.toLocaleString('vi-VN')}đ với mã {promoCode}!
+                  🎉 Bạn đã tiết kiệm {discount.toLocaleString("vi-VN")}đ với mã{" "}
+                  {promoCode}!
                 </p>
               )}
             </div>
@@ -147,9 +163,12 @@ const BookingSuccessPage: React.FC = () => {
             Lưu Ảnh Vé
           </Button>
           <Link to="/" className="block">
-            <Button variant="outline" className="w-full h-12 border-white/30 text-white hover:bg-white/10">
+            <Button
+              variant="outline"
+              className="w-full h-12 border-white/30 text-white hover:bg-white/10 hover:text-white"
+            >
               <Home className="w-5 h-5 mr-2" />
-              Về Trang Chủ
+              <span className="text-white">Về Trang Chủ</span>
             </Button>
           </Link>
         </div>
