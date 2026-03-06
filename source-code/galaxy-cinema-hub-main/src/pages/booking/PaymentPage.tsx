@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useBooking } from '@/contexts/AppContext';
-import { movies } from '@/data/mockData';
+import { API_ENDPOINTS, apiCall } from '@/lib/api';
 import { PaymentMethod } from '@/types/cinema';
 import { cn } from '@/lib/utils';
 import {
@@ -23,7 +23,7 @@ const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedMovie, selectedSeats, concessions, clearBooking } = useBooking();
-  
+
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
   const [promoCode, setPromoCode] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -31,7 +31,30 @@ const PaymentPage: React.FC = () => {
   const [qrTimeLeft, setQRTimeLeft] = useState(300); // 5 minutes
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const movie = movies.find(m => m.id === selectedMovie);
+  const [movie, setMovie] = useState<any>(null);
+
+  // Fetch movie from API
+  useEffect(() => {
+    const fetchMovie = async () => {
+      if (!selectedMovie) return;
+      try {
+        const response = await apiCall<{ success: boolean; data: { movie: any } }>(
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie))
+        );
+        if (response.success && response.data?.movie) {
+          const m = response.data.movie;
+          setMovie({
+            id: String(m.id),
+            title: m.title,
+            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch movie:', error);
+      }
+    };
+    fetchMovie();
+  }, [selectedMovie]);
 
   const ticketTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
   const concessionTotal = concessions.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -134,7 +157,7 @@ const PaymentPage: React.FC = () => {
           <div className="space-y-6">
             <div className="bg-card rounded-xl border border-border p-6">
               <h2 className="font-bold text-lg mb-4">Phương Thức Thanh Toán</h2>
-              
+
               <RadioGroup
                 value={paymentMethod}
                 onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}

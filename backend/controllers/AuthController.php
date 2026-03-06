@@ -396,4 +396,141 @@ class AuthController {
             return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
         }
     }
+    
+    /**
+     * Gửi mã reset password qua email
+     * POST /api/auth/forgot-password
+     */
+    public function forgotPassword() {
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Validate
+            if (empty($data['email'])) {
+                return Response::error('Email không được để trống', 400);
+            }
+            
+            $email = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
+            
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return Response::error('Email không hợp lệ', 400);
+            }
+            
+            // Kiểm tra email có tồn tại không
+            $user = $this->userModel->findByEmail($email);
+            
+            if (!$user) {
+                // Vẫn trả về success để tránh leak thông tin email có tồn tại hay không
+                return Response::success([
+                    'message' => 'Nếu email tồn tại trong hệ thống, mã xác nhận đã được gửi đến email của bạn'
+                ]);
+            }
+            
+            // Kiểm tra user có active không
+            if ($user['status'] !== 'Active') {
+                return Response::error('Tài khoản đã bị khóa', 403);
+            }
+            
+            // Tạo mã reset 6 số
+            $resetCode = sprintf('%06d', rand(0, 999999));
+            
+            // Lưu mã reset (expire sau 15 phút)
+            $codes = $this->getVerificationCodes();
+            $codes[$email] = [
+                'type' => 'reset_password',
+                'code' => $resetCode,
+                'user_id' => $user['id'],
+                'expires_at' => time() + (15 * 60) // 15 minutes
+            ];
+            $this->saveVerificationCodes($codes);
+            
+            // Gửi email
+            $result = $this->emailService->sendPasswordResetCode($email, $resetCode, $user['full_name'] ?? 'Người dùng');
+            
+            if (!$result) {
+                return Response::error('Không thể gửi email. Vui lòng thử lại sau', 500);
+            }
+            
+            return Response::success([
+                'message' => 'Mã xác nhận đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư'
+            ]);
+            
+        } catch (Exception $e) {
+            return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
+        }
+    }
+    
+    /**
+     * Reset password với mã xác nhận
+     * POST /api/auth/reset-password
+     */
+    public function resetPassword() {
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Validate
+            if (empty($data['email']) || empty($data['code']) || empty($data['new_password'])) {
+                return Response::error('Vui lòng điền đầy đủ thông tin', 400);
+            }
+            
+            $email = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
+            $code = $data['code'];
+            $newPassword = $data['new_password'];
+            
+            // Validate password
+            if (strlen($newPassword) < 6) {
+                return Response::error('Mật khẩu phải có ít nhất 6 ký tự', 400);
+            }
+            
+            // Đọc codes
+            $codes = $this->getVerificationCodes();
+            
+            // Kiểm tra code có tồn tại không
+            if (!isset($codes[$email])) {
+                return Response::error('Mã xác nhận không hợp lệ hoặc đã hết hạn', 400);
+            }
+            
+            $savedData = $codes[$email];
+            
+            // Kiểm tra type
+            if ($savedData['type'] !== 'reset_password') {
+                return Response::error('Mã xác nhận không hợp lệ', 400);
+            }
+            
+            // Kiểm tra code có đúng không
+            if ($savedData['code'] !== $code) {
+                return Response::error('Mã xác nhận không đúng', 400);
+            }
+            
+            // Kiểm tra hết hạn chưa
+            if (time() > $savedData['expires_at']) {
+                // Xóa code đã hết hạn
+                unset($codes[$email]);
+                $this->saveVerificationCodes($codes);
+                return Response::error('Mã xác nhận đã hết hạn. Vui lòng yêu cầu mã mới', 400);
+            }
+            
+            // Update password
+            $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+            $result = $this->userModel->update($savedData['user_id'], [
+                'password_hash' => $hashedPassword,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            if (!$result) {
+                return Response::error('Không thể cập nhật mật khẩu', 500);
+            }
+            
+            // Xóa code đã sử dụng
+            unset($codes[$email]);
+            $this->saveVerificationCodes($codes);
+            
+            return Response::success([
+                'message' => 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập với mật khẩu mới'
+            ]);
+            
+        } catch (Exception $e) {
+            return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
+        }
+    }
 }
