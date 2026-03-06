@@ -47,6 +47,10 @@ class Config {
     public static $smtp_from_email = 'noreply@galaxycinema.vn';
     public static $smtp_from_name = 'Galaxy Cinema';
     
+    // REDIS Settings
+    public static $redis_host = 'localhost';
+    public static $redis_port = 6379;
+
     public static function init() {
         date_default_timezone_set(self::$timezone);
         

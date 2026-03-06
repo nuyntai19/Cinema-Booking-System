@@ -93,6 +93,10 @@ const SeatSelectionPage: React.FC = () => {
     }
   };
 
+  const handleHoldSeats = () => {
+
+  };
+
   const getSeatClass = (seat: Seat) => {
     const isSelected = selectedSeats.find((s) => s.id === seat.id);
 

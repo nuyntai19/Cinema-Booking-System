@@ -60,6 +60,17 @@ export const API_ENDPOINTS = {
         USER_BOOKINGS: (userId: string) => `/bookings/user/${userId}`,
     },
 
+    // Transactions
+    TRANSACTIONS: {
+        CREATE: '/transactions',
+        MOMO: '/transactions/momo',
+        VNPAY: '/transactions/vnpay',
+        MOMO_VERIFY: '/transactions/momo/verify',
+        VNPAY_VERIFY: '/transactions/vnpay/verify',
+        BY_BOOKING: (bookingId: string) => `/transactions/booking/${bookingId}`,
+        USER_HISTORY: (userId: string) => `/transactions/user/${userId}`,
+    },
+
     // Showtimes
     SHOWTIMES: {
         LIST: '/showtimes',

@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    
+
     if (token && savedUser) {
       try {
         setUser(JSON.parse(savedUser));
@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Save token and user to localStorage
       localStorage.setItem('token', data.data.token);
       localStorage.setItem('user', JSON.stringify(userData));
-      
+
       setUser(userData);
       return { success: true, user: userData };
     } catch (error) {
@@ -106,7 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-    
+
     // Redirect to home page
     console.log('🏠 Redirecting to home page...');
     window.location.href = '/';
@@ -142,7 +142,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           phone: data.data.user.phone,
           dob: data.data.user.dob,
         };
-        
+
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
         console.log('✅ User data refreshed successfully');
