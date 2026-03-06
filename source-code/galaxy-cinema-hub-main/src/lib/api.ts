@@ -22,13 +22,11 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/users/${id}/change-password`,
 
   // Movies
-  MOVIES: `${API_BASE_URL}/api/movies/index.php`,
-  MOVIE_DETAIL: (id: number) =>
-    `${API_BASE_URL}/api/movies/detail.php?id=${id}`,
+  MOVIES: `${API_BASE_URL}/api/movies`,
+  MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/api/movies/${id}`,
   MOVIE_SHOWTIMES: (id: number) =>
-    `${API_BASE_URL}/api/movies/showtimes.php?id=${id}`,
-  MOVIE_REVIEWS: (id: number) =>
-    `${API_BASE_URL}/api/movies/reviews.php?id=${id}`,
+    `${API_BASE_URL}/api/movies/${id}/showtimes`,
+  MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/api/movies/${id}/reviews`,
   MOVIE_UPLOAD_POSTER: (id: number) =>
     `${API_BASE_URL}/api/movies/upload-poster.php?id=${id}`,
 

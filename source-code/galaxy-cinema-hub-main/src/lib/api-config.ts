@@ -2,8 +2,12 @@
  * API Configuration
  */
 
-// Base API URL - Update this to match your backend
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Base API URL
+// Accept both:
+// - VITE_API_URL=http://localhost:8000
+// - VITE_API_URL=http://localhost:8000/api
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+export const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 // API Endpoints
 export const API_ENDPOINTS = {

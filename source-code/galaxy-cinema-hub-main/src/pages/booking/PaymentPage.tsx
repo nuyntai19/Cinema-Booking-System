@@ -67,6 +67,7 @@ const PaymentPage: React.FC = () => {
   const concessionTotal = concessions.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const subtotal = ticketTotal + concessionTotal;
   const grandTotal = subtotal - discount;
+  const seatCodes = selectedSeats.map(s => `${s.row}${s.number}`);
 
   // QR Timer
   useEffect(() => {
@@ -122,7 +123,9 @@ const PaymentPage: React.FC = () => {
 
   const createBooking = async (): Promise<number | null> => {
     const showTimeId = toPositiveInt(selectedShowtime?.id);
-    const seatIds = selectedSeats.map(s => toPositiveInt(s.id)).filter(id => id !== null && typeof id === 'number');
+    const seatIds = selectedSeats
+      .map(s => toPositiveInt(s.id))
+      .filter((id): id is number => id !== null);
     const concessionsData = concessions.map(c => ({
       concession_id: toPositiveInt(c.id),
       quantity: c.quantity,
@@ -340,7 +343,7 @@ const PaymentPage: React.FC = () => {
               <div>
                 <p className="font-semibold">{movie.title}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Ghế: {selectedSeats.map(s => s.id).join(', ')}
+                  Ghế: {seatCodes.join(', ')}
                 </p>
               </div>
             </div>
