@@ -418,11 +418,11 @@ INSERT INTO loyalty_history (user_id, points_change, type, description, related_
 -- ============================================
 -- 11. REVIEWS
 -- ============================================
-INSERT INTO reviews (user_id, movie_id, rating, comment) VALUES
-(4, 1, 5, 'Phim hay, diễn xuất xuất sắc!'),
-(5, 1, 4, 'Cảm động, đáng xem'),
-(6, 3, 5, 'Con cái rất thích, hoạt hình đẹp'),
-(4, 4, 5, 'Dune 2 siêu phẩm, hình ảnh choáng ngợp!');
+INSERT INTO reviews (user_id, movie_id, rating, comment, status) VALUES
+(4, 1, 5, 'Phim hay, diễn xuất xuất sắc!', 'Approved'),
+(5, 1, 4, 'Cảm động, đáng xem', 'Approved'),
+(6, 3, 5, 'Con cái rất thích, hoạt hình đẹp', 'Approved'),
+(4, 4, 5, 'Dune 2 siêu phẩm, hình ảnh choáng ngợp!', 'Approved');
 
 -- ============================================
 -- 12. NOTIFICATIONS
