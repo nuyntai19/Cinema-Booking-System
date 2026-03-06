@@ -59,9 +59,12 @@ export const API_ENDPOINTS = {
         LIST: '/bookings',
         DETAIL: (id: string) => `/bookings/${id}`,
         CREATE: '/bookings',
+        UPDATE: (id: string) => `/bookings/${id}`,
         CONFIRM: (id: string) => `/bookings/${id}/confirm`,
         CANCEL: (id: string) => `/bookings/${id}/cancel`,
         USER_BOOKINGS: (userId: string) => `/bookings/user/${userId}`,
+        SHOWTIME_BOOKINGS: (showtimeId: string) => `/bookings/showtime/${showtimeId}`,
+        USER_AND_SHOWTIME_BOOKING: (userId: string, showtimeId: string) => `/bookings/user/showtime/${userId}/${showtimeId}`,
     },
 
     // Transactions

@@ -335,7 +335,10 @@ class Booking {
     }
 
     public function calculateTotalPrice($showtime, $seatDetails, $concessions) {
-        $basePrice = $this->getBaseTicketPrice();
+        $basePrice = (float)($showtime['base_price'] ?? 0);
+        if ($basePrice <= 0) {
+            $basePrice = $this->getBaseTicketPrice();
+        }
         $adjustment = $this->getPricingAdjustment($showtime['start_time']);
 
         $seatPrices = [];
@@ -446,6 +449,172 @@ class Booking {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    public function getByShowtime($showtimeId) {
+        $stmt = $this->db->prepare(
+            "SELECT b.*, m.title AS movie_title, s.start_time, c.name AS cinema_name, h.name AS hall_name
+             FROM bookings b
+             JOIN showtimes s ON b.showtime_id = s.id
+             JOIN movies m ON s.movie_id = m.id
+             JOIN cinema_halls h ON s.cinema_hall_id = h.id
+             JOIN cinemas c ON h.cinema_id = c.id
+             WHERE b.showtime_id = :showtime_id
+             ORDER BY b.created_at DESC"
+        );
+        $stmt->execute([':showtime_id' => $showtimeId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    public function update($bookingId, $seatIds, $concessions = [], $userVoucherId = null) {
+        $booking = $this->getById($bookingId);
+        if (!$booking) {
+            throw new Exception('Booking không tồn tại');
+        }
+        if ($booking['status'] !== 'Pending') {
+            throw new Exception('Chỉ có thể cập nhật booking đang chờ');
+        }
+
+        $showtime = $this->getShowtime($booking['showtime_id']);
+        if (!$showtime) {
+            throw new Exception('Suất chiếu không tồn tại');
+        }
+
+        $seatIds = array_values(array_unique(array_map('intval', $seatIds)));
+
+        $this->db->beginTransaction();
+        try {
+            // Validate seats
+            $seatDetails = $this->getSeatDetails($seatIds, (int)$showtime['cinema_hall_id']);
+            if (count($seatDetails) !== count($seatIds)) {
+                throw new Exception('Ghế không hợp lệ hoặc không thuộc phòng chiếu');
+            }
+
+            // Check seat availability (exclude seats already held by this booking)
+            $unavailableSeats = $this->getUnavailableSeats($booking['showtime_id'], $seatIds);
+            $currentSeatIds = $this->getBookingSeatIds($bookingId);
+            $trulyUnavailable = array_diff($unavailableSeats, $currentSeatIds);
+            if (!empty($trulyUnavailable)) {
+                throw new Exception('Một số ghế đã được giữ hoặc đã bán');
+            }
+
+            // Recalculate price
+            $pricing = $this->calculateTotalPrice($showtime, $seatDetails, $concessions);
+            $totalPrice = $pricing['total_price'];
+
+            $voucherDiscount = 0;
+            if ($userVoucherId) {
+                $voucherDiscount = $this->applyVoucherDiscount($userVoucherId, $booking['user_id'], $totalPrice);
+            }
+            $membershipDiscount = $this->applyMembershipDiscount($booking['user_id'], $totalPrice);
+            $discountAmount = min($voucherDiscount + $membershipDiscount, $totalPrice);
+            $finalPrice = $totalPrice - $discountAmount;
+
+            // Update booking record
+            $stmt = $this->db->prepare(
+                "UPDATE bookings SET total_price = :total_price, discount_amount = :discount_amount, 
+                 final_price = :final_price, user_voucher_id = :user_voucher_id
+                 WHERE id = :id"
+            );
+            $stmt->execute([
+                ':total_price' => $totalPrice,
+                ':discount_amount' => $discountAmount,
+                ':final_price' => $finalPrice,
+                ':user_voucher_id' => $userVoucherId ?: null,
+                ':id' => $bookingId,
+            ]);
+
+            // Delete old tickets
+            $this->db->prepare("DELETE FROM tickets WHERE booking_id = :booking_id")
+                ->execute([':booking_id' => $bookingId]);
+
+            // Create new tickets
+            $holdExpiresAt = date('Y-m-d H:i:s', time() + $this->getSeatHoldDuration());
+            $ticketStmt = $this->db->prepare(
+                "INSERT INTO tickets (booking_id, seat_id, price, ticket_code, status, hold_expires_at)
+                 VALUES (:booking_id, :seat_id, :price, :ticket_code, 'HOLDING', :hold_expires_at)"
+            );
+            $ticketIndex = 1;
+            foreach ($pricing['seat_prices'] as $seatId => $price) {
+                $ticketCode = $this->generateTicketCode($bookingId, $ticketIndex);
+                $ticketStmt->execute([
+                    ':booking_id' => $bookingId,
+                    ':seat_id' => $seatId,
+                    ':price' => $price,
+                    ':ticket_code' => $ticketCode,
+                    ':hold_expires_at' => $holdExpiresAt,
+                ]);
+                $ticketIndex++;
+            }
+
+            // Delete old concessions and insert new
+            $this->db->prepare("DELETE FROM booking_concessions WHERE booking_id = :booking_id")
+                ->execute([':booking_id' => $bookingId]);
+
+            if (!empty($pricing['concessions'])) {
+                $concessionStmt = $this->db->prepare(
+                    "INSERT INTO booking_concessions (booking_id, concession_id, quantity, price)
+                     VALUES (:booking_id, :concession_id, :quantity, :price)"
+                );
+                foreach ($pricing['concessions'] as $item) {
+                    $concessionStmt->execute([
+                        ':booking_id' => $bookingId,
+                        ':concession_id' => $item['id'],
+                        ':quantity' => $item['quantity'],
+                        ':price' => $item['price'],
+                    ]);
+                }
+            }
+
+            $this->db->commit();
+
+            return [
+                'booking_id' => $bookingId,
+                'hold_expires_at' => $holdExpiresAt,
+                'total_price' => $totalPrice,
+                'discount_amount' => $discountAmount,
+                'final_price' => $finalPrice,
+            ];
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    public function getByUserAndShowtime($userId, $showtimeId) {
+        $stmt = $this->db->prepare(
+            "SELECT b.*, m.title AS movie_title, s.start_time, c.name AS cinema_name, h.name AS hall_name
+             FROM bookings b
+             JOIN showtimes s ON b.showtime_id = s.id
+             JOIN movies m ON s.movie_id = m.id
+             JOIN cinema_halls h ON s.cinema_hall_id = h.id
+             JOIN cinemas c ON h.cinema_id = c.id
+             WHERE b.user_id = :user_id AND b.showtime_id = :showtime_id
+             ORDER BY b.created_at DESC LIMIT 1"
+        );
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':showtime_id' => $showtimeId,
+        ]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$booking) {
+            return null;
+        }
+
+        // Fetch seats for this booking
+        $ticketStmt = $this->db->prepare(
+            "SELECT s.id, CONCAT(s.row_code, s.number) AS seat_code, s.row_code AS `row_number`, s.number AS seat_number, st.name AS seat_type, t.price
+             FROM tickets t
+             JOIN seats s ON t.seat_id = s.id
+             JOIN seat_types st ON s.seat_type_id = st.id
+             WHERE t.booking_id = :booking_id"
+        );
+        $ticketStmt->execute([':booking_id' => $booking['id']]);
+        $booking['seats'] = $ticketStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $booking;
+    }
+
+    
 
     private function getUnavailableSeats($showtimeId, $seatIds) {
         list($placeholders, $params) = $this->buildInClause($seatIds, 'seat');
@@ -596,6 +765,12 @@ class Booking {
 
     private function generateTicketCode($bookingId, $index) {
         return sprintf('GXY-%06d-%03d', $bookingId, $index);
+    }
+
+    private function getBookingSeatIds($bookingId) {
+        $stmt = $this->db->prepare("SELECT seat_id FROM tickets WHERE booking_id = :booking_id");
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
     private function buildInClause($items, $prefix) {

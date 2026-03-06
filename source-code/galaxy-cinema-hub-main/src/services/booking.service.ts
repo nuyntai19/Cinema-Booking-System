@@ -107,6 +107,54 @@ export class BookingService {
     ) as Promise<PaginatedResponse<BookingDetailResponse[]>>;
   }
 
+  static async getBookingPendingByUserId(userId: string | number): Promise<ApiResponse<BookingDetailResponse[]>> {
+    const url = `${API_ENDPOINTS.BOOKINGS.USER_BOOKINGS(userId.toString())}?status=Pending`;
+    return apiClient.get<BookingDetailResponse[]>(
+      url,
+    ) as Promise<ApiResponse<BookingDetailResponse[]>>;
+  }
+
+  static async getbookingPendingByShowtimeId(showtimeId: string | number): Promise<ApiResponse<BookingDetailResponse[]>> {
+    const url = `${API_ENDPOINTS.BOOKINGS.SHOWTIME_BOOKINGS(showtimeId.toString())}?status=Pending`;
+    return apiClient.get<BookingDetailResponse[]>(
+      url,
+    ) as Promise<ApiResponse<BookingDetailResponse[]>>;
+  }
+
+  static async getBookingByUserAndShowtime(userId: string | number, showtimeId: string | number): Promise<ApiResponse<BookingDetailResponse | null>> {
+    const url = API_ENDPOINTS.BOOKINGS.USER_AND_SHOWTIME_BOOKING(userId.toString(), showtimeId.toString());
+    return apiClient.get<BookingDetailResponse | null>(
+      url,
+    ) as Promise<ApiResponse<BookingDetailResponse | null>>;
+  }
+
+  static async checkBookingExists(userId: string | number, showtimeId: string | number): Promise<boolean> {
+    const response = await this.getBookingByUserAndShowtime(userId, showtimeId);
+    return response.success && response.data !== null;
+  }
+  static async checkBookingPending(userId: string | number, showtimeId: string | number): Promise<boolean> {
+    const response = await this.getBookingByUserAndShowtime(userId, showtimeId);
+    return response.success && response.data !== null && response.data.status === "Pending";
+  }
+
+  static async checkBookingPaid(userId: string | number, showtimeId: string | number): Promise<boolean> {
+    const response = await this.getBookingByUserAndShowtime(userId, showtimeId);
+    return response.success && response.data !== null && response.data.status === "Paid";
+  }
+
+  static async updateBooking(id: string | number, data: {
+    seat_ids: number[];
+    concessions?: Array<{ concession_id: number; quantity: number }>;
+    user_voucher_id?: number | null;
+  }): Promise<ApiResponse<BookingDetailResponse>> {
+    return apiClient.put<BookingDetailResponse>(
+      API_ENDPOINTS.BOOKINGS.UPDATE(id.toString()),
+      data,
+    );
+  }
+
+
+
   /**
    * Get booking details by ID
    */

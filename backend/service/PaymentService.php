@@ -127,4 +127,62 @@ class PaymentService
         throw new Exception('Missing payment config: ' . $key, 500);
     }
 
+    public static function verifyMomoPayment($data) {
+        $secretKey = self::requiredConfig('MOMO_SECRET_KEY');
+        $accessKey = self::requiredConfig('MOMO_ACCESS_KEY');
+        $requiredFields = [
+            'amount', 'message', 'orderId', 'orderInfo',
+            'orderType', 'partnerCode', 'requestId', 'responseTime',
+            'resultCode', 'transId', 'signature'
+        ];
+
+        foreach ($requiredFields as $field) {
+            if (!array_key_exists($field, $data)) {
+                error_log('MoMo verify missing field: ' . $field);
+                return false;
+            }
+        }
+
+        // MoMo IPN signature must include accessKey and payType when payType exists in payload.
+        $raw = "accessKey=" . $accessKey
+            . "&amount=" . $data['amount']
+            . "&extraData=" . ($data['extraData'] ?? "")
+            . "&message=" . $data['message']
+            . "&orderId=" . $data['orderId']
+            . "&orderInfo=" . $data['orderInfo']
+            . "&orderType=" . $data['orderType']
+            . "&partnerCode=" . $data['partnerCode']
+            . "&payType=" . ($data['payType'] ?? "")
+            . "&requestId=" . $data['requestId']
+            . "&responseTime=" . $data['responseTime']
+            . "&resultCode=" . $data['resultCode']
+            . "&transId=" . $data['transId'];
+
+        $signature = hash_hmac('sha256', $raw, $secretKey);
+        $isValid = hash_equals($signature, (string)$data['signature']);
+        if (!$isValid) {
+            error_log('MoMo signature verification failed for orderId=' . (string)($data['orderId'] ?? ''));
+        }
+
+        return $isValid;
+    }
+
+    public static function verifyVNPayPayment($data) {
+        $hashSecret = self::requiredConfig('VNP_HASH_SECRET');
+        $secureHash = $data['vnp_SecureHash'] ?? null;
+
+        if (empty($secureHash)) {
+            return false;
+        }
+
+        $params = $data;
+        unset($params['vnp_SecureHash'], $params['vnp_SecureHashType']);
+        ksort($params);
+
+        $query = urldecode(http_build_query($params));
+        $calculatedHash = hash_hmac('sha512', $query, $hashSecret);
+
+        return hash_equals($calculatedHash, $secureHash);
+    }
+
 }

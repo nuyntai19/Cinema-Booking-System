@@ -24,6 +24,22 @@ class BookingService {
         return $this->bookingModel->getById((int)$id);
     }
 
+    public function updateBooking($id, $seatIds, $concessions, $userVoucherId) {
+        return $this->bookingModel->update(
+            (int)$id,
+            $seatIds,
+            $concessions,
+            $userVoucherId ? (int)$userVoucherId : null
+        );
+    }
+
+    public function getBookingsByShowtime($showtimeId) {
+        return $this->bookingModel->getByShowtime((int)$showtimeId);
+    }
+    public function getBookingByUserAndShowtime($userId, $showtimeId) {
+        return $this->bookingModel->getByUserAndShowtime((int)$userId, (int)$showtimeId);
+    }
+
     public function createBooking($userId, $showtimeId, $seatIds, $concessions, $userVoucherId) {
         return $this->bookingModel->create(
             (int)$userId,

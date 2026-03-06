@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X } from 'lucide-react';
+import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X, User } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { PaymentMethod } from '@/types/cinema';
 import { cn } from '@/lib/utils';
 import { BookingService } from '@/services/booking.service';
 import { TransactionService } from '@/services/transacsion.service';
+import { getPusherClient } from '@/lib/pusher';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,7 @@ const PaymentPage: React.FC = () => {
   const [qrTimeLeft, setQRTimeLeft] = useState(300); // 5 minutes
   const [isProcessing, setIsProcessing] = useState(false);
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
+  const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
 
   const [movie, setMovie] = useState<any>(null);
 
@@ -91,6 +93,67 @@ const PaymentPage: React.FC = () => {
     }
     return () => clearInterval(timer);
   }, [showQRModal, qrTimeLeft, toast]);
+
+  useEffect(() => {
+    if (!showQRModal || !currentBookingId) {
+      return;
+    }
+
+    const pusher = getPusherClient();
+    if (!pusher) {
+      return;
+    }
+
+    const channelName = `booking.${currentBookingId}`;
+    const channel = pusher.subscribe(channelName);
+    const eventName = 'payment-status-updated';
+
+    const onPaymentStatusUpdated = (payload: {
+      status?: string;
+      booking_id?: number;
+      transaction_code?: string;
+    }) => {
+      const status = (payload?.status || '').toLowerCase();
+
+      if (status === 'success') {
+        setShowQRModal(false);
+        navigate('/booking/success', {
+          state: {
+            ticketCode: payload?.transaction_code || `GXY-${currentBookingId}`,
+            movie,
+            seats: selectedSeats,
+            total: grandTotal,
+            discount,
+            promoCode: discount > 0 ? promoCode : null,
+          },
+        });
+        clearBooking();
+        return;
+      }
+
+      if (status === 'failed') {
+        setShowQRModal(false);
+        navigate('/booking/failed');
+      }
+    };
+
+    channel.bind(eventName, onPaymentStatusUpdated);
+
+    return () => {
+      channel.unbind(eventName, onPaymentStatusUpdated);
+      pusher.unsubscribe(channelName);
+    };
+  }, [
+    showQRModal,
+    currentBookingId,
+    navigate,
+    movie,
+    selectedSeats,
+    grandTotal,
+    discount,
+    promoCode,
+    clearBooking,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -176,10 +239,56 @@ const PaymentPage: React.FC = () => {
 
   const processPayment = async (method: PaymentMethod) => {
     setIsProcessing(true);
+
     try {
-      const bookingId = await createBooking();
-      if (!bookingId) {
-        return;
+      // check booking and create if not exists, then get booking ID to proceed with payment
+      const showTimeId = toPositiveInt(selectedShowtime?.id);
+      const userId = toPositiveInt(user?.id);
+      let bookingId: number | null = null;
+
+      // Check if user already has a pending booking for this showtime
+      const hasPending = await BookingService.checkBookingPending(userId!, showTimeId!);
+      if (hasPending) {
+        // Reuse existing pending booking - update seats and concessions
+        const pendingBooking = await BookingService.getBookingByUserAndShowtime(userId!, showTimeId!);
+        const existingBookingId = toPositiveInt(pendingBooking?.data?.id);
+        if (!existingBookingId) {
+          toast({
+            title: 'Lỗi đặt vé',
+            description: 'Không tìm thấy booking đang giữ ghế.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const seatIds = selectedSeats.map(s => toPositiveInt(s.id)).filter((id): id is number => id !== null);
+        const concessionsData = concessions.map(c => ({
+          concession_id: toPositiveInt(c.id),
+          quantity: c.quantity,
+        })).filter(c => c.concession_id !== null && typeof c.concession_id === 'number' && c.quantity > 0);
+
+        const updateResponse = await BookingService.updateBooking(existingBookingId, {
+          seat_ids: seatIds,
+          concessions: concessionsData,
+          user_voucher_id: discount > 0 ? 123 : undefined,
+        });
+
+        if (!updateResponse.success) {
+          toast({
+            title: 'Cập nhật booking thất bại',
+            description: updateResponse.message || 'Có lỗi xảy ra khi cập nhật booking.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        bookingId = existingBookingId;
+      } else {
+        // Create new booking
+        bookingId = await createBooking();
+        if (!bookingId) {
+          return;
+        }
       }
 
       if (method === 'momo') {
@@ -204,7 +313,8 @@ const PaymentPage: React.FC = () => {
       }
 
       setShowQRModal(true);
-      setQRTimeLeft(300);
+      setQRTimeLeft(600);
+      setCurrentBookingId(bookingId);
     } finally {
       setIsProcessing(false);
     }

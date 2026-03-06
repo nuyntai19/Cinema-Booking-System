@@ -22,6 +22,12 @@ const ConcessionsPage: React.FC = () => {
   const [loadingMovie, setLoadingMovie] = useState(true);
 
   useEffect(() => {
+    if (!selectedMovie || selectedSeats.length === 0) {
+      navigate('/schedule');
+    }
+  }, [navigate, selectedMovie, selectedSeats.length]);
+
+  useEffect(() => {
     const fetchMovie = async () => {
       if (!selectedMovie) {
         setLoadingMovie(false);
@@ -113,11 +119,6 @@ const ConcessionsPage: React.FC = () => {
   const handleSkip = () => {
     navigate('/booking/payment');
   };
-
-  if (!selectedMovie || selectedSeats.length === 0) {
-    navigate('/schedule');
-    return null;
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

@@ -1,7 +1,7 @@
 {
-    "time": "2026-03-06 11:02:51",
-    "raw_request_uri": "\/api\/genres\/index.php",
-    "parsed_uri": "\/api\/genres\/index.php",
+    "time": "2026-03-07 00:33:32",
+    "raw_request_uri": "\/uploads\/posters\/https:\/\/example.com\/dao.jpg",
+    "parsed_uri": "\/uploads\/posters\/https:\/\/example.com\/dao.jpg",
     "method": "GET",
     "routes": [
         {
@@ -406,6 +406,14 @@
         },
         {
             "index": 50,
+            "method": "PUT",
+            "path": "\/api\/bookings\/:id",
+            "pattern": "#^\/api\/bookings\/([^\/]+)$#",
+            "matches_method": false,
+            "matches_uri": false
+        },
+        {
+            "index": 51,
             "method": "GET",
             "path": "\/api\/bookings\/user\/:userId",
             "pattern": "#^\/api\/bookings\/user\/([^\/]+)$#",
@@ -413,7 +421,23 @@
             "matches_uri": false
         },
         {
-            "index": 51,
+            "index": 52,
+            "method": "GET",
+            "path": "\/api\/bookings\/showtime\/:showtimeId",
+            "pattern": "#^\/api\/bookings\/showtime\/([^\/]+)$#",
+            "matches_method": true,
+            "matches_uri": false
+        },
+        {
+            "index": 53,
+            "method": "GET",
+            "path": "\/api\/bookings\/user\/showtime\/:userId\/:showtimeId",
+            "pattern": "#^\/api\/bookings\/user\/showtime\/([^\/]+)\/([^\/]+)$#",
+            "matches_method": true,
+            "matches_uri": false
+        },
+        {
+            "index": 54,
             "method": "POST",
             "path": "\/api\/transactions",
             "pattern": "#^\/api\/transactions$#",
@@ -421,7 +445,7 @@
             "matches_uri": false
         },
         {
-            "index": 52,
+            "index": 55,
             "method": "GET",
             "path": "\/api\/transactions\/booking\/:bookingId",
             "pattern": "#^\/api\/transactions\/booking\/([^\/]+)$#",
@@ -429,7 +453,7 @@
             "matches_uri": false
         },
         {
-            "index": 53,
+            "index": 56,
             "method": "POST",
             "path": "\/api\/transactions\/momo\/verify",
             "pattern": "#^\/api\/transactions\/momo\/verify$#",
@@ -437,7 +461,7 @@
             "matches_uri": false
         },
         {
-            "index": 54,
+            "index": 57,
             "method": "POST",
             "path": "\/api\/transactions\/vnpay\/verify",
             "pattern": "#^\/api\/transactions\/vnpay\/verify$#",
@@ -445,7 +469,7 @@
             "matches_uri": false
         },
         {
-            "index": 55,
+            "index": 58,
             "method": "GET",
             "path": "\/api\/transactions\/user\/:userId",
             "pattern": "#^\/api\/transactions\/user\/([^\/]+)$#",
@@ -453,7 +477,7 @@
             "matches_uri": false
         },
         {
-            "index": 56,
+            "index": 59,
             "method": "POST",
             "path": "\/api\/transactions\/momo",
             "pattern": "#^\/api\/transactions\/momo$#",
@@ -461,7 +485,7 @@
             "matches_uri": false
         },
         {
-            "index": 57,
+            "index": 60,
             "method": "POST",
             "path": "\/api\/transactions\/vnpay",
             "pattern": "#^\/api\/transactions\/vnpay$#",
@@ -469,7 +493,7 @@
             "matches_uri": false
         },
         {
-            "index": 58,
+            "index": 61,
             "method": "GET",
             "path": "\/api\/tickets\/code\/:code",
             "pattern": "#^\/api\/tickets\/code\/([^\/]+)$#",
@@ -477,7 +501,7 @@
             "matches_uri": false
         },
         {
-            "index": 59,
+            "index": 62,
             "method": "GET",
             "path": "\/api\/tickets\/booking\/:bookingId",
             "pattern": "#^\/api\/tickets\/booking\/([^\/]+)$#",
@@ -485,7 +509,7 @@
             "matches_uri": false
         },
         {
-            "index": 60,
+            "index": 63,
             "method": "POST",
             "path": "\/api\/tickets\/check",
             "pattern": "#^\/api\/tickets\/check$#",
@@ -493,7 +517,7 @@
             "matches_uri": false
         },
         {
-            "index": 61,
+            "index": 64,
             "method": "PUT",
             "path": "\/api\/tickets\/:id\/use",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/use$#",
@@ -501,7 +525,7 @@
             "matches_uri": false
         },
         {
-            "index": 62,
+            "index": 65,
             "method": "POST",
             "path": "\/api\/tickets\/:id\/refund",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/refund$#",
@@ -509,7 +533,7 @@
             "matches_uri": false
         },
         {
-            "index": 63,
+            "index": 66,
             "method": "POST",
             "path": "\/api\/tickets\/:id\/send-email",
             "pattern": "#^\/api\/tickets\/([^\/]+)\/send-email$#",
@@ -517,7 +541,7 @@
             "matches_uri": false
         },
         {
-            "index": 64,
+            "index": 67,
             "method": "GET",
             "path": "\/api\/loyalty\/history\/:userId",
             "pattern": "#^\/api\/loyalty\/history\/([^\/]+)$#",
@@ -525,7 +549,7 @@
             "matches_uri": false
         },
         {
-            "index": 65,
+            "index": 68,
             "method": "POST",
             "path": "\/api\/loyalty\/earn",
             "pattern": "#^\/api\/loyalty\/earn$#",
@@ -533,7 +557,7 @@
             "matches_uri": false
         },
         {
-            "index": 66,
+            "index": 69,
             "method": "POST",
             "path": "\/api\/loyalty\/redeem",
             "pattern": "#^\/api\/loyalty\/redeem$#",
@@ -541,7 +565,7 @@
             "matches_uri": false
         },
         {
-            "index": 67,
+            "index": 70,
             "method": "GET",
             "path": "\/api\/memberships",
             "pattern": "#^\/api\/memberships$#",
@@ -549,7 +573,7 @@
             "matches_uri": false
         },
         {
-            "index": 68,
+            "index": 71,
             "method": "GET",
             "path": "\/api\/promotions",
             "pattern": "#^\/api\/promotions$#",
@@ -557,7 +581,7 @@
             "matches_uri": false
         },
         {
-            "index": 69,
+            "index": 72,
             "method": "GET",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -565,7 +589,7 @@
             "matches_uri": false
         },
         {
-            "index": 70,
+            "index": 73,
             "method": "POST",
             "path": "\/api\/promotions",
             "pattern": "#^\/api\/promotions$#",
@@ -573,7 +597,7 @@
             "matches_uri": false
         },
         {
-            "index": 71,
+            "index": 74,
             "method": "PUT",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -581,7 +605,7 @@
             "matches_uri": false
         },
         {
-            "index": 72,
+            "index": 75,
             "method": "DELETE",
             "path": "\/api\/promotions\/:id",
             "pattern": "#^\/api\/promotions\/([^\/]+)$#",
@@ -589,7 +613,7 @@
             "matches_uri": false
         },
         {
-            "index": 73,
+            "index": 76,
             "method": "GET",
             "path": "\/api\/vouchers\/user\/:userId",
             "pattern": "#^\/api\/vouchers\/user\/([^\/]+)$#",
@@ -597,7 +621,7 @@
             "matches_uri": false
         },
         {
-            "index": 74,
+            "index": 77,
             "method": "POST",
             "path": "\/api\/vouchers\/apply",
             "pattern": "#^\/api\/vouchers\/apply$#",
@@ -605,7 +629,7 @@
             "matches_uri": false
         },
         {
-            "index": 75,
+            "index": 78,
             "method": "GET",
             "path": "\/api\/concessions",
             "pattern": "#^\/api\/concessions$#",
@@ -613,7 +637,7 @@
             "matches_uri": false
         },
         {
-            "index": 76,
+            "index": 79,
             "method": "GET",
             "path": "\/api\/concessions\/available",
             "pattern": "#^\/api\/concessions\/available$#",
@@ -621,7 +645,7 @@
             "matches_uri": false
         },
         {
-            "index": 77,
+            "index": 80,
             "method": "GET",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -629,7 +653,7 @@
             "matches_uri": false
         },
         {
-            "index": 78,
+            "index": 81,
             "method": "POST",
             "path": "\/api\/concessions",
             "pattern": "#^\/api\/concessions$#",
@@ -637,7 +661,7 @@
             "matches_uri": false
         },
         {
-            "index": 79,
+            "index": 82,
             "method": "PUT",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -645,7 +669,7 @@
             "matches_uri": false
         },
         {
-            "index": 80,
+            "index": 83,
             "method": "DELETE",
             "path": "\/api\/concessions\/:id",
             "pattern": "#^\/api\/concessions\/([^\/]+)$#",
@@ -653,7 +677,7 @@
             "matches_uri": false
         },
         {
-            "index": 81,
+            "index": 84,
             "method": "GET",
             "path": "\/api\/reviews\/movie\/:movieId",
             "pattern": "#^\/api\/reviews\/movie\/([^\/]+)$#",
@@ -661,7 +685,7 @@
             "matches_uri": false
         },
         {
-            "index": 82,
+            "index": 85,
             "method": "POST",
             "path": "\/api\/reviews",
             "pattern": "#^\/api\/reviews$#",
@@ -669,7 +693,7 @@
             "matches_uri": false
         },
         {
-            "index": 83,
+            "index": 86,
             "method": "PUT",
             "path": "\/api\/reviews\/:id",
             "pattern": "#^\/api\/reviews\/([^\/]+)$#",
@@ -677,7 +701,7 @@
             "matches_uri": false
         },
         {
-            "index": 84,
+            "index": 87,
             "method": "DELETE",
             "path": "\/api\/reviews\/:id",
             "pattern": "#^\/api\/reviews\/([^\/]+)$#",
@@ -685,7 +709,7 @@
             "matches_uri": false
         },
         {
-            "index": 85,
+            "index": 88,
             "method": "GET",
             "path": "\/api\/notifications\/user\/:userId",
             "pattern": "#^\/api\/notifications\/user\/([^\/]+)$#",
@@ -693,7 +717,7 @@
             "matches_uri": false
         },
         {
-            "index": 86,
+            "index": 89,
             "method": "PUT",
             "path": "\/api\/notifications\/:id\/read",
             "pattern": "#^\/api\/notifications\/([^\/]+)\/read$#",
@@ -701,7 +725,7 @@
             "matches_uri": false
         },
         {
-            "index": 87,
+            "index": 90,
             "method": "GET",
             "path": "\/api\/admin\/stats",
             "pattern": "#^\/api\/admin\/stats$#",
@@ -709,7 +733,7 @@
             "matches_uri": false
         },
         {
-            "index": 88,
+            "index": 91,
             "method": "GET",
             "path": "\/api\/admin\/revenue",
             "pattern": "#^\/api\/admin\/revenue$#",
@@ -717,7 +741,7 @@
             "matches_uri": false
         },
         {
-            "index": 89,
+            "index": 92,
             "method": "GET",
             "path": "\/api\/admin\/seat-heatmap",
             "pattern": "#^\/api\/admin\/seat-heatmap$#",
@@ -725,7 +749,7 @@
             "matches_uri": false
         },
         {
-            "index": 90,
+            "index": 93,
             "method": "GET",
             "path": "\/api\/config",
             "pattern": "#^\/api\/config$#",
@@ -733,7 +757,7 @@
             "matches_uri": false
         },
         {
-            "index": 91,
+            "index": 94,
             "method": "PUT",
             "path": "\/api\/config",
             "pattern": "#^\/api\/config$#",
