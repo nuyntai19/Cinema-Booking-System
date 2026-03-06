@@ -19,8 +19,8 @@ class Database
     {
         $this->host = $this->getEnvValue('DB_HOST', 'localhost');
         $this->db_name = $this->getEnvValue('DB_NAME', 'galaxy_cinema');
-        $this->username = $this->getEnvValue('DB_USER', 'root');
-        $this->password = $this->getEnvValue('DB_PASSWORD', '');
+        $this->username = $this->getEnvValue('DB_USERNAME', 'root');
+        $this->password = $this->getEnvValue('DB_PASSWORD', '12345678');
         $this->charset = $this->getEnvValue('DB_CHARSET', 'utf8mb4');
 
         try {

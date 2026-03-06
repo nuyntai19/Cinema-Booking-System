@@ -27,6 +27,15 @@ import Footer from "@/components/layout/Footer";
 import { useAuth } from "@/contexts/AppContext";
 import { API_ENDPOINTS, getImageUrl } from "@/lib/api";
 
+interface Concession {
+  id: number;
+  concession_name: string;
+  quantity: number;
+  unit_price: string;
+  subtotal: string;
+  category?: string;
+}
+
 interface BookingHistory {
   id: string;
   bookingCode: string;
@@ -41,6 +50,7 @@ interface BookingHistory {
   date: string;
   time: string;
   seats: string[];
+  concessions: Concession[];
   totalPrice: number;
   status: "completed" | "upcoming" | "cancelled";
   paymentMethod: string;
@@ -73,11 +83,14 @@ const BookingHistoryPage: React.FC = () => {
       try {
         setIsLoading(true);
         const token = localStorage.getItem("token");
-        const response = await fetch(API_ENDPOINTS.USER_BOOKINGS(user.id), {
-          headers: {
-            Authorization: `Bearer ${token}`,
+        const response = await fetch(
+          API_ENDPOINTS.USER_BOOKINGS(Number(user.id)),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           },
-        });
+        );
 
         if (!response.ok) {
           throw new Error("Failed to fetch bookings");
@@ -86,6 +99,7 @@ const BookingHistoryPage: React.FC = () => {
         const result = await response.json();
 
         // Map API data to frontend format
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mappedBookings: BookingHistory[] = result.data.items.map(
           (booking: any) => {
             const startTime = new Date(booking.start_time);
@@ -106,7 +120,7 @@ const BookingHistoryPage: React.FC = () => {
 
             return {
               id: booking.id.toString(),
-              bookingCode: booking.booking_code,
+              bookingCode: booking.booking_code || "",
               movie: {
                 title: booking.movie_title,
                 poster: getImageUrl(booking.poster_url),
@@ -118,11 +132,12 @@ const BookingHistoryPage: React.FC = () => {
               date: bookingDate,
               time: bookingTime,
               seats: booking.seats ? booking.seats.split(", ") : [],
+              concessions: booking.concessions || [],
               totalPrice: parseFloat(booking.total_price),
               status: status,
               paymentMethod: booking.payment_method || "Chưa thanh toán",
               bookingDate: booking.created_at,
-              qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.booking_code}`,
+              qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.booking_code || ""}`,
             };
           },
         );
@@ -469,6 +484,24 @@ const BookingHistoryPage: React.FC = () => {
                   <span className="text-muted-foreground">Ghế:</span>
                   <span>{selectedBooking.seats.join(", ")}</span>
                 </div>
+                {selectedBooking.concessions &&
+                  selectedBooking.concessions.length > 0 && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground block mb-1">
+                        Bắp nước:
+                      </span>
+                      {selectedBooking.concessions.map((item, index) => (
+                        <div key={index} className="flex justify-between mb-1">
+                          <span className="text-xs text-muted-foreground">
+                            {item.concession_name} x{item.quantity}
+                          </span>
+                          <span className="text-xs">
+                            {parseFloat(item.subtotal).toLocaleString("vi-VN")}đ
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 <div className="flex justify-between font-bold text-base pt-2 border-t">
                   <span>Tổng tiền:</span>
                   <span className="text-primary">
@@ -575,6 +608,30 @@ const BookingHistoryPage: React.FC = () => {
                         {selectedBooking.seats.join(", ")}
                       </span>
                     </div>
+                    {selectedBooking.concessions &&
+                      selectedBooking.concessions.length > 0 && (
+                        <div className="pt-2 border-t">
+                          <span className="text-muted-foreground text-sm block mb-2">
+                            Bắp nước:
+                          </span>
+                          {selectedBooking.concessions.map((item, index) => (
+                            <div
+                              key={index}
+                              className="flex justify-between text-sm mb-1"
+                            >
+                              <span className="text-muted-foreground">
+                                {item.concession_name} x{item.quantity}
+                              </span>
+                              <span>
+                                {parseFloat(item.subtotal).toLocaleString(
+                                  "vi-VN",
+                                )}
+                                đ
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     <div className="flex justify-between font-bold text-base pt-2 border-t">
                       <span>Tổng tiền:</span>
                       <span className="text-primary text-lg">

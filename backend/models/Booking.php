@@ -53,12 +53,16 @@ class Booking {
 
             $finalPrice = $totalPrice - $discountAmount;
 
+            // Generate booking code
+            $bookingCode = $this->generateBookingCode();
+
             // Create booking
             $stmt = $this->db->prepare(
-                "INSERT INTO bookings (user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
-                 VALUES (:user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
+                "INSERT INTO bookings (booking_code, user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
+                 VALUES (:booking_code, :user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
             );
             $stmt->execute([
+                ':booking_code' => $bookingCode,
                 ':user_id' => $userId,
                 ':showtime_id' => $showtimeId,
                 ':user_voucher_id' => $userVoucherId ?: null,
@@ -193,8 +197,9 @@ class Booking {
         $stmt->execute();
         $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Get seats for each booking
+        // Get seats and concessions for each booking
         foreach ($bookings as &$booking) {
+            // Get seats
             $ticketStmt = $this->db->prepare(
                 "SELECT t.*, s.row_code, s.number
                  FROM tickets t
@@ -210,6 +215,21 @@ class Booking {
                 return $ticket['row_code'] . $ticket['number'];
             }, $tickets);
             $booking['seats'] = implode(', ', $seats);
+            
+            // Get concessions
+            $concessionStmt = $this->db->prepare(
+                "SELECT bc.*, 
+                        c.name AS concession_name, 
+                        c.category,
+                        bc.price AS unit_price,
+                        (bc.price * bc.quantity) AS subtotal
+                 FROM booking_concessions bc
+                 JOIN concessions c ON bc.concession_id = c.id
+                 WHERE bc.booking_id = :booking_id
+                 ORDER BY c.name"
+            );
+            $concessionStmt->execute([':booking_id' => $booking['id']]);
+            $booking['concessions'] = $concessionStmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         return $bookings;
@@ -304,6 +324,12 @@ class Booking {
                 "UPDATE tickets SET status = 'SOLD', hold_expires_at = NULL WHERE booking_id = :booking_id AND status = 'HOLDING'"
             );
             $stmt->execute([':booking_id' => $id]);
+
+            // Update transaction status to Success
+            $transactionStmt = $this->db->prepare(
+                "UPDATE transactions SET status = 'Success' WHERE booking_id = :booking_id AND status = 'Pending'"
+            );
+            $transactionStmt->execute([':booking_id' => $id]);
 
             // Mark voucher used if any
             $stmt = $this->db->prepare("SELECT user_voucher_id FROM bookings WHERE id = :id");
@@ -500,10 +526,14 @@ class Booking {
         }
         $normalized = [];
         foreach ($concessions as $item) {
-            if (!is_array($item) || empty($item['id'])) {
+            if (!is_array($item)) {
                 continue;
             }
-            $id = (int)$item['id'];
+            // Accept both 'id' and 'concession_id' for compatibility
+            $id = isset($item['concession_id']) ? (int)$item['concession_id'] : (isset($item['id']) ? (int)$item['id'] : 0);
+            if ($id < 1) {
+                continue;
+            }
             $quantity = isset($item['quantity']) ? (int)$item['quantity'] : 1;
             if ($quantity < 1) {
                 continue;
@@ -622,6 +652,12 @@ class Booking {
 
     private function generateTicketCode($bookingId, $index) {
         return sprintf('GXY-%06d-%03d', $bookingId, $index);
+    }
+
+    private function generateBookingCode() {
+        $year = date('Y');
+        $random = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
+        return sprintf('GXY-%s-%s', $year, $random);
     }
 
     private function buildInClause($items, $prefix) {

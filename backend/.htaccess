@@ -6,7 +6,7 @@ Header always set Access-Control-Max-Age "3600"
 
 # Route all requests to index.php (including OPTIONS)
 RewriteEngine On
-RewriteBase /galaxy-cinema/
+RewriteBase /backend/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]

@@ -44,6 +44,8 @@ const HomePage: React.FC = () => {
         method: "GET",
       });
 
+      console.log("HomePage movies response:", response);
+
       if (response.success && response.data?.movies) {
         const mappedMovies: Movie[] = response.data.movies.map((m) => ({
           id: m.id.toString(),
@@ -61,7 +63,18 @@ const HomePage: React.FC = () => {
           trailerUrl: m.trailer_url || undefined,
           isNowShowing: m.status === "Now Showing",
         }));
+        console.log("Mapped movies:", mappedMovies);
+        console.log(
+          "Now showing count:",
+          mappedMovies.filter((m) => m.isNowShowing).length,
+        );
         setMovies(mappedMovies);
+      } else {
+        console.log("Response check failed:", {
+          success: response.success,
+          hasData: !!response.data,
+          hasMovies: !!response.data?.movies,
+        });
       }
     } catch (error) {
       console.error("Error fetching movies:", error);

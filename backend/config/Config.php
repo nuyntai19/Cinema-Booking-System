@@ -51,6 +51,16 @@ class Config
     public static $redis_host = 'localhost';
     public static $redis_port = 6379;
 
+    // Payment Gateway Settings
+    // MoMo Test Credentials (https://developers.momo.vn/)
+    public static $momo_partner_code = 'MOMOBKUN20180529';
+    public static $momo_access_key = 'klm05TvNBzhg7h7j';
+    public static $momo_secret_key = 'at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa';
+    
+    // VNPay Test Credentials
+    public static $vnpay_tmncode = 'DEMOSHOP01';
+    public static $vnpay_hash_secret = 'RAOEXHYVSDDIIENYWSLDIIZTANXUXZFJ';
+    public static $vnpay_url = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
 
 
     public static function init()
@@ -60,6 +70,16 @@ class Config
         // Create upload directory if not exists
         if (!file_exists(self::$upload_path)) {
             mkdir(self::$upload_path, 0777, true);
+        }
+        
+        // Define payment gateway constants for PaymentService
+        if (!defined('MOMO_PARTNER_CODE')) {
+            define('MOMO_PARTNER_CODE', self::$momo_partner_code);
+            define('MOMO_ACCESS_KEY', self::$momo_access_key);
+            define('MOMO_SECRET_KEY', self::$momo_secret_key);
+            define('VNP_TMNCODE', self::$vnpay_tmncode);
+            define('VNP_HASH_SECRET', self::$vnpay_hash_secret);
+            define('VNP_URL', self::$vnpay_url);
         }
     }
 }

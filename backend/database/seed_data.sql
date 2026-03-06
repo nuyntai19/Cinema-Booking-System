@@ -393,8 +393,8 @@ INSERT INTO concessions (name, price, category, image_url) VALUES
 -- 10. SAMPLE BOOKINGS
 -- ============================================
 -- Booking 1: User 4 đặt vé xem MAI
-INSERT INTO bookings (user_id, showtime_id, total_price, discount_amount, final_price, status) VALUES
-(4, 1, 180000, 0, 180000, 'Paid');
+INSERT INTO bookings (user_id, showtime_id, booking_code, total_price, discount_amount, final_price, status) VALUES
+(4, 1, 'GXY-2026-A1B2C', 180000, 0, 180000, 'Paid');
 
 SET @booking_id = LAST_INSERT_ID();
 

@@ -235,6 +235,7 @@ CREATE TABLE bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     showtime_id INT NOT NULL,
+    booking_code VARCHAR(20) UNIQUE NOT NULL COMMENT 'Mã đặt vé duy nhất (GXY-YYYY-XXXXX)',
     user_voucher_id INT NULL COMMENT 'FK -> user_vouchers nếu dùng voucher',
     total_price DECIMAL(10,2) NOT NULL,
     discount_amount DECIMAL(10,2) DEFAULT 0,
@@ -248,7 +249,8 @@ CREATE TABLE bookings (
     INDEX idx_user (user_id),
     INDEX idx_showtime (showtime_id),
     INDEX idx_status (status),
-    INDEX idx_created (created_at)
+    INDEX idx_created (created_at),
+    INDEX idx_booking_code (booking_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng Vé Xem Phim (CẬP NHẬT - Tích hợp logic HOLDING)
