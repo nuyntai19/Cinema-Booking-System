@@ -22,15 +22,20 @@ class HallController
 
     private function isAdmin()
     {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
-        if (empty($authHeader))
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
+            if (empty($authHeader))
+                return false;
+
+            $token = str_replace('Bearer ', '', $authHeader);
+            $payload = JWT::decode($token, Config::$jwt_secret);
+
+            return $payload && $payload['role_id'] == 5;
+        } catch (Exception $e) {
+            error_log("JWT decode error in HallController: " . $e->getMessage());
             return false;
-
-        $token = str_replace('Bearer ', '', $authHeader);
-        $payload = JWT::decode($token, Config::$jwt_secret);
-
-        return $payload && $payload['role_id'] == 5;
+        }
     }
 
     /**

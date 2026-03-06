@@ -24,17 +24,22 @@ class ReviewController {
      * Helper: Get current user from JWT token
      */
     private function getCurrentUser() {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
-        
-        if (empty($authHeader)) {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
+            
+            if (empty($authHeader)) {
+                return null;
+            }
+            
+            $token = str_replace('Bearer ', '', $authHeader);
+            $payload = JWT::decode($token, Config::$jwt_secret);
+            
+            return $payload;
+        } catch (Exception $e) {
+            error_log("JWT decode error in ReviewController: " . $e->getMessage());
             return null;
         }
-        
-        $token = str_replace('Bearer ', '', $authHeader);
-        $payload = JWT::decode($token, Config::$jwt_secret);
-        
-        return $payload;
     }
     
     /**

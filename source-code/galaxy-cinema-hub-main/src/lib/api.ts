@@ -20,12 +20,9 @@ export const API_ENDPOINTS = {
 
   // Movies
   MOVIES: `${API_BASE_URL}/movies`,
-  MOVIE_DETAIL: (id: number) =>
-    `${API_BASE_URL}/movies/${id}`,
-  MOVIE_SHOWTIMES: (id: number) =>
-    `${API_BASE_URL}/movies/${id}/showtimes`,
-  MOVIE_REVIEWS: (id: number) =>
-    `${API_BASE_URL}/movies/${id}/reviews`,
+  MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/movies/${id}`,
+  MOVIE_SHOWTIMES: (id: number) => `${API_BASE_URL}/movies/${id}/showtimes`,
+  MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/movies/${id}/reviews`,
   MOVIE_UPLOAD_POSTER: (id: number) =>
     `${API_BASE_URL}/movies/${id}/upload-poster`,
 
@@ -36,8 +33,7 @@ export const API_ENDPOINTS = {
   CINEMAS: `${API_BASE_URL}/cinemas`,
   CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/cinemas/${id}`,
   CINEMA_HALLS: (id: number) => `${API_BASE_URL}/cinemas/${id}/halls`,
-  CINEMA_SHOWTIMES: (id: number) =>
-    `${API_BASE_URL}/cinemas/${id}/showtimes`,
+  CINEMA_SHOWTIMES: (id: number) => `${API_BASE_URL}/cinemas/${id}/showtimes`,
 
   // Halls
   HALLS: `${API_BASE_URL}/halls`,
@@ -47,21 +43,18 @@ export const API_ENDPOINTS = {
   // Showtimes
   SHOWTIMES: `${API_BASE_URL}/showtimes`,
   SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/showtimes/${id}/seats`,
-  SHOWTIME_SEAT_MAP: (id: number) =>
-    `${API_BASE_URL}/showtimes/${id}/seat-map`,
+  SHOWTIME_SEAT_MAP: (id: number) => `${API_BASE_URL}/showtimes/${id}/seat-map`,
 
   // Bookings
   BOOKINGS: `${API_BASE_URL}/bookings`,
   BOOKING_DETAIL: (id: number) => `${API_BASE_URL}/bookings/${id}`,
-  USER_BOOKINGS: (userId: number) =>
-    `${API_BASE_URL}/bookings/user/${userId}`,
+  USER_BOOKINGS: (userId: number) => `${API_BASE_URL}/bookings/user/${userId}`,
   CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/confirm`,
   CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/cancel`,
 
   // Promotions & Vouchers
   PROMOTIONS: `${API_BASE_URL}/promotions`,
-  USER_VOUCHERS: (userId: number) =>
-    `${API_BASE_URL}/vouchers/user/${userId}`,
+  USER_VOUCHERS: (userId: number) => `${API_BASE_URL}/vouchers/user/${userId}`,
   APPLY_VOUCHER: `${API_BASE_URL}/vouchers/apply`,
 
   // Concessions
@@ -80,14 +73,10 @@ export const API_ENDPOINTS = {
 
   // Reviews (Admin)
   REVIEWS: `${API_BASE_URL}/reviews`,
-  REVIEW_DETAIL: (id: number) =>
-    `${API_BASE_URL}/reviews/${id}`,
-  REVIEW_APPROVE: (id: number) =>
-    `${API_BASE_URL}/reviews/${id}/approve`,
-  REVIEW_REJECT: (id: number) =>
-    `${API_BASE_URL}/reviews/${id}/reject`,
-  REVIEW_REPORT: (id: number) =>
-    `${API_BASE_URL}/reviews/${id}/report`,
+  REVIEW_DETAIL: (id: number) => `${API_BASE_URL}/reviews/${id}`,
+  REVIEW_APPROVE: (id: number) => `${API_BASE_URL}/reviews/${id}/approve`,
+  REVIEW_REJECT: (id: number) => `${API_BASE_URL}/reviews/${id}/reject`,
+  REVIEW_REPORT: (id: number) => `${API_BASE_URL}/reviews/${id}/report`,
 
   // Notifications
   USER_NOTIFICATIONS: (userId: number) =>
@@ -159,6 +148,8 @@ export const getImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Already full URL
   }
-  // Relative path - prepend API base URL
-  return `${API_BASE_URL}/${path}`;
+  // Relative path - for uploads, use base URL without /api
+  // Because uploads are at /backend/uploads/, not /backend/api/uploads/
+  const baseUrl = API_BASE_URL.replace(/\/api$/, ""); // Remove /api suffix
+  return `${baseUrl}/${path}`;
 };

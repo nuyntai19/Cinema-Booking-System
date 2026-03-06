@@ -306,7 +306,11 @@ class AuthController {
             $token = str_replace('Bearer ', '', $authHeader);
             
             // Decode JWT
-            $payload = JWT::decode($token, Config::$jwt_secret);
+            try {
+                $payload = JWT::decode($token, Config::$jwt_secret);
+            } catch (Exception $e) {
+                return Response::error('Token không hợp lệ hoặc đã hết hạn', 401);
+            }
             
             if (!$payload) {
                 return Response::error('Token không hợp lệ', 401);

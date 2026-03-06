@@ -131,7 +131,9 @@ const MovieDetailPage: React.FC = () => {
 
   // Cinema & showtime states (from API)
   const [apiCinemas, setApiCinemas] = useState<APICinema[]>([]);
-  const [showtimesByCinema, setShowtimesByCinema] = useState<Record<string, Showtime[]>>({});
+  const [showtimesByCinema, setShowtimesByCinema] = useState<
+    Record<string, Showtime[]>
+  >({});
   const [loadingShowtimes, setLoadingShowtimes] = useState(false);
 
   // Review states
@@ -193,9 +195,10 @@ const MovieDetailPage: React.FC = () => {
         setLoadingShowtimes(true);
 
         // Fetch cinemas
-        const cinemasRes = await apiCall<{ success: boolean; data: { cinemas: APICinema[] } }>(
-          API_ENDPOINTS.CINEMAS
-        );
+        const cinemasRes = await apiCall<{
+          success: boolean;
+          data: { cinemas: APICinema[] };
+        }>(API_ENDPOINTS.CINEMAS);
         const cinemaList = cinemasRes.data?.cinemas || [];
         setApiCinemas(cinemaList);
 
@@ -204,9 +207,10 @@ const MovieDetailPage: React.FC = () => {
         params.append("movie_id", id);
         params.append("date", selectedDate);
         params.append("limit", "100");
-        const showtimesRes = await apiCall<{ success: boolean; data: { showtimes: APIShowtime[] } }>(
-          `${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`
-        );
+        const showtimesRes = await apiCall<{
+          success: boolean;
+          data: { showtimes: APIShowtime[] };
+        }>(`${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`);
         const rawShowtimes = showtimesRes.data?.showtimes || [];
 
         // Group showtimes by cinema_id
@@ -387,7 +391,7 @@ const MovieDetailPage: React.FC = () => {
         success: boolean;
         message: string;
         data?: { review_id: number };
-      }>(`${API_BASE_URL}/api/reviews/index.php`, {
+      }>(`${API_BASE_URL}/reviews`, {
         method: "POST",
         body: JSON.stringify({
           movie_id: parseInt(id!),
@@ -722,7 +726,7 @@ const MovieDetailPage: React.FC = () => {
                     {[5, 4, 3, 2, 1].map((star) => {
                       const count =
                         reviewStats.rating_distribution[
-                        star.toString() as keyof typeof reviewStats.rating_distribution
+                          star.toString() as keyof typeof reviewStats.rating_distribution
                         ] || 0;
                       const percentage =
                         reviewStats.total_reviews > 0

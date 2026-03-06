@@ -23,8 +23,8 @@ class AuthMiddleware {
             $decoded = JWT::decode($token, Config::$jwt_secret);
             
             // Attach user info to request
-            $_REQUEST['auth_user_id'] = $decoded->user_id;
-            $_REQUEST['auth_user_role'] = $decoded->role;
+            $_REQUEST['auth_user_id'] = $decoded['user_id'];
+            $_REQUEST['auth_user_role'] = $decoded['role'];
             
             return $decoded;
         } catch (Exception $e) {

@@ -172,7 +172,12 @@ class Booking {
     public function getUserBookings($userId, $page = 1, $limit = 20) {
         $offset = ($page - 1) * $limit;
         $stmt = $this->db->prepare(
-            "SELECT b.*, m.title AS movie_title, s.start_time, c.name AS cinema_name, h.name AS hall_name
+            "SELECT b.*, 
+                    m.id AS movie_id, m.title AS movie_title, m.poster_url, m.duration_minutes, m.age_rating,
+                    s.start_time, 
+                    c.name AS cinema_name, 
+                    h.name AS hall_name,
+                    (SELECT payment_method FROM transactions WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_method
              FROM bookings b
              JOIN showtimes s ON b.showtime_id = s.id
              JOIN movies m ON s.movie_id = m.id
@@ -186,7 +191,28 @@ class Booking {
         $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
         $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Get seats for each booking
+        foreach ($bookings as &$booking) {
+            $ticketStmt = $this->db->prepare(
+                "SELECT t.*, s.row_code, s.number
+                 FROM tickets t
+                 JOIN seats s ON t.seat_id = s.id
+                 WHERE t.booking_id = :booking_id
+                 ORDER BY s.row_code, s.number"
+            );
+            $ticketStmt->execute([':booking_id' => $booking['id']]);
+            $tickets = $ticketStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Format seat names
+            $seats = array_map(function($ticket) {
+                return $ticket['row_code'] . $ticket['number'];
+            }, $tickets);
+            $booking['seats'] = implode(', ', $seats);
+        }
+
+        return $bookings;
     }
 
     public function countUserBookings($userId) {

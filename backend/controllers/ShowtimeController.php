@@ -38,17 +38,22 @@ class ShowtimeController
      */
     private function getCurrentUser()
     {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
 
-        if (empty($authHeader)) {
+            if (empty($authHeader)) {
+                return null;
+            }
+
+            $token = str_replace('Bearer ', '', $authHeader);
+            $payload = JWT::decode($token, Config::$jwt_secret);
+
+            return $payload;
+        } catch (Exception $e) {
+            error_log("JWT decode error in ShowtimeController: " . $e->getMessage());
             return null;
         }
-
-        $token = str_replace('Bearer ', '', $authHeader);
-        $payload = JWT::decode($token, Config::$jwt_secret);
-
-        return $payload;
     }
 
     /**

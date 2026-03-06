@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { useAuth } from "@/contexts/AppContext";
+import { API_ENDPOINTS, getImageUrl } from "@/lib/api";
 
 interface BookingHistory {
   id: string;
@@ -48,6 +50,7 @@ interface BookingHistory {
 
 const BookingHistoryPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedBooking, setSelectedBooking] = useState<BookingHistory | null>(
@@ -55,91 +58,85 @@ const BookingHistoryPage: React.FC = () => {
   );
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [bookings, setBookings] = useState<BookingHistory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const bookings: BookingHistory[] = [
-    {
-      id: "booking-1",
-      bookingCode: "GC2026012301",
-      movie: {
-        title: "MAI",
-        poster:
-          "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=600&fit=crop",
-        duration: 131,
-        ageRating: "T18",
-      },
-      cinema: "Galaxy Nguyễn Du",
-      room: "Phòng 3",
-      date: "2026-01-25",
-      time: "19:00",
-      seats: ["G7", "G8"],
-      totalPrice: 240000,
-      status: "upcoming",
-      paymentMethod: "Momo",
-      bookingDate: "2026-01-23T10:30:00",
-      qrCode:
-        "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=GC2026012301",
-    },
-    {
-      id: "booking-2",
-      bookingCode: "GC2026012002",
-      movie: {
-        title: "Kung Fu Panda 4",
-        poster:
-          "https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=400&h=600&fit=crop",
-        duration: 94,
-        ageRating: "P",
-      },
-      cinema: "Galaxy Tân Bình",
-      room: "Phòng 1",
-      date: "2026-01-20",
-      time: "14:00",
-      seats: ["E5", "E6"],
-      totalPrice: 180000,
-      status: "completed",
-      paymentMethod: "Thẻ tín dụng",
-      bookingDate: "2026-01-18T15:20:00",
-    },
-    {
-      id: "booking-3",
-      bookingCode: "GC2026011503",
-      movie: {
-        title: "Dune: Part Two",
-        poster:
-          "https://images.unsplash.com/photo-1534809027769-b00d750a6bac?w=400&h=600&fit=crop",
-        duration: 166,
-        ageRating: "T16",
-      },
-      cinema: "Galaxy Quang Trung",
-      room: "IMAX",
-      date: "2026-01-15",
-      time: "20:30",
-      seats: ["F7", "F8", "F9"],
-      totalPrice: 360000,
-      status: "completed",
-      paymentMethod: "Momo",
-      bookingDate: "2026-01-14T09:15:00",
-    },
-    {
-      id: "booking-4",
-      bookingCode: "GC2026010804",
-      movie: {
-        title: "Đào, Phở và Piano",
-        poster:
-          "https://images.unsplash.com/photo-1595769816263-9b910be24d5f?w=400&h=600&fit=crop",
-        duration: 95,
-        ageRating: "T13",
-      },
-      cinema: "Galaxy Nguyễn Du",
-      room: "Phòng 2",
-      date: "2026-01-10",
-      time: "16:30",
-      seats: ["D4", "D5"],
-      totalPrice: 180000,
-      status: "cancelled",
-      paymentMethod: "Thẻ tín dụng",
-      bookingDate: "2026-01-08T11:45:00",
-    },
-  ];
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    const fetchBookings = async () => {
+      if (!user?.id) return;
+
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem("token");
+        const response = await fetch(API_ENDPOINTS.USER_BOOKINGS(user.id), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch bookings");
+        }
+
+        const result = await response.json();
+
+        // Map API data to frontend format
+        const mappedBookings: BookingHistory[] = result.data.items.map(
+          (booking: any) => {
+            const startTime = new Date(booking.start_time);
+            const bookingDate = booking.start_time.split(" ")[0]; // YYYY-MM-DD
+            const bookingTime = startTime.toLocaleTimeString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            // Determine booking status
+            let status: "completed" | "upcoming" | "cancelled" = "upcoming";
+            const now = new Date();
+            if (booking.status === "Cancelled") {
+              status = "cancelled";
+            } else if (startTime < now) {
+              status = "completed";
+            }
+
+            return {
+              id: booking.id.toString(),
+              bookingCode: booking.booking_code,
+              movie: {
+                title: booking.movie_title,
+                poster: getImageUrl(booking.poster_url),
+                duration: booking.duration_minutes,
+                ageRating: booking.age_rating,
+              },
+              cinema: booking.cinema_name,
+              room: booking.hall_name,
+              date: bookingDate,
+              time: bookingTime,
+              seats: booking.seats ? booking.seats.split(", ") : [],
+              totalPrice: parseFloat(booking.total_price),
+              status: status,
+              paymentMethod: booking.payment_method || "Chưa thanh toán",
+              bookingDate: booking.created_at,
+              qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.booking_code}`,
+            };
+          },
+        );
+
+        setBookings(mappedBookings);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, [user, isAuthenticated, navigate]);
 
   const filteredBookings = bookings.filter((booking) => {
     const matchesSearch =
@@ -263,7 +260,14 @@ const BookingHistoryPage: React.FC = () => {
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-4">
-            {filteredBookings.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-20">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="mt-4 text-muted-foreground">
+                  Đang tải lịch sử đặt vé...
+                </p>
+              </div>
+            ) : filteredBookings.length > 0 ? (
               filteredBookings.map((booking) => (
                 <Card
                   key={booking.id}
