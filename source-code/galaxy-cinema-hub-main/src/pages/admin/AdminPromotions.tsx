@@ -52,6 +52,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 interface Promotion {
   id: number;
@@ -77,81 +78,39 @@ const AdminPromotions: React.FC = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  const [promotions, setPromotions] = useState<Promotion[]>([
-    {
-      id: 1,
-      code: "NEWYEAR2026",
-      title: "Khuyến Mãi Tết 2026",
-      description: "Giảm 30% cho đơn hàng từ 200k",
-      discountType: "percentage",
-      discountAmount: 30,
-      minOrderValue: 200000,
-      maxDiscount: 100000,
-      usageLimit: 1000,
-      usedCount: 245,
-      startDate: "2026-01-01",
-      endDate: "2026-02-15",
-      status: "active",
-    },
-    {
-      id: 2,
-      code: "FIRSTTIME50",
-      title: "Khách Hàng Mới",
-      description: "Giảm 50k cho lần đặt đầu tiên",
-      discountType: "fixed",
-      discountAmount: 50000,
-      minOrderValue: 100000,
-      usageLimit: 500,
-      usedCount: 387,
-      startDate: "2025-12-01",
-      endDate: "2026-06-30",
-      status: "active",
-    },
-    {
-      id: 3,
-      code: "WEEKEND20",
-      title: "Cuối Tuần Vui Vẻ",
-      description: "Giảm 20% cho vé cuối tuần",
-      discountType: "percentage",
-      discountAmount: 20,
-      minOrderValue: 150000,
-      maxDiscount: 50000,
-      usageLimit: 2000,
-      usedCount: 1523,
-      startDate: "2025-11-01",
-      endDate: "2026-12-31",
-      status: "active",
-    },
-    {
-      id: 4,
-      code: "HALLOWEEN2025",
-      title: "Halloween Sale",
-      description: "Giảm 25% tất cả vé",
-      discountType: "percentage",
-      discountAmount: 25,
-      minOrderValue: 0,
-      maxDiscount: 80000,
-      usageLimit: 500,
-      usedCount: 500,
-      startDate: "2025-10-28",
-      endDate: "2025-10-31",
-      status: "expired",
-    },
-    {
-      id: 5,
-      code: "MEMBER100",
-      title: "Thành Viên Vàng",
-      description: "Giảm 100k cho Gold member",
-      discountType: "fixed",
-      discountAmount: 100000,
-      minOrderValue: 300000,
-      usageLimit: 100,
-      usedCount: 45,
-      startDate: "2026-01-01",
-      endDate: "2026-12-31",
-      status: "active",
-    },
-  ]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+
+  // Load promotions from backend on mount
+  React.useEffect(() => {
+    const loadPromotions = async () => {
+      try {
+        const data: any = await apiCall(API_ENDPOINTS.PROMOTIONS);
+        const promos = data?.data?.promotions || data?.promotions || [];
+        if (promos && promos.length) {
+          // Map backend fields -> frontend shape
+          const mapped = promos.map((p: any) => ({
+            id: p.id,
+            code: p.code,
+            title: p.title || p.code,
+            description: p.description,
+            discountType: p.discount_type === 'PERCENT' ? 'percentage' : 'fixed',
+            discountAmount: Number(p.discount_amount),
+            minOrderValue: Number(p.min_order_value || 0),
+            maxDiscount: p.max_discount || 0,
+            usageLimit: p.usage_limit || 0,
+            usedCount: p.used_count || 0,
+            startDate: p.start_date,
+            endDate: p.end_date,
+            status: p.end_date && new Date(p.end_date) < new Date() ? 'expired' : 'active',
+          }));
+          setPromotions(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load promotions', err);
+      }
+    };
+    loadPromotions();
+  }, []);
 
   const [formData, setFormData] = useState({
     code: "",
@@ -209,24 +168,42 @@ const AdminPromotions: React.FC = () => {
   const handleUpdatePromo = () => {
     if (!selectedPromo) return;
 
-    setPromotions(
-      promotions.map((p) =>
-        p.id === selectedPromo.id
-          ? {
-              ...p,
-              ...formData,
-            }
-          : p,
-      ),
-    );
+    const updateServer = async () => {
+      try {
+        const payload = {
+          code: formData.code,
+          description: formData.description || formData.title,
+          discount_amount: formData.discountAmount,
+          discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
+          min_order_value: formData.minOrderValue,
+          start_date: formData.startDate,
+          end_date: formData.endDate,
+          is_auto_apply: false,
+          usage_limit: formData.usageLimit,
+        };
 
-    toast({
-      title: "Cập nhật thành công",
-      description: `Đã cập nhật khuyến mãi ${formData.code}`,
-    });
+        await apiCall(`${API_ENDPOINTS.PROMOTIONS}/${selectedPromo.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
 
-    setIsEditDialogOpen(false);
-    setSelectedPromo(null);
+        setPromotions(
+          promotions.map((p) =>
+            p.id === selectedPromo.id ? { ...p, ...formData } : p,
+          ),
+        );
+
+        toast({ title: 'Cập nhật thành công', description: `Đã cập nhật ${formData.code}` });
+      } catch (err) {
+        console.error('Update promo failed', err);
+        toast({ title: 'Lỗi', description: 'Không thể cập nhật khuyến mãi', variant: 'destructive' });
+      } finally {
+        setIsEditDialogOpen(false);
+        setSelectedPromo(null);
+      }
+    };
+
+    updateServer();
   };
 
   const handleCreatePromo = () => {
@@ -244,42 +221,81 @@ const AdminPromotions: React.FC = () => {
       return;
     }
 
-    const newPromo: Promotion = {
-      id: promotions.length + 1,
-      ...formData,
-      usedCount: 0,
-      status: "active",
+    const createServer = async () => {
+      try {
+        const payload = {
+          code: formData.code,
+          description: formData.description || formData.title,
+          discount_amount: formData.discountAmount,
+          discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
+          min_order_value: formData.minOrderValue,
+          start_date: formData.startDate,
+          end_date: formData.endDate,
+          is_auto_apply: false,
+          usage_limit: formData.usageLimit,
+        };
+
+        const data: any = await apiCall(API_ENDPOINTS.PROMOTIONS, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+        const createdId = data?.data?.id || data?.id || Date.now();
+        const created: Promotion = {
+          id: createdId,
+          code: formData.code,
+          title: formData.title || formData.code,
+          description: formData.description,
+          discountType: formData.discountType,
+          discountAmount: formData.discountAmount,
+          minOrderValue: formData.minOrderValue,
+          maxDiscount: formData.maxDiscount,
+          usageLimit: formData.usageLimit,
+          usedCount: 0,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          status: 'active',
+        };
+
+        setPromotions((prev) => [...prev, created]);
+
+        toast({ title: 'Tạo thành công', description: `Đã tạo mã ${formData.code}` });
+      } catch (err) {
+        console.error('Create promo failed', err);
+        toast({ title: 'Lỗi', description: 'Không thể tạo khuyến mãi', variant: 'destructive' });
+      } finally {
+        setIsCreateDialogOpen(false);
+        setFormData({
+          code: "",
+          title: "",
+          description: "",
+          discountType: "percentage",
+          discountAmount: 0,
+          minOrderValue: 0,
+          maxDiscount: 0,
+          usageLimit: 100,
+          startDate: "",
+          endDate: "",
+        });
+      }
     };
 
-    setPromotions([...promotions, newPromo]);
-
-    toast({
-      title: "Tạo thành công",
-      description: `Đã tạo mã khuyến mãi ${formData.code}`,
-    });
-
-    setIsCreateDialogOpen(false);
-    setFormData({
-      code: "",
-      title: "",
-      description: "",
-      discountType: "percentage",
-      discountAmount: 0,
-      minOrderValue: 0,
-      maxDiscount: 0,
-      usageLimit: 100,
-      startDate: "",
-      endDate: "",
-    });
+    createServer();
   };
 
   const handleDeletePromo = (promo: Promotion) => {
-    setPromotions(promotions.filter((p) => p.id !== promo.id));
+    const doDelete = async () => {
+      try {
+        await apiCall(`${API_ENDPOINTS.PROMOTIONS}/${promo.id}`, { method: 'DELETE' });
+        setPromotions(promotions.filter((p) => p.id !== promo.id));
+        toast({ title: 'Đã xóa', description: `Đã xóa ${promo.code}` });
+      } catch (err) {
+        console.error('Delete promo failed', err);
+        toast({ title: 'Lỗi', description: 'Không thể xóa khuyến mãi', variant: 'destructive' });
+      }
+    };
 
-    toast({
-      title: "Đã xóa",
-      description: `Đã xóa khuyến mãi ${promo.code}`,
-    });
+    doDelete();
   };
 
   const handleCopyCode = (code: string) => {

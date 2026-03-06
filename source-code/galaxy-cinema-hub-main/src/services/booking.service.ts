@@ -5,10 +5,18 @@
 import {
   apiClient,
   ApiResponse,
-  PaginatedData,
-  PaginatedResponse,
 } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-config";
+
+export interface PaginatedData<T> {
+  items: T;
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export type PaginatedResponse<T> = ApiResponse<PaginatedData<T>>;
 
 export interface BookingDetailResponse {
   id: string;

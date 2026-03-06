@@ -16,34 +16,39 @@ const ConcessionsPage: React.FC = () => {
   const { toast } = useToast();
   const { selectedMovie, selectedSeats, concessions: selectedConcessions, updateConcession } = useBooking();
   const [items, setItems] = useState<ConcessionItem[]>([]);
+  const [movie, setMovie] = useState<{ id: string; title: string; poster: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [movie, setMovie] = useState<any>(null);
+  const [loadingMovie, setLoadingMovie] = useState(true);
 
-  // Fetch movie data from API
   useEffect(() => {
-    const movieId = selectedMovie;
-    if (!movieId) return;
-
     const fetchMovie = async () => {
+      if (!selectedMovie) {
+        setLoadingMovie(false);
+        return;
+      }
       try {
         const response = await apiCall<{ success: boolean; data: { movie: any } }>(
-          API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId))
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie))
         );
+
         if (response.success && response.data?.movie) {
           const m = response.data.movie;
           setMovie({
             id: String(m.id),
             title: m.title,
-            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
-            duration: m.duration || m.duration_minutes,
-            ageRating: m.age_rating || 'P',
+            poster: m.poster_url
+              ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}`
+              : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop',
           });
         }
-      } catch (error) {
-        console.error('Failed to fetch movie:', error);
+      } catch (err) {
+        console.error('Error fetching movie:', err);
+      } finally {
+        setLoadingMovie(false);
       }
     };
+
     fetchMovie();
   }, [selectedMovie]);
 
@@ -57,13 +62,13 @@ const ConcessionsPage: React.FC = () => {
 
         if (response.success && response.data) {
           // Map API data to ConcessionItem format
-          const mappedItems: ConcessionItem[] = response.data.map((c: Concession) => ({
-            id: c.id,
+          const mappedItems: ConcessionItem[] = response.data.map((c: any) => ({
+            id: String(c.id),
             name: c.name,
             nameVi: c.name, // Use same name if no Vietnamese name
-            price: c.price,
+            price: Number(c.price) || 0,
             quantity: 0,
-            image: c.imageUrl || 'https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200',
+            image: c.imageUrl || c.image_url || 'https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200',
           }));
           setItems(mappedItems);
         } else {
@@ -99,6 +104,7 @@ const ConcessionsPage: React.FC = () => {
   const ticketTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
   const concessionTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const grandTotal = ticketTotal + concessionTotal;
+  const seatCodes = selectedSeats.map(s => `${s.row}${s.number}`);
 
   const handleContinue = () => {
     navigate('/booking/payment');
@@ -108,28 +114,9 @@ const ConcessionsPage: React.FC = () => {
     navigate('/booking/payment');
   };
 
-  // Redirect if no movie or seats selected
-  useEffect(() => {
-    if (!selectedMovie || selectedSeats.length === 0) {
-      const timer = setTimeout(() => {
-        navigate('/');
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedMovie, selectedSeats, navigate]);
-
-  if (!movie) {
-    return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Đang tải thông tin phim...</p>
-          </div>
-        </main>
-      </div>
-    );
+  if (!selectedMovie || selectedSeats.length === 0) {
+    navigate('/schedule');
+    return null;
   }
 
   return (
@@ -148,7 +135,7 @@ const ConcessionsPage: React.FC = () => {
         )}
 
         {/* Loading State */}
-        {loading && (
+        {(loading || loadingMovie) && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <span className="ml-3 text-lg">Đang tải danh sách bắp nước...</span>
@@ -156,7 +143,7 @@ const ConcessionsPage: React.FC = () => {
         )}
 
         {/* Content */}
-        {!loading && (
+        {!loading && !loadingMovie && (
           <div className="grid lg:grid-cols-[1fr,350px] gap-6">
             {/* Concessions Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,14 +208,14 @@ const ConcessionsPage: React.FC = () => {
               {/* Movie Info */}
               <div className="flex items-center gap-3 pb-4 mb-4 border-b border-border">
                 <img
-                  src={movie.poster}
+                  src={movie?.poster || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop'}
                   alt={movie.title}
                   className="w-12 h-18 object-cover rounded-lg"
                 />
                 <div>
-                  <p className="font-medium">{movie.title}</p>
+                  <p className="font-medium">{movie?.title || 'Phim đã chọn'}</p>
                   <p className="text-sm text-muted-foreground">
-                    {selectedSeats.length} ghế: {selectedSeats.map(s => s.id).join(', ')}
+                    {selectedSeats.length} ghế: {seatCodes.join(', ')}
                   </p>
                 </div>
               </div>

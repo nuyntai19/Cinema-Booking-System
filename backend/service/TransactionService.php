@@ -67,9 +67,14 @@ class TransactionService {
         ];
     }
 
-    public function createPaymentForBooking($gateway, $booking, $amount) {
+    public function createPaymentForBooking($gateway, $booking) {
         if ($booking['status'] !== 'Pending') {
             throw new Exception('Booking is not in pending status', 400);
+        }
+
+        $amount = $this->resolveBookingAmount($booking);
+        if ($amount <= 0) {
+            throw new Exception('Invalid booking amount', 400);
         }
 
         $transaction = $this->transactionModel->getByBooking((int)$booking['id']);
@@ -78,25 +83,25 @@ class TransactionService {
         }
 
         if (!$transaction || $transaction['status'] === 'Failed') {
-            $transaction = $this->transactionModel->create((int)$booking['id'], $gateway, (float)$amount);
+            $transaction = $this->transactionModel->create((int)$booking['id'], $gateway, $amount);
         }
 
         $payload = $this->buildPaymentPayload(
             $gateway,
             (int)$booking['id'],
             $transaction['transaction_code'],
-            (float)$amount
+            $amount
         );
 
         if ($gateway === 'Momo') {
-            $payUrl = PaymentService::createMoMoPayment(
+            $momoPayment = PaymentService::createMoMoPayment(
                 $payload['amount'],
                 $payload['orderId'],
                 $payload['orderInfo'],
                 $payload['returnUrl'],
                 $payload['notifyUrl']
             );
-            return ['pay_url' => $payUrl];
+            return $momoPayment;
         }
 
         if ($gateway === 'VNPay') {
@@ -167,5 +172,15 @@ class TransactionService {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
         return $scheme . '://' . $host;
+    }
+
+    private function resolveBookingAmount($booking) {
+        $final = isset($booking['final_price']) ? (float)$booking['final_price'] : 0.0;
+        if ($final > 0) {
+            return $final;
+        }
+
+        $total = isset($booking['total_price']) ? (float)$booking['total_price'] : 0.0;
+        return $total;
     }
 }

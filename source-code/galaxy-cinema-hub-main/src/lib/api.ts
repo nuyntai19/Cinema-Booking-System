@@ -1,6 +1,10 @@
+import { M, V } from "vitest/dist/chunks/reporters.d.BFLkQcL6.js";
+
 // API Configuration
+// Default to the local PHP built-in server (used in this workspace).
+// You can override with VITE_API_URL in your environment (.env.local)
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost/backend";
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   // Auth
@@ -51,6 +55,15 @@ export const API_ENDPOINTS = {
   USER_BOOKINGS: (userId: number) => `${API_BASE_URL}/bookings/user/${userId}`,
   CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/confirm`,
   CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/cancel`,
+
+  // Transactions
+  TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
+  USER_TRANSACTIONS: (userId: number) =>
+    `${API_BASE_URL}/api/transactions/user/${userId}`,
+  MOMO_PAYMENT: `${API_BASE_URL}/api/transactions/momo`,
+  VNPAY_PAYMENT: `${API_BASE_URL}/api/transactions/vnpay`,
+  MOMO_VERIFY: `${API_BASE_URL}/api/transactions/momo/verify`,
+  VNPAY_VERIFY: `${API_BASE_URL}/api/transactions/vnpay/verify`,
 
   // Promotions & Vouchers
   PROMOTIONS: `${API_BASE_URL}/promotions`,

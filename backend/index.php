@@ -5,6 +5,9 @@
  * REST API for Cinema Booking System
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // Error reporting for development
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
@@ -163,8 +166,8 @@ $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getB
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
-$router->post('/api/transactions/momo/create', 'TransactionController@createMoMoPayment');
-$router->post('/api/transactions/vnpay/create', 'TransactionController@createVNPayPayment');
+$router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
+$router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
 
 // ============================================
 // TICKET ROUTES

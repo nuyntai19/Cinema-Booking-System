@@ -121,13 +121,11 @@ class TransactionController extends BaseController {
 
         $data = self::getRequestData();
         $bookingId = $data['booking_id'] ?? null;
-        $amount = $data['amount'] ?? null;
         $gatewayResponse = null;
 
-        if (!$bookingId || $amount === null) {
+        if (!$bookingId) {
             Response::validationError([
                 'booking_id' => 'Booking id is required',
-                'amount' => 'Amount is required',
             ]);
         }
 
@@ -139,7 +137,8 @@ class TransactionController extends BaseController {
         $this->authorizeBookingAccess($booking);
 
         try {
-            $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking, (float)$amount);
+            // Amount is resolved server-side from booking final price.
+            $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking);
             Response::success($gatewayResponse, $gateway . ' payment created');
         } catch (Exception $e) {
             Response::error($e->getMessage(), $e->getCode() ?: 400);

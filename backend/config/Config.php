@@ -42,10 +42,16 @@ class Config
     public static $smtp_host = 'smtp.gmail.com';
     public static $smtp_port = 587; // 587 for TLS, 465 for SSL
     public static $smtp_encryption = 'tls'; // 'tls' hoặc 'ssl'
-    public static $smtp_username = 'fan7a4@gmail.com'; // Email của bạn, ví dụ: 'yourname@gmail.com'
-    public static $smtp_password = 'qasl pfju kjal wrgv'; // App Password từ Google (16 ký tự)
+    public static $smtp_username = 'taiv80527@gmail.com'; // Email của bạn, ví dụ: 'yourname@gmail.com'
+    public static $smtp_password = 'oscuepstsovuwehn'; // App Password từ Google (16 ký tự)
     public static $smtp_from_email = 'noreply@galaxycinema.vn';
     public static $smtp_from_name = 'Galaxy Cinema';
+    
+    // REDIS Settings
+    public static $redis_host = 'localhost';
+    public static $redis_port = 6379;
+
+
 
     public static function init()
     {

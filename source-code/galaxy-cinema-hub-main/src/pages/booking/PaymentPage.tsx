@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X, Loader2 } from 'lucide-react';
+import { CreditCard, Smartphone, Building2, Tag, Clock, QrCode, Check, X } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useBooking } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AppContext';
+import { movies } from '@/data/mockData';
 import { API_ENDPOINTS, apiCall } from '@/lib/api';
 import { PaymentMethod } from '@/types/cinema';
 import { cn } from '@/lib/utils';
+import { BookingService } from '@/services/booking.service';
+import { TransactionService } from '@/services/transacsion.service';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedMovie, selectedSeats, concessions, clearBooking } = useBooking();
+  const { selectedMovie, selectedSeats, concessions, clearBooking, selectedShowtime } = useBooking();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
   const [promoCode, setPromoCode] = useState('');
@@ -30,7 +34,7 @@ const PaymentPage: React.FC = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrTimeLeft, setQRTimeLeft] = useState(300); // 5 minutes
   const [isProcessing, setIsProcessing] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
 
   const [movie, setMovie] = useState<any>(null);
 
@@ -39,7 +43,6 @@ const PaymentPage: React.FC = () => {
     const fetchMovie = async () => {
       if (!selectedMovie) return;
       try {
-        setLoading(true);
         const response = await apiCall<{ success: boolean; data: { movie: any } }>(
           API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie))
         );
@@ -53,17 +56,18 @@ const PaymentPage: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to fetch movie:', error);
-      } finally {
-        setLoading(false);
       }
     };
     fetchMovie();
   }, [selectedMovie]);
 
+  const { user } = useAuth();
+
   const ticketTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
   const concessionTotal = concessions.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const subtotal = ticketTotal + concessionTotal;
   const grandTotal = subtotal - discount;
+  const seatCodes = selectedSeats.map(s => `${s.row}${s.number}`);
 
   // QR Timer
   useEffect(() => {
@@ -92,6 +96,118 @@ const PaymentPage: React.FC = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const buildQrImageUrl = (payUrl: string) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(payUrl)}`;
+
+  const normalizeQrPayload = (value: string) => {
+    const raw = value.trim();
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  };
+
+  const toPositiveInt = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+      return value;
+    }
+    if (typeof value === 'string' && /^\d+$/.test(value)) {
+      const parsed = Number(value);
+      return parsed > 0 ? parsed : null;
+    }
+    return null;
+  };
+
+  const createBooking = async (): Promise<number | null> => {
+    const showTimeId = toPositiveInt(selectedShowtime?.id);
+    const seatIds = selectedSeats
+      .map(s => toPositiveInt(s.id))
+      .filter((id): id is number => id !== null);
+    const concessionsData = concessions.map(c => ({
+      concession_id: toPositiveInt(c.id),
+      quantity: c.quantity,
+    })).filter(c => c.concession_id !== null && typeof c.concession_id === 'number' && c.quantity > 0);
+    const userId = toPositiveInt(user?.id)
+    const validationErrors: string[] = [];
+    if (!userId) validationErrors.push('Bạn cần đăng nhập để thanh toán.');
+    if (!showTimeId) validationErrors.push('Không tìm thấy suất chiếu hợp lệ.');
+    if (seatIds.length === 0) validationErrors.push('Vui lòng chọn ít nhất 1 ghế.');
+
+    if (validationErrors.length > 0) {
+      toast({
+        title: 'Thông tin không hợp lệ',
+        description: validationErrors.join(' '),
+        variant: 'destructive',
+      });
+      return null;
+    };
+    const bookingRequest = {
+      user_id: userId,
+      showtime_id: showTimeId,
+      seat_ids: seatIds,
+      concessions: concessionsData,
+      user_voucher_id: discount > 0 ? 123 : undefined, // Example voucher ID
+    };
+
+    try {
+      const response = await BookingService.create(bookingRequest);
+      const createdBookingId = toPositiveInt((response as any)?.data?.booking_id);
+      if (!response.success || !createdBookingId) {
+        toast({
+          title: 'Đặt vé thất bại',
+          description: response.message || 'Có lỗi xảy ra khi đặt vé.',
+          variant: 'destructive',
+        });
+        return null;
+      }
+      return createdBookingId;
+    } catch (error) {
+      toast({
+        title: 'Lỗi hệ thống',
+        description: 'Có lỗi xảy ra khi xử lý đơn hàng.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
+
+  const processPayment = async (method: PaymentMethod) => {
+    setIsProcessing(true);
+    try {
+      const bookingId = await createBooking();
+      if (!bookingId) {
+        return;
+      }
+
+      if (method === 'momo') {
+        const momoResponse = await TransactionService.momoPayment({ booking_id: bookingId });
+        const qrCodeUrl = momoResponse?.data?.qr_code_url;
+        const payUrl = momoResponse?.data?.pay_url;
+        const qrPayload = qrCodeUrl || payUrl;
+        if (!qrPayload) {
+          toast({
+            title: 'Không tạo được mã QR MoMo',
+            description: 'Hệ thống không trả về dữ liệu QR thanh toán.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        setMomoQrImageUrl(buildQrImageUrl(normalizeQrPayload(qrPayload)));
+      } else if (method === 'atm') {
+        await TransactionService.vnpayPayment({ booking_id: bookingId });
+        setMomoQrImageUrl(null);
+      } else {
+        setMomoQrImageUrl(null);
+      }
+
+      setShowQRModal(true);
+      setQRTimeLeft(300);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleApplyPromo = () => {
@@ -138,33 +254,14 @@ const PaymentPage: React.FC = () => {
     navigate('/booking/failed');
   };
 
-  // Redirect if no movie or seats selected
-  useEffect(() => {
-    if (!selectedMovie || selectedSeats.length === 0) {
-      const timer = setTimeout(() => {
-        navigate('/');
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedMovie, selectedSeats, navigate]);
-
-  if (loading || !movie) {
-    return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Đang tải thông tin thanh toán...</p>
-          </div>
-        </main>
-      </div>
-    );
+  if (!movie) {
+    navigate('/');
+    return null;
   }
 
   const paymentMethods = [
     { value: 'momo', label: 'Ví MoMo', icon: Smartphone, color: 'bg-pink-500' },
-    { value: 'atm', label: 'Thẻ ATM nội địa', icon: Building2, color: 'bg-blue-500' },
+    { value: 'atm', label: 'VNPay', icon: Building2, color: 'bg-blue-500' },
     { value: 'visa', label: 'Visa / Mastercard', icon: CreditCard, color: 'bg-purple-500' },
   ];
 
@@ -246,7 +343,7 @@ const PaymentPage: React.FC = () => {
               <div>
                 <p className="font-semibold">{movie.title}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Ghế: {selectedSeats.map(s => s.id).join(', ')}
+                  Ghế: {seatCodes.join(', ')}
                 </p>
               </div>
             </div>
@@ -280,7 +377,7 @@ const PaymentPage: React.FC = () => {
             </div>
 
             <Button
-              onClick={handlePayment}
+              onClick={() => processPayment(paymentMethod)}
               className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >
               Tiến Hành Thanh Toán
@@ -309,11 +406,19 @@ const PaymentPage: React.FC = () => {
           </DialogHeader>
 
           <div className="flex flex-col items-center py-6">
-            {/* Simulated QR Code */}
+            {/* QR Code */}
             <div className="w-48 h-48 bg-white rounded-xl p-4 shadow-lg mb-4">
-              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-700 rounded-lg flex items-center justify-center">
-                <QrCode className="w-24 h-24 text-white" />
-              </div>
+              {paymentMethod === 'momo' && momoQrImageUrl ? (
+                <img
+                  src={momoQrImageUrl}
+                  alt="MoMo QR"
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-700 rounded-lg flex items-center justify-center">
+                  <QrCode className="w-24 h-24 text-white" />
+                </div>
+              )}
             </div>
 
             <p className="text-lg font-bold text-primary">

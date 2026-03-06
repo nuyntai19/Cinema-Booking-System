@@ -31,12 +31,7 @@ import Footer from "@/components/layout/Footer";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import LoyaltyHistoryCard from "@/components/profile/LoyaltyHistoryCard";
 import UserVouchersCard from "@/components/profile/UserVouchersCard";
-import {
-  systemConfig,
-  loyaltyHistory,
-  userVouchers,
-  promotions,
-} from "@/data/mockData";
+import { systemConfig } from "@/data/mockData";
 import {
   determineMembershipTier,
   getMembershipDiscount,
@@ -73,6 +68,43 @@ const ProfilePage: React.FC = () => {
     };
     loadUserProfile();
   }, []);
+
+  // Live data states
+  const [liveLoyaltyHistory, setLiveLoyaltyHistory] = useState<any[]>([]);
+  const [liveUserVouchers, setLiveUserVouchers] = useState<any[]>([]);
+  const [livePromotions, setLivePromotions] = useState<any[]>([]);
+
+  // Fetch loyalty history, vouchers and promotions for current user
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.id) return;
+      try {
+        const token = localStorage.getItem('token');
+
+        // Loyalty history
+        const lhRes = await fetch(API_ENDPOINTS.LOYALTY_HISTORY(parseInt(user.id)), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const lhJson = await lhRes.json();
+        if (lhJson.success) setLiveLoyaltyHistory(lhJson.data.history || []);
+
+        // User vouchers
+        const uvRes = await fetch(API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id)), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const uvJson = await uvRes.json();
+        if (uvJson.success) setLiveUserVouchers(uvJson.data.vouchers || []);
+
+        // Promotions (public)
+        const pRes = await fetch(API_ENDPOINTS.PROMOTIONS, { headers: { Authorization: `Bearer ${token}` } });
+        const pJson = await pRes.json();
+        if (pJson.success) setLivePromotions(pJson.data.promotions || []);
+      } catch (err) {
+        console.error('Error fetching profile related data', err);
+      }
+    };
+    fetchData();
+  }, [user?.id, refreshUser]);
 
   // Sync formData when user data loads/changes
   useEffect(() => {
@@ -543,8 +575,8 @@ const ProfilePage: React.FC = () => {
           <div className="space-y-6">
             {/* User Vouchers */}
             <UserVouchersCard
-              vouchers={userVouchers.filter((v) => v.userId === user?.id)}
-              promotions={promotions}
+              vouchers={liveUserVouchers}
+              promotions={livePromotions}
               onUseVoucher={(voucherId) => {
                 toast({
                   title: "Sử dụng voucher",
@@ -555,7 +587,7 @@ const ProfilePage: React.FC = () => {
 
             {/* Loyalty History */}
             <LoyaltyHistoryCard
-              history={loyaltyHistory.filter((h) => h.userId === user?.id)}
+              history={liveLoyaltyHistory}
             />
           </div>
         </div>

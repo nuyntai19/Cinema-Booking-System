@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
@@ -26,106 +27,57 @@ interface Promotion {
 const PromotionsPage: React.FC = () => {
   const { toast } = useToast();
   const [filter, setFilter] = useState<"all" | "active" | "upcoming">("all");
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const promotions: Promotion[] = [
-    {
-      id: "promo-1",
-      code: "FIRSTTIME50",
-      title: "Giảm 50K cho lần đặt vé đầu tiên",
-      description:
-        "Chào mừng thành viên mới! Giảm ngay 50.000đ cho đơn hàng đầu tiên",
-      discount: "50.000đ",
-      type: "fixed",
-      minOrder: 100000,
-      validFrom: "2026-01-01",
-      validTo: "2026-12-31",
-      image:
-        "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&h=400&fit=crop",
-      terms: [
-        "Áp dụng cho khách hàng mới",
-        "Đơn hàng tối thiểu 100.000đ",
-        "Không áp dụng đồng thời với khuyến mãi khác",
-      ],
-      isActive: true,
-    },
-    {
-      id: "promo-2",
-      code: "WEEKEND30",
-      title: "Giảm 30% vé cuối tuần",
-      description:
-        "Thư giãn cuối tuần với ưu đãi giảm giá 30% cho tất cả suất chiếu",
-      discount: "30%",
-      type: "percentage",
-      minOrder: 0,
-      validFrom: "2026-01-01",
-      validTo: "2026-12-31",
-      image:
-        "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&h=400&fit=crop",
-      terms: [
-        "Chỉ áp dụng T7 & CN",
-        "Giảm tối đa 100.000đ",
-        "Áp dụng cho tất cả rạp",
-      ],
-      isActive: true,
-    },
-    {
-      id: "promo-3",
-      code: "EARLYBIRD",
-      title: "Suất chiếu sớm giảm 20K",
-      description: "Đặt vé suất chiếu trước 12h trưa để nhận ưu đãi",
-      discount: "20.000đ",
-      type: "fixed",
-      minOrder: 0,
-      validFrom: "2026-01-01",
-      validTo: "2026-12-31",
-      image:
-        "https://images.unsplash.com/photo-1595769816263-9b910be24d5f?w=800&h=400&fit=crop",
-      terms: [
-        "Áp dụng suất chiếu 08:00 - 12:00",
-        "Tất cả các ngày trong tuần",
-        "Giới hạn 2 vé/giao dịch",
-      ],
-      isActive: true,
-    },
-    {
-      id: "promo-4",
-      code: "COMBO99",
-      title: "Combo bắp nước chỉ 99K",
-      description: "1 bắp lớn + 2 nước ngọt + 1 snack với giá siêu ưu đãi",
-      discount: "Combo 99K",
-      type: "gift",
-      minOrder: 0,
-      validFrom: "2026-02-01",
-      validTo: "2026-02-28",
-      image:
-        "https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=800&h=400&fit=crop",
-      terms: [
-        "Mua kèm với vé xem phim",
-        "Số lượng có hạn",
-        "Không áp dụng với combo khác",
-      ],
-      isActive: false,
-    },
-    {
-      id: "promo-5",
-      code: "MEMBER20",
-      title: "Thành viên Gold giảm 20%",
-      description: "Đặc quyền dành riêng cho thành viên hạng Gold",
-      discount: "20%",
-      type: "percentage",
-      minOrder: 0,
-      validFrom: "2026-01-01",
-      validTo: "2026-12-31",
-      image:
-        "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&h=400&fit=crop",
-      terms: [
-        "Chỉ dành cho thành viên Gold",
-        "Áp dụng cho vé và combo",
-        "Tích điểm x2",
-      ],
-      isActive: true,
-    },
-  ];
+  React.useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res: any = await apiCall(API_ENDPOINTS.PROMOTIONS);
+        const promos = res?.data?.promotions || res?.promotions || [];
+        const today = new Date();
+        const mapped: Promotion[] = promos
+          .map((p: any) => {
+            const discount = p.discount_type === 'PERCENT' ? `${Number(p.discount_amount)}%` : `${Number(p.discount_amount).toLocaleString('vi-VN')}đ`;
+            const start = p.start_date ? new Date(p.start_date) : null;
+            const end = p.end_date ? new Date(p.end_date) : null;
+            const isExpired = end ? end < today : false;
+            return {
+              id: String(p.id),
+              code: p.code,
+              title: p.title || p.code,
+              description: p.description || '',
+              discount,
+              type: p.discount_type === 'PERCENT' ? 'percentage' : 'fixed',
+              minOrder: Number(p.min_order_value || 0),
+              validFrom: p.start_date || '',
+              validTo: p.end_date || '',
+              image: p.image || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&h=400&fit=crop',
+              terms: p.terms || (p.description ? [p.description] : []),
+              isActive: start && end ? start <= today && end >= today : !isExpired,
+              // keep raw end for filtering
+              _rawEnd: end,
+            } as any;
+          })
+          // filter out expired promotions (end date < today)
+          .filter((pm: any) => {
+            if (!pm._rawEnd) return true;
+            return pm._rawEnd >= today;
+          })
+          // remove internal fields
+          .map(({ _rawEnd, ...rest }: any) => rest as Promotion);
+        setPromotions(mapped);
+      } catch (err) {
+        console.error('Failed to load promotions', err);
+        toast({ title: 'Lỗi', description: 'Không thể tải khuyến mãi', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
 
   const filteredPromotions = promotions.filter((promo) => {
     if (filter === "active") return promo.isActive;

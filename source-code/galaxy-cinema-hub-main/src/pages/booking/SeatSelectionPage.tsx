@@ -132,7 +132,8 @@ const SeatSelectionPage: React.FC = () => {
         else if (seatTypeLower === 'sweetbox' || seatTypeLower === 'couple') type = 'couple';
 
         return ({
-          id: `${seat.row_code}${seat.number}`,
+          // Use DB seat id for booking API; render row/number for display.
+          id: String(seat.id),
           row: seat.row_code,
           number: seat.number,
           type,
@@ -273,6 +274,7 @@ const SeatSelectionPage: React.FC = () => {
   };
 
   const totalPrice = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
+  const formatSeatCode = (seat: Seat) => `${seat.row}${seat.number}`;
 
   const handleContinue = () => {
     if (selectedSeats.length === 0) {
@@ -518,7 +520,7 @@ const SeatSelectionPage: React.FC = () => {
                         >
                           {seat.type.toUpperCase()}
                         </span>
-                        <span className="font-medium">{seat.id}</span>
+                        <span className="font-medium">{formatSeatCode(seat)}</span>
                       </div>
                       <span>{seat.price.toLocaleString("vi-VN")}đ</span>
                     </div>
