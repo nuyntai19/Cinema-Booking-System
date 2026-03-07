@@ -84,18 +84,24 @@ const PaymentPage: React.FC = () => {
           setMovie({
             id: String(m.id),
             title: m.title,
-            poster: m.poster_url
-              ? getImageUrl(m.poster_url)
-              : "",
+            poster: m.poster_url ? getImageUrl(m.poster_url) : "",
           });
         } else {
           // API succeeded but no movie data – use fallback
-          setMovie({ id: selectedMovie, title: `Phim #${selectedMovie}`, poster: "" });
+          setMovie({
+            id: selectedMovie,
+            title: `Phim #${selectedMovie}`,
+            poster: "",
+          });
         }
       } catch (error) {
         console.error("Failed to fetch movie:", error);
         // Use fallback so page is not stuck
-        setMovie({ id: selectedMovie, title: `Phim #${selectedMovie}`, poster: "" });
+        setMovie({
+          id: selectedMovie,
+          title: `Phim #${selectedMovie}`,
+          poster: "",
+        });
       } finally {
         setLoadingMovie(false);
       }
@@ -112,19 +118,70 @@ const PaymentPage: React.FC = () => {
         const promoRes: any = await apiCall(API_ENDPOINTS.PROMOTIONS_ACTIVE);
         const promos = promoRes?.data?.promotions || promoRes?.promotions || [];
         setActivePromos(promos);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       if (user?.id) {
         try {
-          const vRes: any = await apiCall(API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id)));
+          // Fetch ALL vouchers (including expired, used) to show but disable ineligible ones
+          const vRes: any = await apiCall(
+            `${API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id))}?status=all`,
+          );
           const vouchers = vRes?.data?.vouchers || vRes?.vouchers || [];
-          setUserVouchers(vouchers);
-        } catch { /* ignore */ }
+
+          // Helper function to parse date string (YYYY-MM-DD) to local date
+          const parseLocalDate = (dateStr: string) => {
+            const [year, month, day] = dateStr.split("-").map(Number);
+            return new Date(year, month - 1, day);
+          };
+
+          // Sort vouchers: ACTIVE+valid dates first, then others
+          const sortedVouchers = [...vouchers].sort((a: any, b: any) => {
+            // Check status
+            const aActive = a.status === "ACTIVE";
+            const bActive = b.status === "ACTIVE";
+
+            // Check date validity for ACTIVE vouchers
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const aValidDate =
+              aActive && a.start_date && a.end_date
+                ? today >= parseLocalDate(a.start_date) &&
+                  today <= parseLocalDate(a.end_date)
+                : false;
+
+            const bValidDate =
+              bActive && b.start_date && b.end_date
+                ? today >= parseLocalDate(b.start_date) &&
+                  today <= parseLocalDate(b.end_date)
+                : false;
+
+            // ACTIVE + valid dates first
+            if (aValidDate && !bValidDate) return -1;
+            if (!aValidDate && bValidDate) return 1;
+
+            // Then ACTIVE but expired
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+
+            return 0;
+          });
+
+          setUserVouchers(sortedVouchers);
+        } catch {
+          /* ignore */
+        }
 
         try {
-          const tierRes: any = await apiCall(API_ENDPOINTS.MEMBERSHIP_USER_TIER(parseInt(user.id)));
+          const tierRes: any = await apiCall(
+            API_ENDPOINTS.MEMBERSHIP_USER_TIER(parseInt(user.id)),
+          );
           if (tierRes?.data?.tier) setUserTier(tierRes.data.tier);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     };
     fetchPromosAndVouchers();
@@ -136,8 +193,12 @@ const PaymentPage: React.FC = () => {
     0,
   );
   const subtotal = ticketTotal + concessionTotal;
-  const membershipDiscountRate = userTier ? parseFloat(userTier.discount_rate || "0") : 0;
-  const membershipDiscountAmount = Math.round(subtotal * (membershipDiscountRate / 100));
+  const membershipDiscountRate = userTier
+    ? parseFloat(userTier.discount_rate || "0")
+    : 0;
+  const membershipDiscountAmount = Math.round(
+    subtotal * (membershipDiscountRate / 100),
+  );
   const grandTotal = subtotal - discount - membershipDiscountAmount;
   const seatCodes = selectedSeats.map((s) => `${s.row}${s.number}`);
 
@@ -319,17 +380,45 @@ const PaymentPage: React.FC = () => {
           description: `Giảm ${Number(res.data.discount).toLocaleString("vi-VN")}đ cho đơn hàng`,
         });
       } else {
-        toast({ title: "Mã không hợp lệ", description: res.message || "Vui lòng kiểm tra lại", variant: "destructive" });
+        toast({
+          title: "Mã không hợp lệ",
+          description: res.message || "Vui lòng kiểm tra lại",
+          variant: "destructive",
+        });
       }
     } catch (err: any) {
       const msg = err?.message || "Vui lòng kiểm tra lại mã giảm giá";
-      toast({ title: "Không thể áp dụng", description: msg, variant: "destructive" });
+      toast({
+        title: "Không thể áp dụng",
+        description: msg,
+        variant: "destructive",
+      });
     }
   };
 
   const handleSelectPromoCard = (code: string) => {
     setPromoCode(code);
     handleApplyPromo(code);
+  };
+
+  const isVoucherValid = (voucher: any) => {
+    // Check if voucher status is ACTIVE
+    if (voucher.status && voucher.status !== "ACTIVE") {
+      return false;
+    }
+
+    // Check if voucher is within valid date range
+    // Parse date strings (YYYY-MM-DD) to avoid timezone issues
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [sYear, sMonth, sDay] = voucher.start_date.split("-").map(Number);
+    const startDate = new Date(sYear, sMonth - 1, sDay);
+
+    const [eYear, eMonth, eDay] = voucher.end_date.split("-").map(Number);
+    const endDate = new Date(eYear, eMonth - 1, eDay);
+
+    return today >= startDate && today <= endDate;
   };
 
   const isPromoEligible = (promo: any) => {
@@ -382,12 +471,14 @@ const PaymentPage: React.FC = () => {
       if (user?.id) {
         try {
           const upgradeRes: any = await apiCall(
-            API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(parseInt(user.id))
+            API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(parseInt(user.id)),
           );
           if (upgradeRes?.data?.upgraded) {
             upgraded = true;
             newTierName = upgradeRes.data.eligible_tier?.rank_name || "";
-            newDiscount = parseFloat(upgradeRes.data.eligible_tier?.discount_rate || "0");
+            newDiscount = parseFloat(
+              upgradeRes.data.eligible_tier?.discount_rate || "0",
+            );
           }
         } catch {
           // Non-blocking
@@ -444,7 +535,9 @@ const PaymentPage: React.FC = () => {
   if (!selectedMovie) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Không tìm thấy thông tin phim. Vui lòng quay lại trang chủ.</p>
+        <p className="text-muted-foreground">
+          Không tìm thấy thông tin phim. Vui lòng quay lại trang chủ.
+        </p>
       </div>
     );
   }
@@ -551,10 +644,15 @@ const PaymentPage: React.FC = () => {
                 <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <BadgeCheck className="w-4 h-4 text-green-600" />
                   <span className="text-sm text-green-700 dark:text-green-400 font-medium">
-                    Đã áp dụng mã <span className="font-mono">{promoCode}</span> — Giảm {discount.toLocaleString("vi-VN")}đ
+                    Đã áp dụng mã <span className="font-mono">{promoCode}</span>{" "}
+                    — Giảm {discount.toLocaleString("vi-VN")}đ
                   </span>
                   <button
-                    onClick={() => { setDiscount(0); setPromoCode(""); setAppliedVoucherId(null); }}
+                    onClick={() => {
+                      setDiscount(0);
+                      setPromoCode("");
+                      setAppliedVoucherId(null);
+                    }}
                     className="ml-auto text-green-600 hover:text-red-500"
                   >
                     <X className="w-4 h-4" />
@@ -562,7 +660,6 @@ const PaymentPage: React.FC = () => {
                 </div>
               )}
             </div>
-
             {/* Available Promotions & Vouchers */}
             {(activePromos.length > 0 || userVouchers.length > 0) && (
               <div className="bg-card rounded-xl border border-border p-6">
@@ -571,14 +668,40 @@ const PaymentPage: React.FC = () => {
                   Khuyến Mãi & Voucher Của Bạn
                 </h2>
                 <div className="space-y-3">
-                  {/* User vouchers first */}
+                  {/* User vouchers - showing all, eligible ones first */}
                   {userVouchers.map((v: any) => {
-                    const eligible = isPromoEligible(v);
+                    // Check if voucher is usable
+                    const isUsed = v.status === "USED";
+                    const isValid = isVoucherValid(v);
+                    const meetsMinOrder = isPromoEligible(v);
+
+                    // Check remaining quantity (if usage_limit is set)
+                    const hasLimit = v.usage_limit && v.usage_limit > 0;
+                    const remaining = hasLimit
+                      ? Math.max(0, v.usage_limit - (v.used_count || 0))
+                      : Infinity;
+                    const isOutOfStock = hasLimit && remaining <= 0;
+
+                    const eligible =
+                      !isUsed && isValid && meetsMinOrder && !isOutOfStock;
                     const isApplied = promoCode === (v.code || v.promo_code);
+
+                    // Determine status for display
+                    let statusLabel = "";
+                    if (isUsed) statusLabel = "Đã sử dụng";
+                    else if (isOutOfStock) statusLabel = "Hết lượt";
+                    else if (v.status === "EXPIRED" || !isValid)
+                      statusLabel = "Hết hạn";
+                    else if (!meetsMinOrder) statusLabel = "Chưa đủ điều kiện";
                     return (
                       <div
                         key={`uv-${v.id}`}
-                        onClick={() => eligible && !isApplied && handleSelectPromoCard(v.code || v.promo_code)}
+                        onClick={() =>
+                          eligible &&
+                          !isApplied &&
+                          handleSelectPromoCard(v.code || v.promo_code)
+                        }
+                        style={{ pointerEvents: eligible ? "auto" : "none" }}
                         className={cn(
                           "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
                           isApplied
@@ -588,48 +711,104 @@ const PaymentPage: React.FC = () => {
                               : "border-border opacity-50 cursor-not-allowed",
                         )}
                       >
-                        <div className={cn(
-                          "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                          eligible ? "bg-orange-500" : "bg-gray-400",
-                        )}>
+                        <div
+                          className={cn(
+                            "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
+                            eligible ? "bg-orange-500" : "bg-gray-400",
+                          )}
+                        >
                           <Ticket className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-sm">{v.code || v.promo_code}</span>
-                            <Badge variant="outline" className="text-xs">Voucher</Badge>
-                            {isApplied && <BadgeCheck className="w-4 h-4 text-green-600" />}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-bold text-sm">
+                              {v.code || v.promo_code}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              Voucher
+                            </Badge>
+                            {isApplied && (
+                              <BadgeCheck className="w-4 h-4 text-green-600" />
+                            )}
+                            {statusLabel && !isApplied && (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs bg-red-100 text-red-600 dark:bg-red-900/20"
+                              >
+                                {statusLabel}
+                              </Badge>
+                            )}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">{v.description}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {v.description}
+                          </p>
                           <div className="flex items-center gap-3 mt-1">
                             <span className="text-sm font-semibold text-primary">
-                              {v.discount_type === 'PERCENT' ? `Giảm ${v.discount_amount}%` : `Giảm ${Number(v.discount_amount).toLocaleString('vi-VN')}đ`}
+                              {v.discount_type === "PERCENT"
+                                ? `Giảm ${v.discount_amount}%`
+                                : `Giảm ${Number(v.discount_amount).toLocaleString("vi-VN")}đ`}
                             </span>
                             {Number(v.min_order_value) > 0 && (
                               <span className="text-xs text-muted-foreground">
-                                Đơn tối thiểu {Number(v.min_order_value).toLocaleString('vi-VN')}đ
+                                Đơn tối thiểu{" "}
+                                {Number(v.min_order_value).toLocaleString(
+                                  "vi-VN",
+                                )}
+                                đ
                               </span>
                             )}
                           </div>
                         </div>
-                        {!eligible && (
-                          <span className="text-xs text-red-500 shrink-0">Chưa đủ điều kiện</span>
-                        )}
                       </div>
                     );
                   })}
 
                   {/* Public active promotions (exclude system & user vouchers) */}
                   {activePromos
-                    .filter((p: any) => !userVouchers.some((v: any) => v.promotion_id === p.id || v.promo_code === p.code))
-                    .filter((p: any) => !p.is_auto_apply && !/^(REWARD_|TIER_|WELCOME_|BIRTHDAY)/.test(p.code))
+                    .filter((p: any) => {
+                      // Check date validity - fix timezone issue
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const [sYear, sMonth, sDay] = p.start_date
+                        .split("-")
+                        .map(Number);
+                      const startDate = new Date(sYear, sMonth - 1, sDay);
+                      const [eYear, eMonth, eDay] = p.end_date
+                        .split("-")
+                        .map(Number);
+                      const endDate = new Date(eYear, eMonth - 1, eDay);
+                      return today >= startDate && today <= endDate;
+                    })
+                    .filter(
+                      (p: any) =>
+                        !userVouchers.some(
+                          (v: any) =>
+                            v.promotion_id === p.id || v.promo_code === p.code,
+                        ),
+                    )
+                    .filter(
+                      (p: any) =>
+                        !p.is_auto_apply &&
+                        !/^(REWARD_20K|REWARD_50K|TIER_|BIRTHDAY)/.test(p.code),
+                    )
                     .map((p: any) => {
-                      const eligible = isPromoEligible(p);
+                      // Check remaining quantity
+                      const hasLimit = p.usage_limit && p.usage_limit > 0;
+                      const remaining = hasLimit
+                        ? Math.max(0, p.usage_limit - (p.used_count || 0))
+                        : Infinity;
+                      const isOutOfStock = hasLimit && remaining <= 0;
+
+                      const eligible = isPromoEligible(p) && !isOutOfStock;
                       const isApplied = promoCode === p.code;
                       return (
                         <div
                           key={`promo-${p.id}`}
-                          onClick={() => eligible && !isApplied && handleSelectPromoCard(p.code)}
+                          onClick={() =>
+                            eligible &&
+                            !isApplied &&
+                            handleSelectPromoCard(p.code)
+                          }
                           className={cn(
                             "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
                             isApplied
@@ -639,32 +818,50 @@ const PaymentPage: React.FC = () => {
                                 : "border-border opacity-50 cursor-not-allowed",
                           )}
                         >
-                          <div className={cn(
-                            "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                            eligible ? "bg-primary" : "bg-gray-400",
-                          )}>
+                          <div
+                            className={cn(
+                              "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
+                              eligible ? "bg-primary" : "bg-gray-400",
+                            )}
+                          >
                             <Percent className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-sm">{p.code}</span>
-                              <Badge variant="secondary" className="text-xs">Khuyến mãi</Badge>
-                              {isApplied && <BadgeCheck className="w-4 h-4 text-green-600" />}
+                              <span className="font-mono font-bold text-sm">
+                                {p.code}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                Khuyến mãi
+                              </Badge>
+                              {isApplied && (
+                                <BadgeCheck className="w-4 h-4 text-green-600" />
+                              )}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {p.description}
+                            </p>
                             <div className="flex items-center gap-3 mt-1">
                               <span className="text-sm font-semibold text-primary">
-                                {p.discount_type === 'PERCENT' ? `Giảm ${p.discount_amount}%` : `Giảm ${Number(p.discount_amount).toLocaleString('vi-VN')}đ`}
+                                {p.discount_type === "PERCENT"
+                                  ? `Giảm ${p.discount_amount}%`
+                                  : `Giảm ${Number(p.discount_amount).toLocaleString("vi-VN")}đ`}
                               </span>
                               {Number(p.min_order_value) > 0 && (
                                 <span className="text-xs text-muted-foreground">
-                                  Đơn tối thiểu {Number(p.min_order_value).toLocaleString('vi-VN')}đ
+                                  Đơn tối thiểu{" "}
+                                  {Number(p.min_order_value).toLocaleString(
+                                    "vi-VN",
+                                  )}
+                                  đ
                                 </span>
                               )}
                             </div>
                           </div>
                           {!eligible && (
-                            <span className="text-xs text-red-500 shrink-0">Chưa đủ điều kiện</span>
+                            <span className="text-xs text-red-500 shrink-0">
+                              Chưa đủ điều kiện
+                            </span>
                           )}
                         </div>
                       );
@@ -717,8 +914,13 @@ const PaymentPage: React.FC = () => {
               )}
               {userTier && membershipDiscountAmount > 0 && (
                 <div className="flex justify-between text-blue-600">
-                  <span>Ưu đãi thành viên {userTier.rank_name} ({userTier.discount_rate}%)</span>
-                  <span>-{membershipDiscountAmount.toLocaleString("vi-VN")}đ</span>
+                  <span>
+                    Ưu đãi thành viên {userTier.rank_name} (
+                    {userTier.discount_rate}%)
+                  </span>
+                  <span>
+                    -{membershipDiscountAmount.toLocaleString("vi-VN")}đ
+                  </span>
                 </div>
               )}
             </div>

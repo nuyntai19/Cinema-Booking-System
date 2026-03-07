@@ -28,12 +28,17 @@ class UserVoucher {
         try {
             $query = "SELECT uv.id, uv.user_id, uv.promotion_id, uv.code as voucher_code, uv.status, uv.assigned_at, uv.used_at,
                 p.code as promo_code, p.description, p.discount_amount, p.discount_type,
-                p.min_order_value, p.max_discount, p.start_date, p.end_date, p.is_auto_apply
+                p.min_order_value, p.max_discount, p.start_date, p.end_date, p.is_auto_apply, p.usage_limit,
+                (SELECT COUNT(*) FROM user_vouchers WHERE promotion_id = p.id AND status = 'USED') as used_count
                 FROM {$this->table} uv
                 LEFT JOIN promotions p ON uv.promotion_id = p.id
                 WHERE uv.user_id = :user_id";
             if ($status) {
                 $query .= " AND uv.status = :status";
+                // Only filter by date validity when explicitly fetching ACTIVE vouchers
+                if ($status === 'ACTIVE') {
+                    $query .= " AND CURDATE() BETWEEN p.start_date AND p.end_date";
+                }
             }
             $query .= " ORDER BY uv.assigned_at DESC";
             $stmt = $this->db->prepare($query);

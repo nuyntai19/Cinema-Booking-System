@@ -366,7 +366,14 @@ INSERT INTO promotions (code, description, discount_amount, discount_type, min_o
 ('WELCOME2026', 'Giảm 50K cho khách hàng mới', 50000, 'FIXED', 200000, '2026-01-01', '2026-12-31', FALSE, NULL),
 ('BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20, 'PERCENT', 100000, '2026-01-01', '2026-12-31', TRUE, 1),
 ('WEEKEND20', 'Giảm 20% cuối tuần', 20, 'PERCENT', 150000, '2026-01-01', '2026-12-31', FALSE, NULL),
-('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2026-01-01', '2026-12-31', FALSE, NULL);
+('MEMBER100', 'Ưu đãi thành viên - Giảm 100K', 100000, 'FIXED', 300000, '2026-01-01', '2026-12-31', FALSE, NULL),
+('REWARD_20K', 'Voucher giảm 20.000đ (đổi điểm)', 20000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('REWARD_50K', 'Voucher giảm 50.000đ (đổi điểm)', 50000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('REWARD_FREE', 'Voucher vé miễn phí (đổi điểm)', 90000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('WELCOME_NEW', 'Chào mừng thành viên mới - Giảm 30K', 30000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('TIER_SILVER', 'Chúc mừng lên hạng Bạc - Giảm 30K', 30000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('TIER_GOLD', 'Chúc mừng lên hạng Vàng - Giảm 50K', 50000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL),
+('TIER_PLATINUM', 'Chúc mừng lên hạng Kim Cương - Giảm 100K', 100000, 'FIXED', 0, '2020-01-01', '2030-12-31', TRUE, NULL);
 
 -- ============================================
 -- 8. USER VOUCHERS (Assign vouchers cho users)

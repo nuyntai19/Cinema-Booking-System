@@ -51,6 +51,8 @@ interface BookingHistory {
   time: string;
   seats: string[];
   concessions: Concession[];
+  originalPrice: number;
+  discountAmount: number;
   totalPrice: number;
   status: "completed" | "upcoming" | "cancelled";
   paymentMethod: string;
@@ -99,9 +101,27 @@ const BookingHistoryPage: React.FC = () => {
         const result = await response.json();
 
         // Map API data to frontend format
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mappedBookings: BookingHistory[] = result.data.items.map(
-          (booking: any) => {
+          (booking: {
+            id: number;
+            booking_code?: string;
+            movie_title: string;
+            poster_url: string;
+            duration_minutes: number;
+            age_rating: string;
+            start_time: string;
+            status: string;
+            cinema_name: string;
+            hall_name: string;
+            seats?: string;
+            concessions?: Concession[];
+            total_price?: string;
+            discount_amount?: string;
+            final_price?: string;
+            payment_method?: string;
+            created_at: string;
+            [key: string]: unknown;
+          }) => {
             const startTime = new Date(booking.start_time);
             const bookingDate = booking.start_time.split(" ")[0]; // YYYY-MM-DD
             const bookingTime = startTime.toLocaleTimeString("vi-VN", {
@@ -133,7 +153,11 @@ const BookingHistoryPage: React.FC = () => {
               time: bookingTime,
               seats: booking.seats ? booking.seats.split(", ") : [],
               concessions: booking.concessions || [],
-              totalPrice: parseFloat(booking.final_price || booking.total_price),
+              originalPrice: parseFloat(booking.total_price || "0"),
+              discountAmount: parseFloat(booking.discount_amount || "0"),
+              totalPrice: parseFloat(
+                booking.final_price || booking.total_price,
+              ),
               status: status,
               paymentMethod: booking.payment_method || "Chưa thanh toán",
               bookingDate: booking.created_at,
@@ -501,7 +525,25 @@ const BookingHistoryPage: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  )}
+                  )}{" "}
+                {selectedBooking.discountAmount > 0 && (
+                  <>
+                    <div className="flex justify-between text-sm pt-2 border-t">
+                      <span className="text-muted-foreground">Tạm tính:</span>
+                      <span>
+                        {selectedBooking.originalPrice.toLocaleString("vi-VN")}đ
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Giảm giá:</span>
+                      <span>
+                        -
+                        {selectedBooking.discountAmount.toLocaleString("vi-VN")}
+                        đ
+                      </span>
+                    </div>
+                  </>
+                )}{" "}
                 <div className="flex justify-between font-bold text-base pt-2 border-t">
                   <span>Tổng tiền:</span>
                   <span className="text-primary">
@@ -631,7 +673,32 @@ const BookingHistoryPage: React.FC = () => {
                             </div>
                           ))}
                         </div>
-                      )}
+                      )}{" "}
+                    {selectedBooking.discountAmount > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm pt-2 border-t">
+                          <span className="text-muted-foreground">
+                            Tạm tính:
+                          </span>
+                          <span>
+                            {selectedBooking.originalPrice.toLocaleString(
+                              "vi-VN",
+                            )}
+                            đ
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm text-green-600 font-semibold">
+                          <span>🎟️ Giảm giá:</span>
+                          <span>
+                            -
+                            {selectedBooking.discountAmount.toLocaleString(
+                              "vi-VN",
+                            )}
+                            đ
+                          </span>
+                        </div>
+                      </>
+                    )}{" "}
                     <div className="flex justify-between font-bold text-base pt-2 border-t">
                       <span>Tổng tiền:</span>
                       <span className="text-primary text-lg">

@@ -206,6 +206,7 @@ CREATE TABLE promotions (
     discount_amount DECIMAL(10,2) NOT NULL COMMENT 'Số tiền giảm cố định hoặc %',
     discount_type ENUM('FIXED', 'PERCENT') DEFAULT 'FIXED',
     min_order_value DECIMAL(10,2) DEFAULT 0 COMMENT 'Giá trị đơn hàng tối thiểu',
+    max_discount DECIMAL(10,2) DEFAULT NULL COMMENT 'Số tiền giảm tối đa (chỉ áp dụng cho loại PERCENT)',
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     is_auto_apply BOOLEAN DEFAULT FALSE COMMENT 'True cho sinh nhật/sự kiện hệ thống',

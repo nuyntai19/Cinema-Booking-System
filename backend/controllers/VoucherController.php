@@ -210,13 +210,13 @@ class VoucherController {
 
             // --- 2) If found user_voucher, apply it ---
             if ($voucherId) {
-                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.code as promo_code FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE' LIMIT 1";
+                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.code as promo_code, p.usage_limit, p.id as promotion_id FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE' LIMIT 1";
                 $stmt = $db->prepare($query);
                 $stmt->bindParam(':id', $voucherId, PDO::PARAM_INT);
                 $stmt->execute();
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($row) {
-                    return $this->calculateDiscount($row, $amount, (int)$voucherId, 'voucher');
+                    return $this->calculateDiscount($row, $amount, (int)$voucherId, 'voucher', $db);
                 }
             }
 
@@ -231,6 +231,34 @@ class VoucherController {
                 $stmt->execute();
                 $promo = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($promo) {
+                    // Check usage limit BEFORE auto-assign
+                    if (isset($promo['usage_limit']) && $promo['usage_limit'] > 0) {
+                        $checkQuery = "SELECT COUNT(*) as used_count FROM user_vouchers WHERE promotion_id = :promo_id AND status = 'USED'";
+                        $checkStmt = $db->prepare($checkQuery);
+                        $checkStmt->bindParam(':promo_id', $promo['id'], PDO::PARAM_INT);
+                        $checkStmt->execute();
+                        $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                        $usedCount = (int)$result['used_count'];
+                        
+                        if ($usedCount >= (int)$promo['usage_limit']) {
+                            return Response::error('Voucher đã hết số lượng sử dụng', 400);
+                        }
+                    }
+                    
+                    // Check if user already has this voucher (even if USED)
+                    if ($userId) {
+                        $existQuery = "SELECT COUNT(*) as count FROM user_vouchers WHERE user_id = :user_id AND promotion_id = :promo_id";
+                        $existStmt = $db->prepare($existQuery);
+                        $existStmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+                        $existStmt->bindParam(':promo_id', $promo['id'], PDO::PARAM_INT);
+                        $existStmt->execute();
+                        $existResult = $existStmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($existResult['count'] > 0) {
+                            return Response::error('Bạn đã sử dụng voucher này rồi', 400);
+                        }
+                    }
+                    
                     // Auto-assign as user_voucher so booking can reference it
                     $autoVoucherId = null;
                     if ($userId) {
@@ -238,9 +266,9 @@ class VoucherController {
                     }
                     if ($autoVoucherId) {
                         // Return as a voucher (with user_voucher_id) so booking applies the discount
-                        return $this->calculateDiscount($promo, $amount, (int)$autoVoucherId, 'voucher');
+                        return $this->calculateDiscount($promo, $amount, (int)$autoVoucherId, 'voucher', $db);
                     }
-                    return $this->calculateDiscount($promo, $amount, (int)$promo['id'], 'promotion');
+                    return $this->calculateDiscount($promo, $amount, (int)$promo['id'], 'promotion', $db);
                 }
             }
 
@@ -250,7 +278,23 @@ class VoucherController {
         }
     }
 
-    private function calculateDiscount($row, $amount, $id, $type = 'voucher') {
+    private function calculateDiscount($row, $amount, $id, $type = 'voucher', $db = null) {
+        // Check usage limit
+        if (isset($row['usage_limit']) && $row['usage_limit'] > 0) {
+            if (!$db) $db = Database::getInstance()->getConnection();
+            $promotionId = $row['promotion_id'] ?? $row['id'];
+            $checkQuery = "SELECT COUNT(*) as used_count FROM user_vouchers WHERE promotion_id = :promo_id AND status = 'USED'";
+            $checkStmt = $db->prepare($checkQuery);
+            $checkStmt->bindParam(':promo_id', $promotionId, PDO::PARAM_INT);
+            $checkStmt->execute();
+            $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            $usedCount = (int)$result['used_count'];
+            
+            if ($usedCount >= (int)$row['usage_limit']) {
+                return Response::error('Voucher đã hết số lượng sử dụng', 400);
+            }
+        }
+        
         if ($amount < (float)$row['min_order_value']) {
             $min = number_format((float)$row['min_order_value'], 0, ',', '.');
             return Response::error("Đơn hàng tối thiểu {$min}đ để sử dụng mã này", 400);

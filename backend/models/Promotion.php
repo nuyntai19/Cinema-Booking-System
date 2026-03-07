@@ -14,8 +14,15 @@ class Promotion {
             $query = "SELECT p.*,
                 (SELECT COUNT(*) FROM user_vouchers uv WHERE uv.promotion_id = p.id AND uv.status = 'USED') as used_count,
                 (SELECT COALESCE(SUM(b.discount_amount), 0) FROM bookings b INNER JOIN user_vouchers uv ON b.user_voucher_id = uv.id WHERE uv.promotion_id = p.id AND uv.status = 'USED') as total_discount
-                FROM {$this->table} p WHERE p.is_auto_apply = 0";
+                FROM {$this->table} p WHERE 1=1";
             $params = [];
+
+            // Admin can see all promotions including auto_apply ones
+            // If you want to filter by is_auto_apply, pass it as filter
+            if (isset($filters['is_auto_apply'])) {
+                $query .= " AND p.is_auto_apply = :is_auto_apply";
+                $params['is_auto_apply'] = $filters['is_auto_apply'] ? 1 : 0;
+            }
 
             if (!empty($filters['active'])) {
                 $query .= " AND p.start_date <= :today1 AND p.end_date >= :today2";
@@ -61,18 +68,28 @@ class Promotion {
         try {
             $query = "INSERT INTO {$this->table} (code, description, discount_amount, discount_type, min_order_value, max_discount, start_date, end_date, is_auto_apply, usage_limit) VALUES (:code, :description, :discount_amount, :discount_type, :min_order_value, :max_discount, :start_date, :end_date, :is_auto_apply, :usage_limit)";
             $stmt = $this->db->prepare($query);
+            
+            // Convert boolean to int for is_auto_apply
+            $isAutoApply = isset($data['is_auto_apply']) ? (int)(bool)$data['is_auto_apply'] : 0;
+            $usageLimit = $data['usage_limit'] ?? null;
+            $maxDiscount = $data['max_discount'] ?? null;
+            
             $stmt->bindParam(':code', $data['code']);
             $stmt->bindParam(':description', $data['description']);
             $stmt->bindParam(':discount_amount', $data['discount_amount']);
             $stmt->bindParam(':discount_type', $data['discount_type']);
             $stmt->bindParam(':min_order_value', $data['min_order_value']);
-            $maxDiscount = $data['max_discount'] ?? null;
             $stmt->bindParam(':max_discount', $maxDiscount);
             $stmt->bindParam(':start_date', $data['start_date']);
             $stmt->bindParam(':end_date', $data['end_date']);
-            $stmt->bindParam(':is_auto_apply', $data['is_auto_apply']);
-            $stmt->bindParam(':usage_limit', $data['usage_limit']);
+            $stmt->bindParam(':is_auto_apply', $isAutoApply, PDO::PARAM_INT);
+            $stmt->bindParam(':usage_limit', $usageLimit);
+            
             if ($stmt->execute()) return $this->db->lastInsertId();
+            
+            // Log PDO error info if execute failed
+            $errorInfo = $stmt->errorInfo();
+            error_log('Promotion Create Execute Failed: ' . json_encode($errorInfo));
             return false;
         } catch (PDOException $e) {
             error_log('Promotion Create Error: '.$e->getMessage());
@@ -87,6 +104,12 @@ class Promotion {
             $params = ['id' => $id];
             foreach ($data as $k => $v) {
                 if (!in_array($k, $allowed, true)) continue;
+                
+                // Convert boolean to int for is_auto_apply
+                if ($k === 'is_auto_apply') {
+                    $v = isset($v) ? (int)(bool)$v : 0;
+                }
+                
                 $fields[] = "$k = :$k";
                 $params[$k] = $v;
             }
@@ -116,7 +139,11 @@ class Promotion {
         // Exclude is_auto_apply = 1 (system vouchers: REWARD_*, TIER_*, WELCOME_*, BIRTHDAY)
         try {
             $today = date('Y-m-d');
-            $query = "SELECT * FROM {$this->table} WHERE start_date <= :today1 AND end_date >= :today2 AND is_auto_apply = 0 ORDER BY created_at DESC";
+            $query = "SELECT p.*,
+                (SELECT COUNT(*) FROM user_vouchers uv WHERE uv.promotion_id = p.id AND uv.status = 'USED') as used_count
+                FROM {$this->table} p 
+                WHERE start_date <= :today1 AND end_date >= :today2 AND is_auto_apply = 0 
+                ORDER BY created_at DESC";
             $stmt = $this->db->prepare($query);
             $stmt->bindValue(':today1', $today);
             $stmt->bindValue(':today2', $today);

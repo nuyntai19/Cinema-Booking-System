@@ -46,7 +46,14 @@ const ConcessionsPage: React.FC = () => {
       try {
         const response = await apiCall<{
           success: boolean;
-          data: { movie: any };
+          data: {
+            movie: {
+              id: number;
+              title: string;
+              poster_url?: string;
+              [key: string]: unknown;
+            };
+          };
         }>(API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie)));
 
         if (response.success && response.data?.movie) {
@@ -79,7 +86,9 @@ const ConcessionsPage: React.FC = () => {
 
         if (response.success && response.data) {
           // Map API data to ConcessionItem format
-          const mappedItems: ConcessionItem[] = response.data.map((c: any) => ({
+          const mappedItems: ConcessionItem[] = (
+            response.data as Concession[]
+          ).map((c) => ({
             id: String(c.id),
             name: c.name,
             nameVi: c.name, // Use same name if no Vietnamese name
@@ -87,16 +96,17 @@ const ConcessionsPage: React.FC = () => {
             quantity: 0,
             image:
               c.imageUrl ||
-              c.image_url ||
               "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
           }));
           setItems(mappedItems);
         } else {
           setError("Không thể tải danh sách bắp nước");
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching concessions:", err);
-        setError(err.message || "Có lỗi xảy ra khi tải dữ liệu");
+        setError(
+          err instanceof Error ? err.message : "Có lỗi xảy ra khi tải dữ liệu",
+        );
         toast({
           title: "Lỗi",
           description: "Không thể tải danh sách bắp nước",

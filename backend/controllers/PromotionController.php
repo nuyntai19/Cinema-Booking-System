@@ -36,10 +36,28 @@ class PromotionController {
     }
 
     public function update($id) {
-        $data = json_decode(file_get_contents('php://input'), true);
-        $ok = $this->model->update($id, $data);
-        if (!$ok) return Response::error('Could not update promotion', 500);
-        return Response::success(['updated' => true]);
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Debug logging
+            error_log("=== Promotion Update Request ===");
+            error_log("ID: " . $id);
+            error_log("Data: " . json_encode($data));
+            
+            $ok = $this->model->update($id, $data);
+            
+            error_log("Update result: " . ($ok ? "SUCCESS" : "FAILED"));
+            
+            if (!$ok) {
+                error_log("Update failed for promotion ID: " . $id);
+                return Response::error('Could not update promotion', 500);
+            }
+            
+            return Response::success(['updated' => true]);
+        } catch (Exception $e) {
+            error_log("Exception in PromotionController::update: " . $e->getMessage());
+            return Response::error('Error: ' . $e->getMessage(), 500);
+        }
     }
 
     public function delete($id) {

@@ -85,30 +85,55 @@ const AdminPromotions: React.FC = () => {
   React.useEffect(() => {
     const loadPromotions = async () => {
       try {
-        const data: any = await apiCall(API_ENDPOINTS.PROMOTIONS);
+        const data: {
+          data?: { promotions?: unknown[] };
+          promotions?: unknown[];
+        } = await apiCall(API_ENDPOINTS.PROMOTIONS);
         const promos = data?.data?.promotions || data?.promotions || [];
         if (promos && promos.length) {
           // Map backend fields -> frontend shape
-          const mapped = promos.map((p: any) => ({
-            id: p.id,
-            code: p.code,
-            title: p.title || p.code,
-            description: p.description,
-            discountType: p.discount_type === 'PERCENT' ? 'percentage' : 'fixed',
-            discountAmount: Number(p.discount_amount),
-            minOrderValue: Number(p.min_order_value || 0),
-            maxDiscount: p.max_discount || 0,
-            usageLimit: p.usage_limit || 0,
-            usedCount: Number(p.used_count) || 0,
-            totalDiscount: Number(p.total_discount) || 0,
-            startDate: p.start_date,
-            endDate: p.end_date,
-            status: p.end_date && new Date(p.end_date + 'T23:59:59') < new Date() ? 'expired' : 'active',
-          }));
+          const mapped = promos.map(
+            (p: {
+              id: number;
+              code: string;
+              title?: string;
+              description: string;
+              discount_type: string;
+              discount_amount: number | string;
+              min_order_value?: number | string;
+              max_discount?: number | string;
+              usage_limit?: number;
+              used_count?: number;
+              total_discount?: number;
+              start_date: string;
+              end_date: string;
+              [key: string]: unknown;
+            }) => ({
+              id: p.id,
+              code: p.code,
+              title: p.title || p.code,
+              description: p.description,
+              discountType: (p.discount_type === "PERCENT"
+                ? "percentage"
+                : "fixed") as "percentage" | "fixed",
+              discountAmount: Number(p.discount_amount),
+              minOrderValue: Number(p.min_order_value || 0),
+              maxDiscount: Number(p.max_discount || 0),
+              usageLimit: p.usage_limit || 0,
+              usedCount: Number(p.used_count) || 0,
+              totalDiscount: Number(p.total_discount) || 0,
+              startDate: p.start_date,
+              endDate: p.end_date,
+              status: (p.end_date &&
+              new Date(p.end_date + "T23:59:59") < new Date()
+                ? "expired"
+                : "active") as "active" | "expired" | "inactive",
+            }),
+          );
           setPromotions(mapped);
         }
       } catch (err) {
-        console.error('Failed to load promotions', err);
+        console.error("Failed to load promotions", err);
       }
     };
     loadPromotions();
@@ -165,7 +190,11 @@ const AdminPromotions: React.FC = () => {
   const handleUpdatePromo = () => {
     if (!selectedPromo) return;
 
-    if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
+    if (
+      formData.startDate &&
+      formData.endDate &&
+      new Date(formData.endDate) < new Date(formData.startDate)
+    ) {
       toast({
         title: "Lỗi",
         description: "Ngày kết thúc không được trước ngày bắt đầu",
@@ -180,9 +209,13 @@ const AdminPromotions: React.FC = () => {
           code: formData.code,
           description: formData.description || formData.title,
           discount_amount: formData.discountAmount,
-          discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
+          discount_type:
+            formData.discountType === "percentage" ? "PERCENT" : "FIXED",
           min_order_value: formData.minOrderValue,
-          max_discount: formData.discountType === 'fixed' ? null : (formData.maxDiscount || null),
+          max_discount:
+            formData.discountType === "fixed"
+              ? null
+              : formData.maxDiscount || null,
           start_date: formData.startDate,
           end_date: formData.endDate,
           is_auto_apply: false,
@@ -190,7 +223,7 @@ const AdminPromotions: React.FC = () => {
         };
 
         await apiCall(`${API_ENDPOINTS.PROMOTIONS}/${selectedPromo.id}`, {
-          method: 'PUT',
+          method: "PUT",
           body: JSON.stringify(payload),
         });
 
@@ -200,10 +233,17 @@ const AdminPromotions: React.FC = () => {
           ),
         );
 
-        toast({ title: 'Cập nhật thành công', description: `Đã cập nhật ${formData.code}` });
+        toast({
+          title: "Cập nhật thành công",
+          description: `Đã cập nhật ${formData.code}`,
+        });
       } catch (err) {
-        console.error('Update promo failed', err);
-        toast({ title: 'Lỗi', description: 'Không thể cập nhật khuyến mãi', variant: 'destructive' });
+        console.error("Update promo failed", err);
+        toast({
+          title: "Lỗi",
+          description: "Không thể cập nhật khuyến mãi",
+          variant: "destructive",
+        });
       } finally {
         setIsEditDialogOpen(false);
         setSelectedPromo(null);
@@ -237,7 +277,10 @@ const AdminPromotions: React.FC = () => {
       return;
     }
 
-    if (formData.discountType === "percentage" && formData.discountAmount > 100) {
+    if (
+      formData.discountType === "percentage" &&
+      formData.discountAmount > 100
+    ) {
       toast({
         title: "Lỗi",
         description: "Giá trị giảm theo % không được vượt quá 100",
@@ -261,19 +304,26 @@ const AdminPromotions: React.FC = () => {
           code: formData.code,
           description: formData.description || formData.title,
           discount_amount: formData.discountAmount,
-          discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
+          discount_type:
+            formData.discountType === "percentage" ? "PERCENT" : "FIXED",
           min_order_value: formData.minOrderValue,
-          max_discount: formData.discountType === 'fixed' ? null : (formData.maxDiscount || null),
+          max_discount:
+            formData.discountType === "fixed"
+              ? null
+              : formData.maxDiscount || null,
           start_date: formData.startDate,
           end_date: formData.endDate,
           is_auto_apply: false,
           usage_limit: formData.usageLimit,
         };
 
-        const data: any = await apiCall(API_ENDPOINTS.PROMOTIONS, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
+        const data: { data?: { id?: number }; id?: number } = await apiCall(
+          API_ENDPOINTS.PROMOTIONS,
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+        );
 
         const createdId = data?.data?.id || data?.id || Date.now();
         const created: Promotion = {
@@ -287,17 +337,25 @@ const AdminPromotions: React.FC = () => {
           maxDiscount: formData.maxDiscount,
           usageLimit: formData.usageLimit,
           usedCount: 0,
+          totalDiscount: 0,
           startDate: formData.startDate,
           endDate: formData.endDate,
-          status: 'active',
+          status: "active",
         };
 
-        setPromotions((prev) => [...prev, created]);
+        setPromotions((prev) => [created, ...prev]);
 
-        toast({ title: 'Tạo thành công', description: `Đã tạo mã ${formData.code}` });
+        toast({
+          title: "Tạo thành công",
+          description: `Đã tạo mã ${formData.code}`,
+        });
       } catch (err) {
-        console.error('Create promo failed', err);
-        toast({ title: 'Lỗi', description: 'Không thể tạo khuyến mãi', variant: 'destructive' });
+        console.error("Create promo failed", err);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tạo khuyến mãi",
+          variant: "destructive",
+        });
       } finally {
         setIsCreateDialogOpen(false);
         setFormData({
@@ -321,12 +379,18 @@ const AdminPromotions: React.FC = () => {
   const handleDeletePromo = (promo: Promotion) => {
     const doDelete = async () => {
       try {
-        await apiCall(`${API_ENDPOINTS.PROMOTIONS}/${promo.id}`, { method: 'DELETE' });
+        await apiCall(`${API_ENDPOINTS.PROMOTIONS}/${promo.id}`, {
+          method: "DELETE",
+        });
         setPromotions(promotions.filter((p) => p.id !== promo.id));
-        toast({ title: 'Đã xóa', description: `Đã xóa ${promo.code}` });
+        toast({ title: "Đã xóa", description: `Đã xóa ${promo.code}` });
       } catch (err) {
-        console.error('Delete promo failed', err);
-        toast({ title: 'Lỗi', description: 'Không thể xóa khuyến mãi', variant: 'destructive' });
+        console.error("Delete promo failed", err);
+        toast({
+          title: "Lỗi",
+          description: "Không thể xóa khuyến mãi",
+          variant: "destructive",
+        });
       }
     };
 
@@ -427,7 +491,9 @@ const AdminPromotions: React.FC = () => {
             <div className="text-2xl font-bold">
               {(totalDiscount / 1000000).toFixed(1)}M
             </div>
-            <p className="text-xs text-muted-foreground">Tổng giảm giá thực tế</p>
+            <p className="text-xs text-muted-foreground">
+              Tổng giảm giá thực tế
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -523,19 +589,35 @@ const AdminPromotions: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {promo.usedCount}/{promo.usageLimit}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          Đã dùng: {promo.usedCount}
                         </span>
+                        {promo.usageLimit && promo.usageLimit > 0 ? (
+                          <span className="text-sm font-medium text-green-600">
+                            Còn:{" "}
+                            {Math.max(0, promo.usageLimit - promo.usedCount)}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-medium text-blue-600">
+                            Không giới hạn
+                          </span>
+                        )}
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className="bg-primary h-2 rounded-full transition-all"
-                          style={{
-                            width: `${(promo.usedCount / promo.usageLimit) * 100}%`,
-                          }}
-                        />
-                      </div>
+                      {promo.usageLimit && promo.usageLimit > 0 ? (
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, (promo.usedCount / promo.usageLimit) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full bg-blue-100 dark:bg-blue-900/20 rounded-full h-2">
+                          <div className="w-full bg-blue-500 h-2 rounded-full" />
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -663,7 +745,9 @@ const AdminPromotions: React.FC = () => {
               <Label htmlFor="edit-discountAmount">
                 Giá Trị Giảm *{" "}
                 {formData.discountType === "percentage" && (
-                  <span className="text-muted-foreground text-xs">(1 – 100%)</span>
+                  <span className="text-muted-foreground text-xs">
+                    (1 – 100%)
+                  </span>
                 )}
               </Label>
               <Input
@@ -701,7 +785,9 @@ const AdminPromotions: React.FC = () => {
               <Label htmlFor="edit-maxDiscount">
                 Giảm Tối Đa (đ){" "}
                 {formData.discountType === "fixed" && (
-                  <span className="text-muted-foreground text-xs">(Không áp dụng)</span>
+                  <span className="text-muted-foreground text-xs">
+                    (Không áp dụng)
+                  </span>
                 )}
               </Label>
               <Input
@@ -710,7 +796,11 @@ const AdminPromotions: React.FC = () => {
                 min={0}
                 disabled={formData.discountType === "fixed"}
                 placeholder={formData.discountType === "fixed" ? "—" : ""}
-                value={formData.discountType === "fixed" ? "" : (formData.maxDiscount || "")}
+                value={
+                  formData.discountType === "fixed"
+                    ? ""
+                    : formData.maxDiscount || ""
+                }
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -845,7 +935,9 @@ const AdminPromotions: React.FC = () => {
               <Label htmlFor="create-discountAmount">
                 Giá Trị Giảm *{" "}
                 {formData.discountType === "percentage" && (
-                  <span className="text-muted-foreground text-xs">(1 – 100%)</span>
+                  <span className="text-muted-foreground text-xs">
+                    (1 – 100%)
+                  </span>
                 )}
               </Label>
               <Input
@@ -883,7 +975,9 @@ const AdminPromotions: React.FC = () => {
               <Label htmlFor="create-maxDiscount">
                 Giảm Tối Đa (đ){" "}
                 {formData.discountType === "fixed" && (
-                  <span className="text-muted-foreground text-xs">(Không áp dụng)</span>
+                  <span className="text-muted-foreground text-xs">
+                    (Không áp dụng)
+                  </span>
                 )}
               </Label>
               <Input
@@ -892,7 +986,11 @@ const AdminPromotions: React.FC = () => {
                 min={0}
                 disabled={formData.discountType === "fixed"}
                 placeholder={formData.discountType === "fixed" ? "—" : ""}
-                value={formData.discountType === "fixed" ? "" : (formData.maxDiscount || "")}
+                value={
+                  formData.discountType === "fixed"
+                    ? ""
+                    : formData.maxDiscount || ""
+                }
                 onChange={(e) =>
                   setFormData({
                     ...formData,
