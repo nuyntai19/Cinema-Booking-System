@@ -65,15 +65,15 @@ class Database
     private function getEnvValue($key, $default = null)
     {
         $value = getenv($key);
-        if ($value !== false && $value !== '') {
+        if ($value !== false) {
             return $value;
         }
 
-        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+        if (isset($_ENV[$key])) {
             return $_ENV[$key];
         }
 
-        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+        if (isset($_SERVER[$key])) {
             return $_SERVER[$key];
         }
 

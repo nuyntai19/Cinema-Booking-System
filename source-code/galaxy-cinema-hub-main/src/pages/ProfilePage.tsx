@@ -36,7 +36,7 @@ import {
   determineMembershipTier,
   getMembershipDiscount,
 } from "@/lib/validation";
-import { API_ENDPOINTS } from "@/lib/api";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -73,38 +73,142 @@ const ProfilePage: React.FC = () => {
   const [liveLoyaltyHistory, setLiveLoyaltyHistory] = useState<any[]>([]);
   const [liveUserVouchers, setLiveUserVouchers] = useState<any[]>([]);
   const [livePromotions, setLivePromotions] = useState<any[]>([]);
+  const [liveCurrentPoints, setLiveCurrentPoints] = useState<number>(0);
+  const [liveUserTier, setLiveUserTier] = useState<any>(null);
+  const [rewardTiers, setRewardTiers] = useState<any[]>([]);
+  const [isRedeeming, setIsRedeeming] = useState<string | null>(null);
+  const [allMembershipTiers, setAllMembershipTiers] = useState<any[]>([]);
 
-  // Fetch loyalty history, vouchers and promotions for current user
+  // Helper to reload points + vouchers + tier after redeem
+  const refreshProfileData = async () => {
+    if (!user?.id) return;
+    const uid = parseInt(user.id);
+    try {
+      const cpJson: any = await apiCall(API_ENDPOINTS.LOYALTY_POINTS(uid));
+      if (cpJson.success) setLiveCurrentPoints(cpJson.data?.current_points || 0);
+      const uvJson: any = await apiCall(`${API_ENDPOINTS.USER_VOUCHERS(uid)}?status=all`);
+      if (uvJson.success) setLiveUserVouchers(mapVouchers(uvJson.data?.vouchers || []));
+      const lhJson: any = await apiCall(API_ENDPOINTS.LOYALTY_HISTORY(uid));
+      if (lhJson.success) setLiveLoyaltyHistory(mapHistory(lhJson.data?.history || []));
+      // Re-fetch tier (may have changed after point deduction)
+      const utJson: any = await apiCall(API_ENDPOINTS.MEMBERSHIP_USER_TIER(uid));
+      if (utJson.success) setLiveUserTier(utJson.data?.tier || null);
+    } catch {}
+  };
+
+  // Map backend snake_case → frontend camelCase
+  const mapHistory = (items: any[]) =>
+    items.map((h: any) => ({
+      id: String(h.id),
+      userId: String(h.user_id),
+      pointsChange: Number(h.points_change),
+      type: h.type,
+      description: h.description,
+      bookingId: h.related_booking_id ? String(h.related_booking_id) : undefined,
+      movieTitle: h.movie_title || undefined,
+      bookingAmount: h.booking_amount ? Number(h.booking_amount) : undefined,
+      bookingCode: h.booking_code || undefined,
+      createdAt: h.created_at,
+    }));
+
+  const mapVouchers = (items: any[]) =>
+    items.map((v: any) => ({
+      id: String(v.id),
+      userId: String(v.user_id),
+      promotionId: String(v.promotion_id),
+      code: v.voucher_code || v.promo_code,
+      status: v.status,
+      assignedAt: v.assigned_at,
+      usedAt: v.used_at || undefined,
+      expiresAt: v.end_date || undefined,
+      // Carry promo details for display
+      description: v.description,
+      discountAmount: Number(v.discount_amount),
+      discountType: v.discount_type,
+      minOrderValue: Number(v.min_order_value || 0),
+      maxDiscount: v.max_discount ? Number(v.max_discount) : undefined,
+    }));
+
+  // Fetch loyalty history, vouchers, promotions, points and tier for current user
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
+      const uid = parseInt(user.id);
       try {
-        const token = localStorage.getItem('token');
+        // Check and auto-upgrade tier first
+        try {
+          await apiCall(API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(uid));
+        } catch {}
 
         // Loyalty history
-        const lhRes = await fetch(API_ENDPOINTS.LOYALTY_HISTORY(parseInt(user.id)), {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const lhJson = await lhRes.json();
-        if (lhJson.success) setLiveLoyaltyHistory(lhJson.data.history || []);
+        const lhJson: any = await apiCall(API_ENDPOINTS.LOYALTY_HISTORY(uid));
+        if (lhJson.success) setLiveLoyaltyHistory(mapHistory(lhJson.data?.history || []));
 
-        // User vouchers
-        const uvRes = await fetch(API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id)), {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const uvJson = await uvRes.json();
-        if (uvJson.success) setLiveUserVouchers(uvJson.data.vouchers || []);
+        // Current points
+        const cpJson: any = await apiCall(API_ENDPOINTS.LOYALTY_POINTS(uid));
+        if (cpJson.success) setLiveCurrentPoints(cpJson.data?.current_points || 0);
 
-        // Promotions (public)
-        const pRes = await fetch(API_ENDPOINTS.PROMOTIONS, { headers: { Authorization: `Bearer ${token}` } });
-        const pJson = await pRes.json();
-        if (pJson.success) setLivePromotions(pJson.data.promotions || []);
+        // User tier (after upgrade check)
+        const utJson: any = await apiCall(API_ENDPOINTS.MEMBERSHIP_USER_TIER(uid));
+        if (utJson.success) setLiveUserTier(utJson.data?.tier || null);
+
+        // All membership tiers (for next-tier calculation)
+        const allTiersJson: any = await apiCall(API_ENDPOINTS.MEMBERSHIPS);
+        if (allTiersJson.success) setAllMembershipTiers(allTiersJson.data?.memberships || []);
+
+        // User vouchers (all statuses for profile)
+        const uvJson: any = await apiCall(`${API_ENDPOINTS.USER_VOUCHERS(uid)}?status=all`);
+        if (uvJson.success) setLiveUserVouchers(mapVouchers(uvJson.data?.vouchers || []));
+
+        // Promotions
+        const pJson: any = await apiCall(API_ENDPOINTS.PROMOTIONS);
+        if (pJson.success) setLivePromotions(pJson.data?.promotions || []);
+
+        // Reward tiers
+        const rtJson: any = await apiCall(API_ENDPOINTS.REWARD_TIERS);
+        if (rtJson.success) setRewardTiers(rtJson.data?.tiers || []);
       } catch (err) {
         console.error('Error fetching profile related data', err);
       }
     };
     fetchData();
-  }, [user?.id, refreshUser]);
+  }, [user?.id]);
+
+  // Redeem points for voucher
+  const handleRedeemPoints = async (promoCode: string, pointsRequired: number) => {
+    if (!user?.id) return;
+    setIsRedeeming(promoCode);
+    try {
+      const res: any = await apiCall(API_ENDPOINTS.REDEEM_POINTS_VOUCHER, {
+        method: "POST",
+        body: JSON.stringify({
+          user_id: parseInt(user.id),
+          promotion_code: promoCode,
+        }),
+      });
+      if (res.success) {
+        toast({
+          title: "Đổi voucher thành công!",
+          description: `Bạn đã dùng ${pointsRequired} điểm để đổi voucher. Kiểm tra phần Voucher Của Tôi.`,
+        });
+        await refreshProfileData();
+      } else {
+        toast({
+          title: "Không thể đổi voucher",
+          description: res.message || "Vui lòng thử lại",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Lỗi",
+        description: err?.message || "Không thể đổi voucher",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRedeeming(null);
+    }
+  };
 
   // Sync formData when user data loads/changes
   useEffect(() => {
@@ -291,10 +395,28 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const membershipTier = user?.membershipTier || "bronze";
-  const totalSpent = user?.totalSpent || 0;
-  const loyaltyPoints = user?.loyaltyPoints || 0;
-  const discount = getMembershipDiscount(membershipTier, systemConfig);
+  const membershipTier = liveUserTier?.rank_name?.toLowerCase() || user?.membershipTier || "bronze";
+  const totalSpent = liveUserTier?.total_spent || 0;
+  const loyaltyPoints = liveCurrentPoints || user?.loyaltyPoints || 0;
+  const discount = liveUserTier?.discount_rate ? Number(liveUserTier.discount_rate) : getMembershipDiscount(membershipTier, systemConfig);
+
+  // Calculate next tier info
+  const getNextTierInfo = () => {
+    if (!liveUserTier || allMembershipTiers.length === 0) return null;
+    const currentMinPoints = Number(liveUserTier.min_points_required);
+    // Find the next tier with higher min_points_required
+    const sorted = [...allMembershipTiers].sort((a, b) => Number(a.min_points_required) - Number(b.min_points_required));
+    const nextTier = sorted.find((t) => Number(t.min_points_required) > currentMinPoints);
+    if (!nextTier) return null; // Already at highest tier
+    const pointsNeeded = Number(nextTier.min_points_required) - loyaltyPoints;
+    return {
+      name: nextTier.rank_name,
+      pointsNeeded: Math.max(0, pointsNeeded),
+      minPoints: Number(nextTier.min_points_required),
+      discount: Number(nextTier.discount_rate),
+    };
+  };
+  const nextTierInfo = getNextTierInfo();
 
   const getMembershipColor = (tier: string) => {
     switch (tier) {
@@ -516,13 +638,38 @@ const ProfilePage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span>Điểm tích lũy:</span>
-                    <span className="font-bold">{loyaltyPoints} điểm</span>
+                    <span className="font-bold">{loyaltyPoints.toLocaleString("vi-VN")} điểm</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Giảm giá:</span>
                     <span className="font-bold">{discount}%</span>
                   </div>
                 </div>
+
+                {/* Next tier progress */}
+                {nextTierInfo ? (
+                  <div className="mt-4 pt-3 border-t border-white/20">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span>Hạng tiếp theo: {nextTierInfo.name}</span>
+                      <span>Còn {nextTierInfo.pointsNeeded.toLocaleString("vi-VN")} điểm</span>
+                    </div>
+                    <div className="w-full bg-white/20 rounded-full h-2">
+                      <div
+                        className="bg-white rounded-full h-2 transition-all"
+                        style={{
+                          width: `${Math.min(100, (loyaltyPoints / nextTierInfo.minPoints) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-white/70 mt-1">
+                      {loyaltyPoints.toLocaleString("vi-VN")} / {nextTierInfo.minPoints.toLocaleString("vi-VN")} điểm
+                    </p>
+                  </div>
+                ) : membershipTier === "platinum" ? (
+                  <div className="mt-4 pt-3 border-t border-white/20">
+                    <p className="text-xs text-white/90 font-medium">🏆 Bạn đã đạt hạng cao nhất!</p>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -535,7 +682,7 @@ const ProfilePage: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
                   <p className="text-sm">
-                    Giảm giá {discount}% cho tất cả vé phim
+                    Giảm giá {discount}% cho tất cả vé xem phim
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
@@ -554,16 +701,17 @@ const ProfilePage: React.FC = () => {
                   <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
                   <p className="text-sm">Quà tặng sinh nhật đặc biệt</p>
                 </div>
-                {membershipTier !== "bronze" && (
+                {nextTierInfo && (
                   <div className="mt-4 p-3 bg-primary/10 rounded-lg">
                     <p className="text-xs font-medium text-primary">
-                      🎉 Thăng hạng tiếp theo:
-                      {membershipTier === "silver" &&
-                        ` Vàng (${systemConfig.membershipTiers.gold.minSpent.toLocaleString("vi-VN")}đ)`}
-                      {membershipTier === "gold" &&
-                        ` Kim Cương (${systemConfig.membershipTiers.platinum.minSpent.toLocaleString("vi-VN")}đ)`}
-                      {membershipTier === "platinum" &&
-                        " Bạn đã đạt hạng cao nhất!"}
+                      🎉 Thăng hạng tiếp theo: {nextTierInfo.name} — cần thêm {nextTierInfo.pointsNeeded.toLocaleString("vi-VN")} điểm (giảm {nextTierInfo.discount}% mỗi vé)
+                    </p>
+                  </div>
+                )}
+                {!nextTierInfo && membershipTier === "platinum" && (
+                  <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                    <p className="text-xs font-medium text-primary">
+                      🏆 Bạn đã đạt hạng cao nhất!
                     </p>
                   </div>
                 )}
@@ -577,10 +725,14 @@ const ProfilePage: React.FC = () => {
             <UserVouchersCard
               vouchers={liveUserVouchers}
               promotions={livePromotions}
+              currentPoints={liveCurrentPoints}
+              rewardTiers={rewardTiers}
+              isRedeeming={isRedeeming}
+              onRedeemPoints={handleRedeemPoints}
               onUseVoucher={(voucherId) => {
                 toast({
                   title: "Sử dụng voucher",
-                  description: "Voucher đã được thêm vào giỏ hàng",
+                  description: "Hãy áp dụng mã voucher khi thanh toán",
                 });
               }}
             />

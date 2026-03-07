@@ -342,23 +342,8 @@ class Booking {
                 $updateVoucher->execute([':id' => $row['user_voucher_id']]);
             }
 
-            // Award loyalty points for this paid booking
-            try {
-                require_once __DIR__ . '/LoyaltyHistory.php';
-                $booking = $this->getById($id);
-                if ($booking && !empty($booking['final_price']) && !empty($booking['user_id'])) {
-                    $finalPrice = (float)$booking['final_price'];
-                    $userId = (int)$booking['user_id'];
-                    $points = LoyaltyHistory::calculatePoints($finalPrice);
-                    if ($points > 0) {
-                        $lh = new LoyaltyHistory();
-                        $lh->create($userId, $points, 'PURCHASE', 'Earned from booking #'.(int)$id, $id);
-                    }
-                }
-            } catch (Exception $e) {
-                // Log but do not prevent booking confirmation
-                error_log('Loyalty award error: ' . $e->getMessage());
-            }
+            // NOTE: Loyalty points are awarded via LoyaltyController::earnPoints() called from frontend
+            // Do NOT award here to avoid double-counting
 
             $this->db->commit();
             return true;
@@ -387,7 +372,11 @@ class Booking {
     }
 
     public function calculateTotalPrice($showtime, $seatDetails, $concessions) {
-        $basePrice = $this->getBaseTicketPrice();
+        // Use showtime's base_price (same as seat-map API) instead of system config
+        $basePrice = (float)($showtime['base_price'] ?? 0);
+        if ($basePrice <= 0) {
+            $basePrice = $this->getBaseTicketPrice();
+        }
         $adjustment = $this->getPricingAdjustment($showtime['start_time']);
 
         $seatPrices = [];
@@ -439,7 +428,7 @@ class Booking {
 
     public function applyVoucherDiscount($userVoucherId, $userId, $total) {
         $stmt = $this->db->prepare(
-            "SELECT uv.id, uv.status, p.discount_amount, p.discount_type, p.min_order_value, p.start_date, p.end_date
+            "SELECT uv.id, uv.status, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.start_date, p.end_date
              FROM user_vouchers uv
              JOIN promotions p ON uv.promotion_id = p.id
              WHERE uv.id = :id AND uv.user_id = :user_id"
@@ -468,6 +457,9 @@ class Booking {
         $discount = 0;
         if ($voucher['discount_type'] === 'PERCENT') {
             $discount = $total * ((float)$voucher['discount_amount'] / 100);
+            if (!empty($voucher['max_discount']) && $discount > (float)$voucher['max_discount']) {
+                $discount = (float)$voucher['max_discount'];
+            }
         } else {
             $discount = (float)$voucher['discount_amount'];
         }

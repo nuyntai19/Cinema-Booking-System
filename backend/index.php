@@ -8,6 +8,9 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Set timezone to Vietnam
+date_default_timezone_set('Asia/Ho_Chi_Minh');
+
 // Error reporting for development
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
@@ -17,15 +20,9 @@ ini_set('log_errors', 1);     // Log errors instead
 ob_start();
 file_put_contents(__DIR__ . '/debug_index_hit.txt', date('Y-m-d H:i:s') . ' - ' . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
-// CORS is handled by .htaccess to avoid duplicate headers
-// Load CorsMiddleware for OPTIONS handling only
+// Load and apply CORS middleware
 require_once __DIR__ . '/middleware/CorsMiddleware.php';
-
-// Handle OPTIONS preflight requests (CORS headers already set by .htaccess)
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
+CorsMiddleware::handle();
 
 // Set content type
 header('Content-Type: application/json; charset=UTF-8');
@@ -86,6 +83,8 @@ $router->post('/api/auth/login', 'AuthController@login');
 $router->post('/api/auth/logout', 'AuthController@logout');
 $router->post('/api/auth/refresh-token', 'AuthController@refreshToken');
 $router->get('/api/auth/me', 'AuthController@getCurrentUser'); // Protected
+$router->post('/api/auth/forgot-password', 'AuthController@forgotPassword');
+$router->post('/api/auth/reset-password', 'AuthController@resetPassword');
 
 // ============================================
 // USER ROUTES
@@ -184,20 +183,30 @@ $router->post('/api/tickets/:id/send-email', 'TicketController@sendEmail'); // S
 // LOYALTY & MEMBERSHIP ROUTES
 // ============================================
 $router->get('/api/loyalty/history/:userId', 'LoyaltyController@getHistory');
+$router->get('/api/loyalty/points/:userId', 'LoyaltyController@getCurrentPoints');
 $router->post('/api/loyalty/earn', 'LoyaltyController@earnPoints');
 $router->post('/api/loyalty/redeem', 'LoyaltyController@redeemPoints');
 $router->get('/api/memberships', 'MembershipController@index');
+$router->get('/api/memberships/user/:userId', 'MembershipController@getUserTier');
+$router->get('/api/memberships/check-upgrade/:userId', 'MembershipController@checkUpgrade');
+$router->get('/api/memberships/:id', 'MembershipController@show');
 
 // ============================================
 // VOUCHER & PROMOTION ROUTES
 // ============================================
+$router->get('/api/promotions/active', 'PromotionController@getActive');
 $router->get('/api/promotions', 'PromotionController@index');
 $router->get('/api/promotions/:id', 'PromotionController@show');
 $router->post('/api/promotions', 'PromotionController@create'); // Admin
 $router->put('/api/promotions/:id', 'PromotionController@update'); // Admin
 $router->delete('/api/promotions/:id', 'PromotionController@delete'); // Admin
+$router->get('/api/vouchers/reward-tiers', 'VoucherController@getRewardTiers');
+$router->post('/api/vouchers/redeem-points', 'VoucherController@redeemPoints');
 $router->get('/api/vouchers/user/:userId', 'VoucherController@getUserVouchers');
+$router->get('/api/vouchers/:id', 'VoucherController@show');
+$router->post('/api/vouchers/assign', 'VoucherController@assignToUser');
 $router->post('/api/vouchers/apply', 'VoucherController@applyVoucher');
+$router->put('/api/vouchers/:id/use', 'VoucherController@markAsUsed');
 
 // ============================================
 // CONCESSION ROUTES
@@ -219,6 +228,7 @@ $router->put('/api/reviews/:id', 'ReviewController@update');
 $router->delete('/api/reviews/:id', 'ReviewController@delete');
 $router->put('/api/reviews/:id/approve', 'ReviewController@approve'); // Admin - Approve review
 $router->put('/api/reviews/:id/reject', 'ReviewController@reject'); // Admin - Reject review
+$router->post('/api/reviews/:id/report', 'ReviewController@report'); // Report review
 
 // ============================================
 // NOTIFICATION ROUTES

@@ -7,8 +7,9 @@ class CorsMiddleware
      */
     public static function handle()
     {
-        // Allow from any origin during development
-        header("Access-Control-Allow-Origin: *");
+        // Allow the requesting origin during development
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+        header("Access-Control-Allow-Origin: $origin");
 
         // Allow common HTTP methods
         header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");

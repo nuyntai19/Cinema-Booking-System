@@ -18,7 +18,7 @@ import {
 import AgeWarningDialog from "@/components/booking/AgeWarningDialog";
 import CurfewWarningDialog from "@/components/booking/CurfewWarningDialog";
 import { Badge } from "@/components/ui/badge";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 
 interface SeatFromAPI {
   id: number;
@@ -61,6 +61,7 @@ const SeatSelectionPage: React.FC = () => {
     selectedSeats,
     addSeat,
     removeSeat,
+    clearSeats,
     clearBooking,
     setSelectedMovie,
     setSelectedShowtime,
@@ -115,7 +116,7 @@ const SeatSelectionPage: React.FC = () => {
             id: String(m.id),
             title: m.title,
             poster: m.poster_url
-              ? `http://localhost/backend/${m.poster_url}`
+              ? getImageUrl(m.poster_url)
               : "",
             duration: m.duration || m.duration_minutes,
             ageRating: m.age_rating || "P",
@@ -182,6 +183,7 @@ const SeatSelectionPage: React.FC = () => {
     const fetchSeatMap = async () => {
       try {
         setLoading(true);
+        clearSeats();
         const response = await apiCall<{
           success: boolean;
           data: SeatMapResponse;
@@ -192,11 +194,8 @@ const SeatSelectionPage: React.FC = () => {
           response.data || (response as unknown as SeatMapResponse);
         console.log("Extracted seat map data:", seatMapData);
 
-        // If we initialized from query params, update the showtime object in context with real data
-        if (
-          seatMapData.showtime &&
-          (!selectedShowtime || !selectedShowtime.start_time)
-        ) {
+        // Update the showtime object in context with real data from API
+        if (seatMapData.showtime) {
           setSelectedShowtime({
             id: String(seatMapData.showtime.id),
             time: new Date(seatMapData.showtime.start_time).toLocaleTimeString(
@@ -229,13 +228,16 @@ const SeatSelectionPage: React.FC = () => {
     };
 
     fetchSeatMap();
+    // Only re-fetch when the showtime or movie ID changes (primitives), not the full object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selectedMovie,
-    selectedShowtime,
+    selectedShowtime?.id,
     searchParams,
     navigate,
     toast,
     setSelectedShowtime,
+    clearSeats,
   ]);
 
   // Countdown timer

@@ -26,10 +26,16 @@ class UserVoucher {
 
     public function getByUser($userId, $status = 'ACTIVE') {
         try {
-            $query = "SELECT uv.*, p.* FROM {$this->table} uv LEFT JOIN promotions p ON uv.promotion_id = p.id WHERE uv.user_id = :user_id";
+            $query = "SELECT uv.id, uv.user_id, uv.promotion_id, uv.code as voucher_code, uv.status, uv.assigned_at, uv.used_at,
+                p.code as promo_code, p.description, p.discount_amount, p.discount_type,
+                p.min_order_value, p.max_discount, p.start_date, p.end_date, p.is_auto_apply
+                FROM {$this->table} uv
+                LEFT JOIN promotions p ON uv.promotion_id = p.id
+                WHERE uv.user_id = :user_id";
             if ($status) {
                 $query .= " AND uv.status = :status";
             }
+            $query .= " ORDER BY uv.assigned_at DESC";
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
             if ($status) $stmt->bindParam(':status', $status);

@@ -3,6 +3,8 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import {
@@ -37,6 +39,7 @@ interface BookingContextType {
   setSelectedShowtime: (showtime: Showtime | null) => void;
   addSeat: (seat: Seat) => void;
   removeSeat: (seatId: string) => void;
+  clearSeats: () => void;
   updateConcession: (item: ConcessionItem) => void;
   getTotalAmount: () => number;
   clearBooking: () => void;
@@ -197,64 +200,87 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [concessions, setConcessions] = useState<ConcessionItem[]>([]);
 
-  const addSeat = (seat: Seat) => {
-    if (!selectedSeats.find((s) => s.id === seat.id)) {
-      setSelectedSeats([...selectedSeats, seat]);
-    }
-  };
+  const addSeat = useCallback((seat: Seat) => {
+    setSelectedSeats((prev) => {
+      if (prev.find((s) => s.id === seat.id)) return prev;
+      return [...prev, seat];
+    });
+  }, []);
 
-  const removeSeat = (seatId: string) => {
-    setSelectedSeats(selectedSeats.filter((s) => s.id !== seatId));
-  };
+  const removeSeat = useCallback((seatId: string) => {
+    setSelectedSeats((prev) => prev.filter((s) => s.id !== seatId));
+  }, []);
 
-  const updateConcession = (item: ConcessionItem) => {
-    const existing = concessions.find((c) => c.id === item.id);
-    if (existing) {
-      if (item.quantity === 0) {
-        setConcessions(concessions.filter((c) => c.id !== item.id));
-      } else {
-        setConcessions(concessions.map((c) => (c.id === item.id ? item : c)));
+  const clearSeats = useCallback(() => {
+    setSelectedSeats((prev) => (prev.length === 0 ? prev : []));
+  }, []);
+
+  const updateConcession = useCallback((item: ConcessionItem) => {
+    setConcessions((prev) => {
+      const existing = prev.find((c) => c.id === item.id);
+      if (existing) {
+        if (item.quantity === 0) {
+          return prev.filter((c) => c.id !== item.id);
+        }
+        return prev.map((c) => (c.id === item.id ? item : c));
+      } else if (item.quantity > 0) {
+        return [...prev, item];
       }
-    } else if (item.quantity > 0) {
-      setConcessions([...concessions, item]);
-    }
-  };
+      return prev;
+    });
+  }, []);
 
-  const getTotalAmount = () => {
+  const getTotalAmount = useCallback(() => {
     const seatTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
     const concessionTotal = concessions.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0,
     );
     return seatTotal + concessionTotal;
-  };
+  }, [selectedSeats, concessions]);
 
-  const clearBooking = () => {
+  const clearBooking = useCallback(() => {
     setSelectedMovie(null);
     setSelectedCinema(null);
     setSelectedShowtime(null);
     setSelectedSeats([]);
     setConcessions([]);
-  };
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({
+      selectedMovie,
+      selectedCinema,
+      selectedShowtime,
+      selectedSeats,
+      concessions,
+      setSelectedMovie,
+      setSelectedCinema,
+      setSelectedShowtime,
+      addSeat,
+      removeSeat,
+      clearSeats,
+      updateConcession,
+      getTotalAmount,
+      clearBooking,
+    }),
+    [
+      selectedMovie,
+      selectedCinema,
+      selectedShowtime,
+      selectedSeats,
+      concessions,
+      addSeat,
+      removeSeat,
+      clearSeats,
+      updateConcession,
+      getTotalAmount,
+      clearBooking,
+    ],
+  );
 
   return (
-    <BookingContext.Provider
-      value={{
-        selectedMovie,
-        selectedCinema,
-        selectedShowtime,
-        selectedSeats,
-        concessions,
-        setSelectedMovie,
-        setSelectedCinema,
-        setSelectedShowtime,
-        addSeat,
-        removeSeat,
-        updateConcession,
-        getTotalAmount,
-        clearBooking,
-      }}
-    >
+    <BookingContext.Provider value={contextValue}>
       {children}
     </BookingContext.Provider>
   );

@@ -66,7 +66,11 @@ const LoyaltyHistoryCard: React.FC<LoyaltyHistoryCardProps> = ({
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    if (!dateStr) return "";
+    // MySQL datetime "2026-03-07 04:37:38" → replace space with T for reliable parsing
+    const normalized = dateStr.includes("T") ? dateStr : dateStr.replace(" ", "T");
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return "";
     return date.toLocaleDateString("vi-VN", {
       day: "2-digit",
       month: "2-digit",
@@ -116,6 +120,16 @@ const LoyaltyHistoryCard: React.FC<LoyaltyHistoryCardProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.description}</p>
+                      {item.movieTitle && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          🎬 {item.movieTitle}
+                        </p>
+                      )}
+                      {item.bookingAmount != null && item.bookingAmount > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          💰 Thanh toán: {item.bookingAmount.toLocaleString("vi-VN")}đ
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1">
                         <Badge
                           className={cn(

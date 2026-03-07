@@ -1,5 +1,3 @@
-import { M, V } from "vitest/dist/chunks/reporters.d.BFLkQcL6.js";
-
 // API Configuration
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost/Cinema-Booking-System/backend";
 
@@ -54,18 +52,24 @@ export const API_ENDPOINTS = {
   CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/cancel`,
 
   // Transactions
-  TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
+  TRANSACTIONS: `${API_BASE_URL}/transactions`,
   USER_TRANSACTIONS: (userId: number) =>
-    `${API_BASE_URL}/api/transactions/user/${userId}`,
-  MOMO_PAYMENT: `${API_BASE_URL}/api/transactions/momo`,
-  VNPAY_PAYMENT: `${API_BASE_URL}/api/transactions/vnpay`,
-  MOMO_VERIFY: `${API_BASE_URL}/api/transactions/momo/verify`,
-  VNPAY_VERIFY: `${API_BASE_URL}/api/transactions/vnpay/verify`,
+    `${API_BASE_URL}/transactions/user/${userId}`,
+  MOMO_PAYMENT: `${API_BASE_URL}/transactions/momo`,
+  VNPAY_PAYMENT: `${API_BASE_URL}/transactions/vnpay`,
+  MOMO_VERIFY: `${API_BASE_URL}/transactions/momo/verify`,
+  VNPAY_VERIFY: `${API_BASE_URL}/transactions/vnpay/verify`,
 
   // Promotions & Vouchers
   PROMOTIONS: `${API_BASE_URL}/promotions`,
+  PROMOTIONS_ACTIVE: `${API_BASE_URL}/promotions/active`,
   USER_VOUCHERS: (userId: number) => `${API_BASE_URL}/vouchers/user/${userId}`,
+  VOUCHER_DETAIL: (id: number) => `${API_BASE_URL}/vouchers/${id}`,
   APPLY_VOUCHER: `${API_BASE_URL}/vouchers/apply`,
+  ASSIGN_VOUCHER: `${API_BASE_URL}/vouchers/assign`,
+  MARK_VOUCHER_USED: (id: number) => `${API_BASE_URL}/vouchers/${id}/use`,
+  REWARD_TIERS: `${API_BASE_URL}/vouchers/reward-tiers`,
+  REDEEM_POINTS_VOUCHER: `${API_BASE_URL}/vouchers/redeem-points`,
 
   // Concessions
   CONCESSIONS: `${API_BASE_URL}/concessions`,
@@ -96,11 +100,17 @@ export const API_ENDPOINTS = {
   // Loyalty
   LOYALTY_HISTORY: (userId: number) =>
     `${API_BASE_URL}/loyalty/history/${userId}`,
+  LOYALTY_POINTS: (userId: number) =>
+    `${API_BASE_URL}/loyalty/points/${userId}`,
   EARN_POINTS: `${API_BASE_URL}/loyalty/earn`,
   REDEEM_POINTS: `${API_BASE_URL}/loyalty/redeem`,
 
   // Memberships
   MEMBERSHIPS: `${API_BASE_URL}/memberships`,
+  MEMBERSHIP_USER_TIER: (userId: number) =>
+    `${API_BASE_URL}/memberships/user/${userId}`,
+  MEMBERSHIP_CHECK_UPGRADE: (userId: number) =>
+    `${API_BASE_URL}/memberships/check-upgrade/${userId}`,
 };
 
 // Helper function for API calls

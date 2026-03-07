@@ -10,7 +10,11 @@ import {
   Check,
   X,
   ArrowLeft,
+  Ticket,
+  Percent,
+  BadgeCheck,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBooking } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AppContext";
 import { movies } from "@/data/mockData";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { PaymentMethod } from "@/types/cinema";
 import { cn } from "@/lib/utils";
 import { BookingService } from "@/services/booking.service";
@@ -52,14 +56,25 @@ const PaymentPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
+  const [appliedVoucherId, setAppliedVoucherId] = useState<number | null>(null);
+
+  // Promotions & vouchers for display
+  const [activePromos, setActivePromos] = useState<any[]>([]);
+  const [userVouchers, setUserVouchers] = useState<any[]>([]);
+  const [userTier, setUserTier] = useState<any>(null);
 
   const [movie, setMovie] = useState<any>(null);
+  const [loadingMovie, setLoadingMovie] = useState(true);
 
   // Fetch movie from API
   useEffect(() => {
     const fetchMovie = async () => {
-      if (!selectedMovie) return;
+      if (!selectedMovie) {
+        setLoadingMovie(false);
+        return;
+      }
       try {
+        setLoadingMovie(true);
         const response = await apiCall<{
           success: boolean;
           data: { movie: any };
@@ -70,12 +85,19 @@ const PaymentPage: React.FC = () => {
             id: String(m.id),
             title: m.title,
             poster: m.poster_url
-              ? `${API_ENDPOINTS.MOVIES.replace("/api/movies", "")}/uploads/posters/${m.poster_url}`
+              ? getImageUrl(m.poster_url)
               : "",
           });
+        } else {
+          // API succeeded but no movie data – use fallback
+          setMovie({ id: selectedMovie, title: `Phim #${selectedMovie}`, poster: "" });
         }
       } catch (error) {
         console.error("Failed to fetch movie:", error);
+        // Use fallback so page is not stuck
+        setMovie({ id: selectedMovie, title: `Phim #${selectedMovie}`, poster: "" });
+      } finally {
+        setLoadingMovie(false);
       }
     };
     fetchMovie();
@@ -83,13 +105,40 @@ const PaymentPage: React.FC = () => {
 
   const { user } = useAuth();
 
+  // Fetch active promotions, user vouchers, and membership tier
+  useEffect(() => {
+    const fetchPromosAndVouchers = async () => {
+      try {
+        const promoRes: any = await apiCall(API_ENDPOINTS.PROMOTIONS_ACTIVE);
+        const promos = promoRes?.data?.promotions || promoRes?.promotions || [];
+        setActivePromos(promos);
+      } catch { /* ignore */ }
+
+      if (user?.id) {
+        try {
+          const vRes: any = await apiCall(API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id)));
+          const vouchers = vRes?.data?.vouchers || vRes?.vouchers || [];
+          setUserVouchers(vouchers);
+        } catch { /* ignore */ }
+
+        try {
+          const tierRes: any = await apiCall(API_ENDPOINTS.MEMBERSHIP_USER_TIER(parseInt(user.id)));
+          if (tierRes?.data?.tier) setUserTier(tierRes.data.tier);
+        } catch { /* ignore */ }
+      }
+    };
+    fetchPromosAndVouchers();
+  }, [user?.id]);
+
   const ticketTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
   const concessionTotal = concessions.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
   const subtotal = ticketTotal + concessionTotal;
-  const grandTotal = subtotal - discount;
+  const membershipDiscountRate = userTier ? parseFloat(userTier.discount_rate || "0") : 0;
+  const membershipDiscountAmount = Math.round(subtotal * (membershipDiscountRate / 100));
+  const grandTotal = subtotal - discount - membershipDiscountAmount;
   const seatCodes = selectedSeats.map((s) => `${s.row}${s.number}`);
 
   // QR Timer
@@ -180,7 +229,7 @@ const PaymentPage: React.FC = () => {
       showtime_id: showTimeId,
       seat_ids: seatIds,
       concessions: concessionsData,
-      user_voucher_id: discount > 0 ? 123 : undefined, // Example voucher ID
+      user_voucher_id: appliedVoucherId || undefined,
     };
 
     try {
@@ -197,10 +246,10 @@ const PaymentPage: React.FC = () => {
         return null;
       }
       return createdBookingId;
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Lỗi hệ thống",
-        description: "Có lỗi xảy ra khi xử lý đơn hàng.",
+        description: error?.message || "Có lỗi xảy ra khi xử lý đơn hàng.",
         variant: "destructive",
       });
       return null;
@@ -246,20 +295,46 @@ const PaymentPage: React.FC = () => {
     }
   };
 
-  const handleApplyPromo = () => {
-    if (promoCode.toUpperCase() === "SUMMER20") {
-      setDiscount(20000);
-      toast({
-        title: "Áp dụng thành công!",
-        description: "Giảm 20.000đ cho đơn hàng",
-      });
-    } else {
-      toast({
-        title: "Mã không hợp lệ",
-        description: "Vui lòng kiểm tra lại mã giảm giá",
-        variant: "destructive",
-      });
+  const handleApplyPromo = async (codeOverride?: string) => {
+    const codeToApply = (codeOverride || promoCode).trim();
+    if (!codeToApply) {
+      toast({ title: "Vui lòng nhập mã giảm giá", variant: "destructive" });
+      return;
     }
+    try {
+      const res: any = await apiCall(API_ENDPOINTS.APPLY_VOUCHER, {
+        method: "POST",
+        body: JSON.stringify({
+          code: codeToApply,
+          user_id: user?.id ? parseInt(user.id) : undefined,
+          amount: subtotal,
+        }),
+      });
+      if (res.success && res.data) {
+        setDiscount(res.data.discount || 0);
+        setAppliedVoucherId(res.data.voucher_id || null);
+        setPromoCode(codeToApply);
+        toast({
+          title: "Áp dụng thành công!",
+          description: `Giảm ${Number(res.data.discount).toLocaleString("vi-VN")}đ cho đơn hàng`,
+        });
+      } else {
+        toast({ title: "Mã không hợp lệ", description: res.message || "Vui lòng kiểm tra lại", variant: "destructive" });
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Vui lòng kiểm tra lại mã giảm giá";
+      toast({ title: "Không thể áp dụng", description: msg, variant: "destructive" });
+    }
+  };
+
+  const handleSelectPromoCard = (code: string) => {
+    setPromoCode(code);
+    handleApplyPromo(code);
+  };
+
+  const isPromoEligible = (promo: any) => {
+    const minOrder = Number(promo.min_order_value || 0);
+    return subtotal >= minOrder;
   };
 
   const handlePayment = () => {
@@ -283,6 +358,58 @@ const PaymentPage: React.FC = () => {
       // Confirm booking to update status from Pending -> Paid and tickets from HOLDING -> SOLD
       await BookingService.confirm(currentBookingId.toString());
 
+      // Earn loyalty points for this purchase (backend uses final_price from DB)
+      let earnedPoints = 0;
+      if (user?.id) {
+        try {
+          const pointsRes: any = await apiCall(API_ENDPOINTS.EARN_POINTS, {
+            method: "POST",
+            body: JSON.stringify({
+              user_id: parseInt(user.id),
+              booking_id: currentBookingId,
+            }),
+          });
+          earnedPoints = pointsRes?.data?.earned_points || 0;
+        } catch {
+          // Non-blocking
+        }
+      }
+
+      // Check for tier upgrade after earning points
+      let upgraded = false;
+      let newTierName = "";
+      let newDiscount = 0;
+      if (user?.id) {
+        try {
+          const upgradeRes: any = await apiCall(
+            API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(parseInt(user.id))
+          );
+          if (upgradeRes?.data?.upgraded) {
+            upgraded = true;
+            newTierName = upgradeRes.data.eligible_tier?.rank_name || "";
+            newDiscount = parseFloat(upgradeRes.data.eligible_tier?.discount_rate || "0");
+          }
+        } catch {
+          // Non-blocking
+        }
+      }
+
+      if (earnedPoints > 0) {
+        toast({
+          title: "🎉 Tích điểm thành công!",
+          description: `Bạn nhận được ${earnedPoints.toLocaleString("vi-VN")} điểm thưởng cho đơn hàng này.`,
+        });
+      }
+
+      if (upgraded) {
+        setTimeout(() => {
+          toast({
+            title: "🏆 Chúc mừng lên hạng!",
+            description: `Bạn đã được thăng hạng lên ${newTierName}! Giảm ${newDiscount}% cho mỗi vé xem phim.`,
+          });
+        }, 1000);
+      }
+
       setTimeout(() => {
         setShowQRModal(false);
         navigate("/booking/success", {
@@ -291,7 +418,7 @@ const PaymentPage: React.FC = () => {
             movie,
             seats: selectedSeats,
             total: grandTotal,
-            discount,
+            discount: discount + membershipDiscountAmount,
             promoCode: discount > 0 ? promoCode : null,
           },
         });
@@ -314,9 +441,20 @@ const PaymentPage: React.FC = () => {
     navigate("/booking/failed");
   };
 
-  if (!movie) {
-    navigate("/");
-    return null;
+  if (!selectedMovie) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Không tìm thấy thông tin phim. Vui lòng quay lại trang chủ.</p>
+      </div>
+    );
+  }
+
+  if (loadingMovie) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Đang tải...</p>
+      </div>
+    );
   }
 
   const paymentMethods = [
@@ -402,19 +540,138 @@ const PaymentPage: React.FC = () => {
                   placeholder="Nhập mã giảm giá"
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
                   className="flex-1"
                 />
-                <Button onClick={handleApplyPromo} variant="outline">
+                <Button onClick={() => handleApplyPromo()} variant="outline">
                   Áp dụng
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Thử mã:{" "}
-                <span className="font-mono bg-muted px-1 rounded">
-                  SUMMER20
-                </span>
-              </p>
+              {discount > 0 && (
+                <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <BadgeCheck className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-green-700 dark:text-green-400 font-medium">
+                    Đã áp dụng mã <span className="font-mono">{promoCode}</span> — Giảm {discount.toLocaleString("vi-VN")}đ
+                  </span>
+                  <button
+                    onClick={() => { setDiscount(0); setPromoCode(""); setAppliedVoucherId(null); }}
+                    className="ml-auto text-green-600 hover:text-red-500"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Available Promotions & Vouchers */}
+            {(activePromos.length > 0 || userVouchers.length > 0) && (
+              <div className="bg-card rounded-xl border border-border p-6">
+                <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <Ticket className="w-5 h-5" />
+                  Khuyến Mãi & Voucher Của Bạn
+                </h2>
+                <div className="space-y-3">
+                  {/* User vouchers first */}
+                  {userVouchers.map((v: any) => {
+                    const eligible = isPromoEligible(v);
+                    const isApplied = promoCode === (v.code || v.promo_code);
+                    return (
+                      <div
+                        key={`uv-${v.id}`}
+                        onClick={() => eligible && !isApplied && handleSelectPromoCard(v.code || v.promo_code)}
+                        className={cn(
+                          "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
+                          isApplied
+                            ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                            : eligible
+                              ? "border-border hover:border-primary/50 cursor-pointer"
+                              : "border-border opacity-50 cursor-not-allowed",
+                        )}
+                      >
+                        <div className={cn(
+                          "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
+                          eligible ? "bg-orange-500" : "bg-gray-400",
+                        )}>
+                          <Ticket className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-sm">{v.code || v.promo_code}</span>
+                            <Badge variant="outline" className="text-xs">Voucher</Badge>
+                            {isApplied && <BadgeCheck className="w-4 h-4 text-green-600" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{v.description}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-sm font-semibold text-primary">
+                              {v.discount_type === 'PERCENT' ? `Giảm ${v.discount_amount}%` : `Giảm ${Number(v.discount_amount).toLocaleString('vi-VN')}đ`}
+                            </span>
+                            {Number(v.min_order_value) > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Đơn tối thiểu {Number(v.min_order_value).toLocaleString('vi-VN')}đ
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!eligible && (
+                          <span className="text-xs text-red-500 shrink-0">Chưa đủ điều kiện</span>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Public active promotions (exclude system & user vouchers) */}
+                  {activePromos
+                    .filter((p: any) => !userVouchers.some((v: any) => v.promotion_id === p.id || v.promo_code === p.code))
+                    .filter((p: any) => !p.is_auto_apply && !/^(REWARD_|TIER_|WELCOME_|BIRTHDAY)/.test(p.code))
+                    .map((p: any) => {
+                      const eligible = isPromoEligible(p);
+                      const isApplied = promoCode === p.code;
+                      return (
+                        <div
+                          key={`promo-${p.id}`}
+                          onClick={() => eligible && !isApplied && handleSelectPromoCard(p.code)}
+                          className={cn(
+                            "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
+                            isApplied
+                              ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                              : eligible
+                                ? "border-border hover:border-primary/50 cursor-pointer"
+                                : "border-border opacity-50 cursor-not-allowed",
+                          )}
+                        >
+                          <div className={cn(
+                            "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
+                            eligible ? "bg-primary" : "bg-gray-400",
+                          )}>
+                            <Percent className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm">{p.code}</span>
+                              <Badge variant="secondary" className="text-xs">Khuyến mãi</Badge>
+                              {isApplied && <BadgeCheck className="w-4 h-4 text-green-600" />}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-sm font-semibold text-primary">
+                                {p.discount_type === 'PERCENT' ? `Giảm ${p.discount_amount}%` : `Giảm ${Number(p.discount_amount).toLocaleString('vi-VN')}đ`}
+                              </span>
+                              {Number(p.min_order_value) > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  Đơn tối thiểu {Number(p.min_order_value).toLocaleString('vi-VN')}đ
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {!eligible && (
+                            <span className="text-xs text-red-500 shrink-0">Chưa đủ điều kiện</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Order Summary */}
@@ -456,6 +713,12 @@ const PaymentPage: React.FC = () => {
                 <div className="flex justify-between text-green-600">
                   <span>Giảm giá ({promoCode})</span>
                   <span>-{discount.toLocaleString("vi-VN")}đ</span>
+                </div>
+              )}
+              {userTier && membershipDiscountAmount > 0 && (
+                <div className="flex justify-between text-blue-600">
+                  <span>Ưu đãi thành viên {userTier.rank_name} ({userTier.discount_rate}%)</span>
+                  <span>-{membershipDiscountAmount.toLocaleString("vi-VN")}đ</span>
                 </div>
               )}
             </div>

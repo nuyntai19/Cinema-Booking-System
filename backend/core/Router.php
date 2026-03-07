@@ -51,9 +51,13 @@ class Router
         $method = $_SERVER['REQUEST_METHOD'];
         $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-        // Remove /backend prefix if it exists
-        if (strpos($uri, '/backend') === 0) {
-            $uri = substr($uri, strlen('/backend'));
+        // Remove base path prefix
+        $basePrefixes = ['/Cinema-Booking-System/backend', '/backend'];
+        foreach ($basePrefixes as $prefix) {
+            if (strpos($uri, $prefix) === 0) {
+                $uri = substr($uri, strlen($prefix));
+                break;
+            }
         }
 
         // Remove /index.php prefix if it exists (from URL rewriting)

@@ -65,6 +65,7 @@ interface Promotion {
   maxDiscount?: number;
   usageLimit: number;
   usedCount: number;
+  totalDiscount: number;
   startDate: string;
   endDate: string;
   status: "active" | "expired" | "inactive";
@@ -98,10 +99,11 @@ const AdminPromotions: React.FC = () => {
             minOrderValue: Number(p.min_order_value || 0),
             maxDiscount: p.max_discount || 0,
             usageLimit: p.usage_limit || 0,
-            usedCount: p.used_count || 0,
+            usedCount: Number(p.used_count) || 0,
+            totalDiscount: Number(p.total_discount) || 0,
             startDate: p.start_date,
             endDate: p.end_date,
-            status: p.end_date && new Date(p.end_date) < new Date() ? 'expired' : 'active',
+            status: p.end_date && new Date(p.end_date + 'T23:59:59') < new Date() ? 'expired' : 'active',
           }));
           setPromotions(mapped);
         }
@@ -129,12 +131,7 @@ const AdminPromotions: React.FC = () => {
   const totalPromos = promotions.length;
   const activePromos = promotions.filter((p) => p.status === "active").length;
   const totalUsed = promotions.reduce((sum, p) => sum + p.usedCount, 0);
-  const estimatedSavings = promotions.reduce(
-    (sum, p) =>
-      sum +
-      p.usedCount * (p.discountAmount > 100 ? 50000 : p.discountAmount * 1000),
-    0,
-  );
+  const totalDiscount = promotions.reduce((sum, p) => sum + p.totalDiscount, 0);
 
   // Filter
   const filteredPromos = promotions.filter((promo) => {
@@ -168,6 +165,15 @@ const AdminPromotions: React.FC = () => {
   const handleUpdatePromo = () => {
     if (!selectedPromo) return;
 
+    if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
+      toast({
+        title: "Lỗi",
+        description: "Ngày kết thúc không được trước ngày bắt đầu",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const updateServer = async () => {
       try {
         const payload = {
@@ -176,6 +182,7 @@ const AdminPromotions: React.FC = () => {
           discount_amount: formData.discountAmount,
           discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
           min_order_value: formData.minOrderValue,
+          max_discount: formData.discountType === 'fixed' ? null : (formData.maxDiscount || null),
           start_date: formData.startDate,
           end_date: formData.endDate,
           is_auto_apply: false,
@@ -221,6 +228,33 @@ const AdminPromotions: React.FC = () => {
       return;
     }
 
+    if (formData.discountAmount <= 0) {
+      toast({
+        title: "Lỗi",
+        description: "Giá trị giảm phải lớn hơn 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.discountType === "percentage" && formData.discountAmount > 100) {
+      toast({
+        title: "Lỗi",
+        description: "Giá trị giảm theo % không được vượt quá 100",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (new Date(formData.endDate) < new Date(formData.startDate)) {
+      toast({
+        title: "Lỗi",
+        description: "Ngày kết thúc không được trước ngày bắt đầu",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const createServer = async () => {
       try {
         const payload = {
@@ -229,6 +263,7 @@ const AdminPromotions: React.FC = () => {
           discount_amount: formData.discountAmount,
           discount_type: formData.discountType === 'percentage' ? 'PERCENT' : 'FIXED',
           min_order_value: formData.minOrderValue,
+          max_discount: formData.discountType === 'fixed' ? null : (formData.maxDiscount || null),
           start_date: formData.startDate,
           end_date: formData.endDate,
           is_auto_apply: false,
@@ -390,9 +425,9 @@ const AdminPromotions: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(estimatedSavings / 1000000).toFixed(1)}M
+              {(totalDiscount / 1000000).toFixed(1)}M
             </div>
-            <p className="text-xs text-muted-foreground">Estimated savings</p>
+            <p className="text-xs text-muted-foreground">Tổng giảm giá thực tế</p>
           </CardContent>
         </Card>
       </div>
@@ -476,7 +511,7 @@ const AdminPromotions: React.FC = () => {
                       {promo.discountType === "percentage"
                         ? `${promo.discountAmount}%`
                         : `${promo.discountAmount.toLocaleString("vi-VN")}đ`}
-                      {promo.maxDiscount && (
+                      {promo.maxDiscount > 0 && (
                         <span className="text-xs text-muted-foreground block">
                           Max: {promo.maxDiscount.toLocaleString("vi-VN")}đ
                         </span>
@@ -610,6 +645,7 @@ const AdminPromotions: React.FC = () => {
                   setFormData({
                     ...formData,
                     discountType: value as "percentage" | "fixed",
+                    maxDiscount: value === "fixed" ? 0 : formData.maxDiscount,
                   })
                 }
               >
@@ -624,11 +660,18 @@ const AdminPromotions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-discountAmount">Giá Trị Giảm *</Label>
+              <Label htmlFor="edit-discountAmount">
+                Giá Trị Giảm *{" "}
+                {formData.discountType === "percentage" && (
+                  <span className="text-muted-foreground text-xs">(1 – 100%)</span>
+                )}
+              </Label>
               <Input
                 id="edit-discountAmount"
                 type="number"
-                value={formData.discountAmount}
+                min={1}
+                max={formData.discountType === "percentage" ? 100 : undefined}
+                value={formData.discountAmount || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -643,7 +686,8 @@ const AdminPromotions: React.FC = () => {
               <Input
                 id="edit-minOrder"
                 type="number"
-                value={formData.minOrderValue}
+                min={0}
+                value={formData.minOrderValue || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -654,11 +698,19 @@ const AdminPromotions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-maxDiscount">Giảm Tối Đa (đ)</Label>
+              <Label htmlFor="edit-maxDiscount">
+                Giảm Tối Đa (đ){" "}
+                {formData.discountType === "fixed" && (
+                  <span className="text-muted-foreground text-xs">(Không áp dụng)</span>
+                )}
+              </Label>
               <Input
                 id="edit-maxDiscount"
                 type="number"
-                value={formData.maxDiscount}
+                min={0}
+                disabled={formData.discountType === "fixed"}
+                placeholder={formData.discountType === "fixed" ? "—" : ""}
+                value={formData.discountType === "fixed" ? "" : (formData.maxDiscount || "")}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -775,6 +827,7 @@ const AdminPromotions: React.FC = () => {
                   setFormData({
                     ...formData,
                     discountType: value as "percentage" | "fixed",
+                    maxDiscount: value === "fixed" ? 0 : formData.maxDiscount,
                   })
                 }
               >
@@ -789,11 +842,18 @@ const AdminPromotions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-discountAmount">Giá Trị Giảm *</Label>
+              <Label htmlFor="create-discountAmount">
+                Giá Trị Giảm *{" "}
+                {formData.discountType === "percentage" && (
+                  <span className="text-muted-foreground text-xs">(1 – 100%)</span>
+                )}
+              </Label>
               <Input
                 id="create-discountAmount"
                 type="number"
-                value={formData.discountAmount}
+                min={1}
+                max={formData.discountType === "percentage" ? 100 : undefined}
+                value={formData.discountAmount || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -808,7 +868,8 @@ const AdminPromotions: React.FC = () => {
               <Input
                 id="create-minOrder"
                 type="number"
-                value={formData.minOrderValue}
+                min={0}
+                value={formData.minOrderValue || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -819,11 +880,19 @@ const AdminPromotions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-maxDiscount">Giảm Tối Đa (đ)</Label>
+              <Label htmlFor="create-maxDiscount">
+                Giảm Tối Đa (đ){" "}
+                {formData.discountType === "fixed" && (
+                  <span className="text-muted-foreground text-xs">(Không áp dụng)</span>
+                )}
+              </Label>
               <Input
                 id="create-maxDiscount"
                 type="number"
-                value={formData.maxDiscount}
+                min={0}
+                disabled={formData.discountType === "fixed"}
+                placeholder={formData.discountType === "fixed" ? "—" : ""}
+                value={formData.discountType === "fixed" ? "" : (formData.maxDiscount || "")}
                 onChange={(e) =>
                   setFormData({
                     ...formData,

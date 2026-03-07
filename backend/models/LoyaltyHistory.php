@@ -27,7 +27,17 @@ class LoyaltyHistory {
 
     public function getByUser($userId, $limit = 100) {
         try {
-            $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit";
+            $query = "SELECT lh.*, 
+                        b.final_price as booking_amount, 
+                        b.total_price as booking_total,
+                        b.booking_code,
+                        m.title as movie_title
+                      FROM {$this->table} lh
+                      LEFT JOIN bookings b ON lh.related_booking_id = b.id
+                      LEFT JOIN showtimes s ON b.showtime_id = s.id
+                      LEFT JOIN movies m ON s.movie_id = m.id
+                      WHERE lh.user_id = :user_id 
+                      ORDER BY lh.created_at DESC LIMIT :limit";
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
             $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);

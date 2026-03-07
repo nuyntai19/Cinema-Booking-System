@@ -16,7 +16,7 @@ import { ConcessionItem } from "@/types/cinema";
 import { ConcessionService } from "@/services/concession.service";
 import { Concession } from "@/types/api";
 import { useToast } from "@/hooks/use-toast";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 
 const ConcessionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +55,7 @@ const ConcessionsPage: React.FC = () => {
             id: String(m.id),
             title: m.title,
             poster: m.poster_url
-              ? `${API_ENDPOINTS.MOVIES.replace("/api/movies", "")}/uploads/posters/${m.poster_url}`
+              ? getImageUrl(m.poster_url)
               : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop",
           });
         }
@@ -140,8 +140,14 @@ const ConcessionsPage: React.FC = () => {
     navigate("/booking/payment");
   };
 
+  // Redirect if no movie/seats selected (must be in useEffect, not during render)
+  useEffect(() => {
+    if (!selectedMovie || selectedSeats.length === 0) {
+      navigate("/schedule");
+    }
+  }, [selectedMovie, selectedSeats, navigate]);
+
   if (!selectedMovie || selectedSeats.length === 0) {
-    navigate("/schedule");
     return null;
   }
 

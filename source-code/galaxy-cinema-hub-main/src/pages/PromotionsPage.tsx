@@ -37,11 +37,12 @@ const PromotionsPage: React.FC = () => {
         const res: any = await apiCall(API_ENDPOINTS.PROMOTIONS);
         const promos = res?.data?.promotions || res?.promotions || [];
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const mapped: Promotion[] = promos
           .map((p: any) => {
             const discount = p.discount_type === 'PERCENT' ? `${Number(p.discount_amount)}%` : `${Number(p.discount_amount).toLocaleString('vi-VN')}đ`;
-            const start = p.start_date ? new Date(p.start_date) : null;
-            const end = p.end_date ? new Date(p.end_date) : null;
+            const start = p.start_date ? new Date(p.start_date + 'T00:00:00') : null;
+            const end = p.end_date ? new Date(p.end_date + 'T23:59:59') : null;
             const isExpired = end ? end < today : false;
             return {
               id: String(p.id),

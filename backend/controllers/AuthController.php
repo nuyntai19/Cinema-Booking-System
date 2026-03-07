@@ -6,6 +6,9 @@ require_once __DIR__ . '/../utils/JWT.php';
 require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../config/Config.php';
 
+require_once __DIR__ . '/../models/UserVoucher.php';
+require_once __DIR__ . '/../config/Database.php';
+
 class AuthController {
     private $userModel;
     private $userProfileModel;
@@ -207,7 +210,21 @@ class AuthController {
             $codes = $this->getVerificationCodes();
             unset($codes[$email]);
             $this->saveVerificationCodes($codes);
-            
+
+            // Auto-assign welcome voucher
+            try {
+                $db = Database::getInstance()->getConnection();
+                $stmt = $db->prepare("SELECT id FROM promotions WHERE code = 'WELCOME_NEW' LIMIT 1");
+                $stmt->execute();
+                $welcomePromo = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($welcomePromo) {
+                    $voucherModel = new UserVoucher();
+                    $voucherModel->assignToUser($userId, (int)$welcomePromo['id']);
+                }
+            } catch (Exception $ignore) {
+                // Non-blocking: welcome voucher is a bonus
+            }
+
             return Response::success([
                 'message' => 'Đăng ký tài khoản thành công!',
                 'userId' => $userId

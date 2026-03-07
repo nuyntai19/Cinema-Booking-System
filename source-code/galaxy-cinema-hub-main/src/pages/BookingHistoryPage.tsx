@@ -133,7 +133,7 @@ const BookingHistoryPage: React.FC = () => {
               time: bookingTime,
               seats: booking.seats ? booking.seats.split(", ") : [],
               concessions: booking.concessions || [],
-              totalPrice: parseFloat(booking.total_price),
+              totalPrice: parseFloat(booking.final_price || booking.total_price),
               status: status,
               paymentMethod: booking.payment_method || "Chưa thanh toán",
               bookingDate: booking.created_at,

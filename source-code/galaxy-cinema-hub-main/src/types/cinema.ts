@@ -180,6 +180,9 @@ export interface LoyaltyHistory {
   type: LoyaltyHistoryType; // PURCHASE/REDEEM/EVENT/BIRTHDAY
   description: string;
   bookingId?: string; // Liên kết với booking nếu là PURCHASE
+  movieTitle?: string;
+  bookingAmount?: number;
+  bookingCode?: string;
   createdAt: string;
 }
 
