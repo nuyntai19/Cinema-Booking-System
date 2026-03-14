@@ -155,7 +155,10 @@ $router->get('/api/bookings/:id', 'BookingController@show');
 $router->post('/api/bookings', 'BookingController@create'); // Create booking & hold seats
 $router->put('/api/bookings/:id/confirm', 'BookingController@confirm'); // Confirm payment
 $router->put('/api/bookings/:id/cancel', 'BookingController@cancel');
+$router->put('/api/bookings/:id', 'BookingController@update'); // Update booking (change seats, concessions, etc.)
 $router->get('/api/bookings/user/:userId', 'BookingController@getUserBookings');
+$router->get('/api/bookings/showtime/:showtimeId', 'BookingController@getBookingsByShowtime'); // Get all bookings for a showtime (for seat hold status)
+$router->get('/api/bookings/user/showtime/:userId/:showtimeId', 'BookingController@getBookingByUserAndShowtime'); // Get user's booking for a specific showtime (to prevent multiple holds)
 
 // ============================================
 // TRANSACTION ROUTES
@@ -167,7 +170,6 @@ $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNP
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
 $router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
 $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
-
 // ============================================
 // TICKET ROUTES
 // ============================================

@@ -82,30 +82,14 @@ class TransactionController extends BaseController {
     }
 
     private function verifyGateway($gateway) {
-        $data = $this->getRequestData();
+        $data = array_merge($_GET, self::getRequestData());
 
-        $transactionCode = $data['transaction_code'] ?? $data['orderId'] ?? $data['vnp_TxnRef'] ?? null;
-        $bookingId = $data['booking_id'] ?? $data['orderId'] ?? null;
-        $status = $data['status'] ?? $data['resultCode'] ?? $data['vnp_ResponseCode'] ?? null;
-
-        if (!$transactionCode && !$bookingId) {
-            Response::validationError([
-                'transaction_code' => 'Transaction code or booking id is required',
-            ]);
+        try {
+            $result = $this->transactionService->processGatewayVerification($gateway, $data);
+            Response::success($result, $gateway . ' verification processed');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), $e->getCode() ?: 400);
         }
-
-        $result = $this->transactionService->processGatewayVerification(
-            $gateway,
-            $transactionCode,
-            $bookingId,
-            $status
-        );
-
-        if (!$result) {
-            Response::notFound('Transaction not found');
-        }
-
-        Response::success($result, $gateway . ' verification processed');
     }
 
     public function createMoMoPayment() {

@@ -1,116 +1,108 @@
 // API Configuration
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost/Cinema-Booking-System/backend";
+// Default to the local PHP built-in server (used in this workspace).
+// You can override with VITE_API_URL in your environment (.env.local)
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   // Auth
-  SEND_VERIFICATION: `${API_BASE_URL}/auth/send-verification`,
-  VERIFY_EMAIL: `${API_BASE_URL}/auth/verify-email`,
-  LOGIN: `${API_BASE_URL}/auth/login`,
-  LOGOUT: `${API_BASE_URL}/auth/logout`,
-  GET_CURRENT_USER: `${API_BASE_URL}/auth/me`,
-  FORGOT_PASSWORD: `${API_BASE_URL}/auth/forgot-password`,
-  RESET_PASSWORD: `${API_BASE_URL}/auth/reset-password`,
+  SEND_VERIFICATION: `${API_BASE_URL}/api/auth/send-verification`,
+  VERIFY_EMAIL: `${API_BASE_URL}/api/auth/verify-email`,
+  LOGIN: `${API_BASE_URL}/api/auth/login`,
+  LOGOUT: `${API_BASE_URL}/api/auth/logout`,
+  GET_CURRENT_USER: `${API_BASE_URL}/api/auth/me`,
+  FORGOT_PASSWORD: `${API_BASE_URL}/api/auth/forgot-password`,
+  RESET_PASSWORD: `${API_BASE_URL}/api/auth/reset-password`,
 
   // Users
-  USERS: `${API_BASE_URL}/users`,
-  USER_PROFILE: (id: number) => `${API_BASE_URL}/users/${id}/profile`,
+  USERS: `${API_BASE_URL}/api/users`,
+  USER_PROFILE: (id: number) => `${API_BASE_URL}/api/users/${id}/profile`,
   CHANGE_PASSWORD: (id: number) =>
-    `${API_BASE_URL}/users/${id}/change-password`,
+    `${API_BASE_URL}/api/users/${id}/change-password`,
 
   // Movies
-  MOVIES: `${API_BASE_URL}/movies`,
-  MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/movies/${id}`,
-  MOVIE_SHOWTIMES: (id: number) => `${API_BASE_URL}/movies/${id}/showtimes`,
-  MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/movies/${id}/reviews`,
+  MOVIES: `${API_BASE_URL}/api/movies`,
+  MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/api/movies/${id}`,
+  MOVIE_SHOWTIMES: (id: number) =>
+    `${API_BASE_URL}/api/movies/${id}/showtimes`,
+  MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/api/movies/${id}/reviews`,
   MOVIE_UPLOAD_POSTER: (id: number) =>
-    `${API_BASE_URL}/movies/${id}/upload-poster`,
+    `${API_BASE_URL}/api/movies/upload-poster.php?id=${id}`,
 
   // Genres
-  GENRES: `${API_BASE_URL}/genres`,
+  GENRES: `${API_BASE_URL}/api/genres`,
 
   // Cinemas
-  CINEMAS: `${API_BASE_URL}/cinemas`,
-  CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/cinemas/${id}`,
-  CINEMA_HALLS: (id: number) => `${API_BASE_URL}/cinemas/${id}/halls`,
-  CINEMA_SHOWTIMES: (id: number) => `${API_BASE_URL}/cinemas/${id}/showtimes`,
+  CINEMAS: `${API_BASE_URL}/api/cinemas`,
+  CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/api/cinemas/${id}`,
+  CINEMA_HALLS: (id: number) => `${API_BASE_URL}/api/cinemas/${id}/halls`,
+  CINEMA_SHOWTIMES: (id: number) =>
+    `${API_BASE_URL}/api/cinemas/${id}/showtimes`,
 
   // Halls
-  HALLS: `${API_BASE_URL}/halls`,
-  HALL_DETAIL: (id: number) => `${API_BASE_URL}/halls/${id}`,
-  HALL_LAYOUT: (id: number) => `${API_BASE_URL}/halls/${id}/layout`,
+  HALLS: `${API_BASE_URL}/api/halls`,
+  HALL_DETAIL: (id: number) => `${API_BASE_URL}/api/halls/${id}`,
+  HALL_LAYOUT: (id: number) => `${API_BASE_URL}/api/halls/${id}/layout`,
 
   // Showtimes
-  SHOWTIMES: `${API_BASE_URL}/showtimes`,
-  SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/showtimes/${id}/seats`,
-  SHOWTIME_SEAT_MAP: (id: number) => `${API_BASE_URL}/showtimes/${id}/seat-map`,
+  SHOWTIMES: `${API_BASE_URL}/api/showtimes`,
+  SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seats`,
+  SHOWTIME_SEAT_MAP: (id: number) =>
+    `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
 
   // Bookings
-  BOOKINGS: `${API_BASE_URL}/bookings`,
-  BOOKING_DETAIL: (id: number) => `${API_BASE_URL}/bookings/${id}`,
-  USER_BOOKINGS: (userId: number) => `${API_BASE_URL}/bookings/user/${userId}`,
-  CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/confirm`,
-  CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/bookings/${id}/cancel`,
+  BOOKINGS: `${API_BASE_URL}/api/bookings`,
+  BOOKING_DETAIL: (id: number) => `${API_BASE_URL}/api/bookings/${id}`,
+  USER_BOOKINGS: (userId: number) =>
+    `${API_BASE_URL}/api/bookings/user/${userId}`,
+  CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/confirm`,
+  CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/cancel`,
 
   // Transactions
-  TRANSACTIONS: `${API_BASE_URL}/transactions`,
-  USER_TRANSACTIONS: (userId: number) =>
-    `${API_BASE_URL}/transactions/user/${userId}`,
-  MOMO_PAYMENT: `${API_BASE_URL}/transactions/momo`,
-  VNPAY_PAYMENT: `${API_BASE_URL}/transactions/vnpay`,
-  MOMO_VERIFY: `${API_BASE_URL}/transactions/momo/verify`,
-  VNPAY_VERIFY: `${API_BASE_URL}/transactions/vnpay/verify`,
+  TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
+  USER_TRANSACTIONS: (userId: number) => `${API_BASE_URL}/api/transactions/user/${userId}`,
+  MOMO_PAYMENT: `${API_BASE_URL}/api/transactions/momo`,
+  VNPAY_PAYMENT: `${API_BASE_URL}/api/transactions/vnpay`,
+  MOMO_VERIFY: `${API_BASE_URL}/api/transactions/momo/verify`,
+  VNPAY_VERIFY: `${API_BASE_URL}/api/transactions/vnpay/verify`,
 
   // Promotions & Vouchers
-  PROMOTIONS: `${API_BASE_URL}/promotions`,
-  PROMOTIONS_ACTIVE: `${API_BASE_URL}/promotions/active`,
-  USER_VOUCHERS: (userId: number) => `${API_BASE_URL}/vouchers/user/${userId}`,
-  VOUCHER_DETAIL: (id: number) => `${API_BASE_URL}/vouchers/${id}`,
-  APPLY_VOUCHER: `${API_BASE_URL}/vouchers/apply`,
-  ASSIGN_VOUCHER: `${API_BASE_URL}/vouchers/assign`,
-  MARK_VOUCHER_USED: (id: number) => `${API_BASE_URL}/vouchers/${id}/use`,
-  REWARD_TIERS: `${API_BASE_URL}/vouchers/reward-tiers`,
-  REDEEM_POINTS_VOUCHER: `${API_BASE_URL}/vouchers/redeem-points`,
+  PROMOTIONS: `${API_BASE_URL}/api/promotions`,
+  USER_VOUCHERS: (userId: number) =>
+    `${API_BASE_URL}/api/vouchers/user/${userId}`,
+  APPLY_VOUCHER: `${API_BASE_URL}/api/vouchers/apply`,
 
   // Concessions
-  CONCESSIONS: `${API_BASE_URL}/concessions`,
-
-  // Tickets
-  TICKETS: `${API_BASE_URL}/tickets`,
-  TICKET_BY_CODE: (code: string) => `${API_BASE_URL}/tickets/code/${code}`,
-  TICKET_BY_BOOKING: (bookingId: number) =>
-    `${API_BASE_URL}/tickets/booking/${bookingId}`,
+  CONCESSIONS: `${API_BASE_URL}/api/concessions`,
 
   // Reviews
   MOVIE_REVIEWS_LIST: (movieId: number) =>
-    `${API_BASE_URL}/reviews/movie/${movieId}`,
-  CREATE_REVIEW: `${API_BASE_URL}/reviews`,
+    `${API_BASE_URL}/api/reviews/movie/${movieId}`,
+  CREATE_REVIEW: `${API_BASE_URL}/api/reviews`,
 
   // Reviews (Admin)
-  REVIEWS: `${API_BASE_URL}/reviews`,
-  REVIEW_DETAIL: (id: number) => `${API_BASE_URL}/reviews/${id}`,
-  REVIEW_APPROVE: (id: number) => `${API_BASE_URL}/reviews/${id}/approve`,
-  REVIEW_REJECT: (id: number) => `${API_BASE_URL}/reviews/${id}/reject`,
-  REVIEW_REPORT: (id: number) => `${API_BASE_URL}/reviews/${id}/report`,
+  REVIEWS: `${API_BASE_URL}/api/reviews/index.php`,
+  REVIEW_DETAIL: (id: number) =>
+    `${API_BASE_URL}/api/reviews/detail.php?id=${id}`,
+  REVIEW_APPROVE: (id: number) =>
+    `${API_BASE_URL}/api/reviews/approve.php?id=${id}`,
+  REVIEW_REJECT: (id: number) =>
+    `${API_BASE_URL}/api/reviews/reject.php?id=${id}`,
+  REVIEW_REPORT: (id: number) =>
+    `${API_BASE_URL}/api/reviews/report.php?id=${id}`,
 
   // Notifications
   USER_NOTIFICATIONS: (userId: number) =>
-    `${API_BASE_URL}/notifications/user/${userId}`,
-  MARK_READ: (id: number) => `${API_BASE_URL}/notifications/${id}/read`,
+    `${API_BASE_URL}/api/notifications/user/${userId}`,
+  MARK_READ: (id: number) => `${API_BASE_URL}/api/notifications/${id}/read`,
 
   // Loyalty
   LOYALTY_HISTORY: (userId: number) =>
-    `${API_BASE_URL}/loyalty/history/${userId}`,
-  LOYALTY_POINTS: (userId: number) =>
-    `${API_BASE_URL}/loyalty/points/${userId}`,
-  EARN_POINTS: `${API_BASE_URL}/loyalty/earn`,
-  REDEEM_POINTS: `${API_BASE_URL}/loyalty/redeem`,
+    `${API_BASE_URL}/api/loyalty/history/${userId}`,
+  EARN_POINTS: `${API_BASE_URL}/api/loyalty/earn`,
+  REDEEM_POINTS: `${API_BASE_URL}/api/loyalty/redeem`,
 
   // Memberships
-  MEMBERSHIPS: `${API_BASE_URL}/memberships`,
-  MEMBERSHIP_USER_TIER: (userId: number) =>
-    `${API_BASE_URL}/memberships/user/${userId}`,
-  MEMBERSHIP_CHECK_UPGRADE: (userId: number) =>
-    `${API_BASE_URL}/memberships/check-upgrade/${userId}`,
+  MEMBERSHIPS: `${API_BASE_URL}/api/memberships`,
 };
 
 // Helper function for API calls
@@ -168,8 +160,6 @@ export const getImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Already full URL
   }
-  // Relative path - for uploads, use base URL without /api
-  // Because uploads are at /backend/uploads/, not /backend/api/uploads/
-  const baseUrl = API_BASE_URL.replace(/\/api$/, ""); // Remove /api suffix
-  return `${baseUrl}/${path}`;
+  // Relative path - prepend API base URL
+  return `${API_BASE_URL}/${path}`;
 };

@@ -41,35 +41,30 @@ export const API_ENDPOINTS = {
 
     // Movies
     MOVIES: {
-        ALL: '/movies',
         LIST: '/movies',
-        BY_ID: (id: number | string) => `/movies/${id}`,
-        DETAIL: (id: number | string) => `/movies/${id}`,
-        SHOWTIMES: (id: number | string) => `/movies/${id}/showtimes`,
-        REVIEWS: (id: number | string) => `/movies/${id}/reviews`,
+        DETAIL: (id: string) => `/movies/${id}`,
+        SHOWTIMES: (id: string) => `/movies/${id}/showtimes`,
+        REVIEWS: (id: string) => `/movies/${id}/reviews`,
     },
 
     // Cinemas
     CINEMAS: {
-        ALL: '/cinemas',
         LIST: '/cinemas',
-        BY_ID: (id: number | string) => `/cinemas/${id}`,
-        DETAIL: (id: number | string) => `/cinemas/${id}`,
-        HALLS: (id: number | string) => `/cinemas/${id}/halls`,
-        SHOWTIMES: (id: number | string) => `/cinemas/${id}/showtimes`,
+        DETAIL: (id: string) => `/cinemas/${id}`,
+        HALLS: (id: string) => `/cinemas/${id}/halls`,
     },
 
     // Bookings
     BOOKINGS: {
-        ALL: '/bookings',
         LIST: '/bookings',
-        BY_ID: (id: number | string) => `/bookings/${id}`,
-        DETAIL: (id: number | string) => `/bookings/${id}`,
+        DETAIL: (id: string) => `/bookings/${id}`,
         CREATE: '/bookings',
-        CONFIRM: (id: number | string) => `/bookings/${id}/confirm`,
-        CANCEL: (id: number | string) => `/bookings/${id}/cancel`,
-        USER: (userId: number | string) => `/bookings/user/${userId}`,
-        USER_BOOKINGS: (userId: number | string) => `/bookings/user/${userId}`,
+        UPDATE: (id: string) => `/bookings/${id}`,
+        CONFIRM: (id: string) => `/bookings/${id}/confirm`,
+        CANCEL: (id: string) => `/bookings/${id}/cancel`,
+        USER_BOOKINGS: (userId: string) => `/bookings/user/${userId}`,
+        SHOWTIME_BOOKINGS: (showtimeId: string) => `/bookings/showtime/${showtimeId}`,
+        USER_AND_SHOWTIME_BOOKING: (userId: string, showtimeId: string) => `/bookings/user/showtime/${userId}/${showtimeId}`,
     },
 
     // Transactions
@@ -85,12 +80,9 @@ export const API_ENDPOINTS = {
 
     // Showtimes
     SHOWTIMES: {
-        ALL: '/showtimes',
         LIST: '/showtimes',
-        BY_ID: (id: number | string) => `/showtimes/${id}`,
-        DETAIL: (id: number | string) => `/showtimes/${id}`,
-        SEATS: (id: number | string) => `/showtimes/${id}/seats`,
-        SEAT_MAP: (id: number | string) => `/showtimes/${id}/seat-map`,
+        DETAIL: (id: string) => `/showtimes/${id}`,
+        SEATS: (id: string) => `/showtimes/${id}/seats`,
     },
 };
 

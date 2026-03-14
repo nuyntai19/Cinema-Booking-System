@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Clock, X, AlertCircle, Shield, Loader, ArrowLeft } from "lucide-react";
+import { Clock, X, AlertCircle, Shield, Loader } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { useAuth, useBooking } from "@/contexts/AppContext";
-import { systemConfig } from "@/data/mockData";
+import {
+  systemConfig,
+} from "@/data/mockData";
 import { Seat } from "@/types/cinema";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +20,8 @@ import {
 import AgeWarningDialog from "@/components/booking/AgeWarningDialog";
 import CurfewWarningDialog from "@/components/booking/CurfewWarningDialog";
 import { Badge } from "@/components/ui/badge";
-import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { BookingService } from "@/services/booking.service";
 
 interface SeatFromAPI {
   id: number;
@@ -61,7 +64,6 @@ const SeatSelectionPage: React.FC = () => {
     selectedSeats,
     addSeat,
     removeSeat,
-    clearSeats,
     clearBooking,
     setSelectedMovie,
     setSelectedShowtime,
@@ -91,13 +93,7 @@ const SeatSelectionPage: React.FC = () => {
       // For now, minimal object to satisfy the context check
       setSelectedShowtime({ id: showtimeParam } as any);
     }
-  }, [
-    searchParams,
-    selectedMovie,
-    selectedShowtime,
-    setSelectedMovie,
-    setSelectedShowtime,
-  ]);
+  }, [searchParams, selectedMovie, selectedShowtime, setSelectedMovie, setSelectedShowtime]);
 
   // Fetch movie data from API
   useEffect(() => {
@@ -106,24 +102,21 @@ const SeatSelectionPage: React.FC = () => {
 
     const fetchMovie = async () => {
       try {
-        const response = await apiCall<{
-          success: boolean;
-          data: { movie: any };
-        }>(API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId)));
+        const response = await apiCall<{ success: boolean; data: { movie: any } }>(
+          API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId))
+        );
         if (response.success && response.data?.movie) {
           const m = response.data.movie;
           setMovie({
             id: String(m.id),
             title: m.title,
-            poster: m.poster_url
-              ? getImageUrl(m.poster_url)
-              : "",
+            poster: m.poster_url ? `${API_ENDPOINTS.MOVIES.replace('/api/movies', '')}/uploads/posters/${m.poster_url}` : '',
             duration: m.duration || m.duration_minutes,
-            ageRating: m.age_rating || "P",
+            ageRating: m.age_rating || 'P',
           });
         }
       } catch (error) {
-        console.error("Failed to fetch movie:", error);
+        console.error('Failed to fetch movie:', error);
       }
     };
     fetchMovie();
@@ -131,37 +124,26 @@ const SeatSelectionPage: React.FC = () => {
 
   // Convert API response to component format
   const convertSeatMap = (apiResponse: SeatMapResponse): Seat[][] => {
-    if (!apiResponse || !apiResponse.seat_map) {
-      console.error("Invalid seat map response:", apiResponse);
-      return [];
-    }
     const rows = Object.keys(apiResponse.seat_map).sort();
     return rows.map((rowCode) => {
       return apiResponse.seat_map[rowCode].map((seat) => {
         const seatTypeLower = seat.seat_type.toLowerCase();
-        let type: "standard" | "vip" | "couple" = "standard";
-        if (seatTypeLower === "vip") type = "vip";
-        else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple")
-          type = "couple";
+        let type: 'standard' | 'vip' | 'couple' = 'standard';
+        if (seatTypeLower === 'vip') type = 'vip';
+        else if (seatTypeLower === 'sweetbox' || seatTypeLower === 'couple') type = 'couple';
 
-        return {
+        return ({
           // Use DB seat id for booking API; render row/number for display.
           id: String(seat.id),
           row: seat.row_code,
           number: seat.number,
           type,
-          status:
-            seat.status === "Available"
-              ? "available"
-              : seat.status === "HOLDING"
-                ? "held"
-                : seat.status === "SOLD"
-                  ? "sold"
-                  : seat.status === "Maintenance"
-                    ? "maintenance"
-                    : "available",
-          price: seat.calculated_price,
-        };
+          status: seat.status === 'Available' ? 'available' :
+            seat.status === 'HOLDING' ? 'held' :
+              seat.status === 'SOLD' ? 'sold' :
+                seat.status === 'Maintenance' ? 'maintenance' : 'available',
+          price: Number(seat.calculated_price) || 0,
+        });
       });
     });
   };
@@ -183,29 +165,21 @@ const SeatSelectionPage: React.FC = () => {
     const fetchSeatMap = async () => {
       try {
         setLoading(true);
-        clearSeats();
-        const response = await apiCall<{
-          success: boolean;
-          data: SeatMapResponse;
-        }>(API_ENDPOINTS.SHOWTIME_SEAT_MAP(parseInt(showtimeId)));
+        const response = await apiCall<{ success: boolean; data: SeatMapResponse }>(
+          API_ENDPOINTS.SHOWTIME_SEAT_MAP(parseInt(showtimeId))
+        );
 
-        console.log("Seat map API response:", response);
-        const seatMapData =
-          response.data || (response as unknown as SeatMapResponse);
-        console.log("Extracted seat map data:", seatMapData);
+        const seatMapData = response.data || response as unknown as SeatMapResponse;
 
-        // Update the showtime object in context with real data from API
-        if (seatMapData.showtime) {
+        // If we initialized from query params, update the showtime object in context with real data
+        if (seatMapData.showtime && (!selectedShowtime || !selectedShowtime.start_time)) {
           setSelectedShowtime({
             id: String(seatMapData.showtime.id),
-            time: new Date(seatMapData.showtime.start_time).toLocaleTimeString(
-              "vi-VN",
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-            ),
-            date: seatMapData.showtime.start_time.split(" ")[0],
+            time: new Date(seatMapData.showtime.start_time).toLocaleTimeString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            date: seatMapData.showtime.start_time.split(' ')[0],
             start_time: seatMapData.showtime.start_time,
             hall: seatMapData.showtime.hall_name,
             cinema: seatMapData.showtime.cinema_name,
@@ -228,17 +202,73 @@ const SeatSelectionPage: React.FC = () => {
     };
 
     fetchSeatMap();
-    // Only re-fetch when the showtime or movie ID changes (primitives), not the full object
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selectedMovie,
-    selectedShowtime?.id,
-    searchParams,
-    navigate,
-    toast,
-    setSelectedShowtime,
-    clearSeats,
-  ]);
+  }, [selectedMovie, selectedShowtime, searchParams, navigate, toast, setSelectedShowtime]);
+
+  // Track whether pending booking has been synced to avoid re-syncing on every render
+  const hasSyncedPendingBooking = useRef(false);
+  // Track seat IDs that belong to the user's own pending booking
+  const pendingBookingSeatIds = useRef<Set<string>>(new Set());
+
+  // if user has an active booking for this showtime, sync seats once
+  useEffect(() => {
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
+    const userId = user?.id;
+    if (!showtimeId || !userId) return;
+    if (hasSyncedPendingBooking.current) return;
+
+    let isCancelled = false;
+
+    const syncPendingBookingSeats = async () => {
+      try {
+        const hasPendingBooking = await BookingService.checkBookingPending(userId, showtimeId);
+        if (!hasPendingBooking || isCancelled) return;
+
+        const booking = await BookingService.getBookingByUserAndShowtime(userId, showtimeId);
+        const seatOfBooking = booking.data?.seats || [];
+
+        const seatIds = new Set<string>();
+
+        seatOfBooking.forEach((seat) => {
+          const seatTypeLower = seat.seat_type.toLowerCase();
+          let type: "standard" | "vip" | "couple" = "standard";
+          if (seatTypeLower === "vip") type = "vip";
+          else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple") type = "couple";
+
+          const seatId = String(seat.id);
+          seatIds.add(seatId);
+          removeSeat(seatId);
+
+          addSeat({
+            id: seatId,
+            row: seat.row_number,
+            number: Number(seat.seat_number) || 0,
+            type,
+            status: "selected" as const,
+            price: Number(seat.price) || 0,
+          });
+        });
+
+        if (!isCancelled) {
+          pendingBookingSeatIds.current = seatIds;
+          hasSyncedPendingBooking.current = true;
+
+          // Update seatMap: change user's own held seats to "available" so toggle works visually
+          setSeatMap(prev => prev.map(row =>
+            row.map(s => seatIds.has(s.id) ? { ...s, status: "available" as const } : s)
+          ));
+        }
+      } catch (error) {
+        console.error("Failed to sync pending booking seats:", error);
+      }
+    };
+
+    void syncPendingBookingSeats();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedShowtime, searchParams, user, addSeat, removeSeat]);
+
 
   // Countdown timer
   useEffect(() => {
@@ -270,51 +300,37 @@ const SeatSelectionPage: React.FC = () => {
 
   const handleSeatClick = (seat: Seat | Seat[]) => {
     const seats = Array.isArray(seat) ? seat : [seat];
-    if (
-      seats.some(
-        (s) =>
-          s.status === "sold" ||
-          s.status === "held" ||
-          s.status === "maintenance",
-      )
-    )
-      return;
 
-    const anySelected = seats.some((s) =>
-      selectedSeats.find((ss) => ss.id === s.id),
-    );
+    // Check if any of the seats are already selected (e.g., synced from pending booking)
+    const anySelected = seats.some(s => selectedSeats.find((ss) => ss.id === s.id));
+
+    // If selected → allow deselect
     if (anySelected) {
-      seats.forEach((s) => removeSeat(s.id));
-    } else {
-      seats.forEach((s) => addSeat({ ...s, status: "selected" }));
+      seats.forEach(s => removeSeat(s.id));
+      return;
     }
+
+    // Block sold/maintenance seats
+    if (seats.some(s => s.status === "sold" || s.status === "maintenance")) return;
+
+    // Block held seats (from other users)
+    if (seats.some(s => s.status === "held")) return;
+
+    // Add available seat
+    seats.forEach(s => addSeat({ ...s, status: "selected" }));
   };
 
   const getSeatClass = (seat: Seat | Seat[]) => {
     const seats = Array.isArray(seat) ? seat : [seat];
     const isMerged = Array.isArray(seat);
-    const isSelected = seats.some((s) =>
-      selectedSeats.find((ss) => ss.id === s.id),
-    );
+    const isSelected = seats.some(s => selectedSeats.find((ss) => ss.id === s.id));
 
-    if (isSelected)
-      return cn("seat seat-selected", isMerged && "seat-couple-merged");
-    if (seats.some((s) => s.status === "sold"))
-      return cn("seat seat-sold", isMerged && "seat-couple-merged");
-    if (seats.some((s) => s.status === "held"))
-      return cn("seat seat-held", isMerged && "seat-couple-merged");
-    if (seats.some((s) => s.status === "maintenance"))
-      return cn("seat seat-maintenance", isMerged && "seat-couple-merged");
-    if (seats.some((s) => s.type === "vip"))
-      return cn(
-        "seat seat-vip seat-available",
-        isMerged && "seat-couple-merged",
-      );
-    if (seats.some((s) => s.type === "couple"))
-      return cn(
-        "seat seat-couple seat-available",
-        isMerged && "seat-couple-merged",
-      );
+    if (isSelected) return cn("seat seat-selected", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "sold")) return cn("seat seat-sold", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "held")) return cn("seat seat-held", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.status === "maintenance")) return cn("seat seat-maintenance", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.type === "vip")) return cn("seat seat-vip seat-available", isMerged && "seat-couple-merged");
+    if (seats.some(s => s.type === "couple")) return cn("seat seat-couple seat-available", isMerged && "seat-couple-merged");
     return cn("seat seat-available", isMerged && "seat-couple-merged");
   };
 
@@ -324,7 +340,7 @@ const SeatSelectionPage: React.FC = () => {
       const current = row[i];
       const next = row[i + 1];
 
-      if (current.type === "couple" && next && next.type === "couple") {
+      if (current.type === 'couple' && next && next.type === 'couple') {
         grouped.push([current, next]);
         i++; // skip next
       } else {
@@ -401,10 +417,10 @@ const SeatSelectionPage: React.FC = () => {
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
-            <p className="text-muted-foreground mb-4">
-              Không thể tải sơ đồ ghế
-            </p>
-            <Button onClick={() => navigate("/schedule")}>Quay lại</Button>
+            <p className="text-muted-foreground mb-4">Không thể tải sơ đồ ghế</p>
+            <Button onClick={() => navigate("/schedule")}>
+              Quay lại
+            </Button>
           </div>
         </main>
       </div>
@@ -419,14 +435,6 @@ const SeatSelectionPage: React.FC = () => {
         {/* Movie Info & Timer */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mb-4 md:mb-6 p-3 md:p-4 bg-card rounded-xl border border-border">
           <div className="flex items-center gap-3 md:gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/schedule")}
-              className="shrink-0"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
             <img
               src={movie.poster}
               alt={movie.title}
@@ -492,41 +500,27 @@ const SeatSelectionPage: React.FC = () => {
                       const isMerged = Array.isArray(seat);
                       const seats = isMerged ? seat : [seat];
                       const firstSeat = seats[0];
-                      const isSold = seats.some((s) => s.status === "sold");
-                      const isMaintenance = seats.some(
-                        (s) => s.status === "maintenance",
-                      );
-                      const seatNumbers = isMerged
-                        ? `${seats[0].number}-${seats[1].number}`
-                        : firstSeat.number;
-                      const seatIds = isMerged
-                        ? `${seats[0].id},${seats[1].id}`
-                        : firstSeat.id;
-                      const price = isMerged
-                        ? seats[0].price + seats[1].price
-                        : firstSeat.price;
+                      const isSold = seats.some(s => s.status === "sold");
+                      const isMaintenance = seats.some(s => s.status === "maintenance");
+                      const isHeld = seats.some(s => s.status === "held");
+                      const isInSelectedSeats = seats.some(s => selectedSeats.find(ss => ss.id === s.id));
+                      const seatNumbers = isMerged ? `${seats[0].number}-${seats[1].number}` : firstSeat.number;
+                      const seatIds = isMerged ? `${seats[0].id},${seats[1].id}` : firstSeat.id;
+                      const price = isMerged ? seats[0].price + seats[1].price : firstSeat.price;
+
+                      // Disable only if: sold, maintenance, or held by OTHER user (not in our selectedSeats)
+                      const isDisabled = isSold || isMaintenance || (isHeld && !isInSelectedSeats);
 
                       return (
                         <button
-                          key={
-                            isMerged ? `merged-${seats[0].id}` : firstSeat.id
-                          }
+                          key={isMerged ? `merged-${seats[0].id}` : firstSeat.id}
                           onClick={() => handleSeatClick(seat)}
-                          disabled={
-                            isSold ||
-                            seats.some((s) => s.status === "held") ||
-                            isMaintenance
-                          }
                           className={cn(
                             getSeatClass(seat),
                             !isMerged && "w-6 md:w-8",
                             "text-[10px] md:text-xs",
                           )}
-                          title={
-                            isMaintenance
-                              ? "Khu vực không ngồi"
-                              : `${seatIds} - ${price.toLocaleString("vi-VN")}đ`
-                          }
+                          title={isMaintenance ? "Khu vực không ngồi" : `${seatIds} - ${price.toLocaleString("vi-VN")}đ`}
                         >
                           {isSold ? (
                             <X className="w-2 h-2 md:w-3 md:h-3" />
@@ -605,9 +599,7 @@ const SeatSelectionPage: React.FC = () => {
                         >
                           {seat.type.toUpperCase()}
                         </span>
-                        <span className="font-medium">
-                          {formatSeatCode(seat)}
-                        </span>
+                        <span className="font-medium">{formatSeatCode(seat)}</span>
                       </div>
                       <span>{seat.price.toLocaleString("vi-VN")}đ</span>
                     </div>
