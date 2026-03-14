@@ -133,6 +133,53 @@ class BookingController extends BaseController {
         Response::paginated($bookings, $total, $page, $limit);
     }
 
+    public function getBookingsByShowtime($showtimeId) {
+        AuthMiddleware::authenticate();
+
+        $bookings = $this->bookingService->getBookingsByShowtime((int)$showtimeId);
+
+        Response::success($bookings);
+    }
+    public function getBookingByUserAndShowtime($userId, $showtimeId) {
+        AuthMiddleware::authenticate();
+
+        $this->authorizeUserId((int)$userId);
+
+        $booking = $this->bookingService->getBookingByUserAndShowtime((int)$userId, (int)$showtimeId);
+
+        Response::success($booking);
+    }
+    public function update($id) {
+        AuthMiddleware::authenticate();
+
+        $booking = $this->bookingService->getBookingById($id);
+        if (!$booking) {
+            Response::notFound('Booking not found');
+        }
+
+        self::authorizeBookingAccess($booking);
+
+        if ($booking['status'] !== 'Pending') {
+            Response::error('Only pending bookings can be updated', 400);
+        }
+
+        $data = self::getRequestData();
+        $seatIds = $this->extractSeatIds($data);
+        $concessions = $data['concessions'] ?? [];
+        $userVoucherId = $data['user_voucher_id'] ?? null;
+
+        try {
+            $result = $this->bookingService->updateBooking(
+                (int)$id,
+                $seatIds,
+                $concessions,
+                $userVoucherId ? (int)$userVoucherId : null
+            );
+            Response::success($result, 'Booking updated successfully');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
     private function extractSeatIds($data) {
         $seatIds = $data['seat_ids'] ?? $data['seats'] ?? [];
         if (!is_array($seatIds)) {

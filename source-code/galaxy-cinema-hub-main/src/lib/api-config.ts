@@ -2,8 +2,12 @@
  * API Configuration
  */
 
-// Base API URL - Update this to match your backend
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Base API URL
+// Accept both:
+// - VITE_API_URL=http://localhost:8000
+// - VITE_API_URL=http://localhost:8000/api
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+export const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -55,9 +59,23 @@ export const API_ENDPOINTS = {
         LIST: '/bookings',
         DETAIL: (id: string) => `/bookings/${id}`,
         CREATE: '/bookings',
+        UPDATE: (id: string) => `/bookings/${id}`,
         CONFIRM: (id: string) => `/bookings/${id}/confirm`,
         CANCEL: (id: string) => `/bookings/${id}/cancel`,
         USER_BOOKINGS: (userId: string) => `/bookings/user/${userId}`,
+        SHOWTIME_BOOKINGS: (showtimeId: string) => `/bookings/showtime/${showtimeId}`,
+        USER_AND_SHOWTIME_BOOKING: (userId: string, showtimeId: string) => `/bookings/user/showtime/${userId}/${showtimeId}`,
+    },
+
+    // Transactions
+    TRANSACTIONS: {
+        CREATE: '/transactions',
+        MOMO: '/transactions/momo',
+        VNPAY: '/transactions/vnpay',
+        MOMO_VERIFY: '/transactions/momo/verify',
+        VNPAY_VERIFY: '/transactions/vnpay/verify',
+        BY_BOOKING: (bookingId: string) => `/transactions/booking/${bookingId}`,
+        USER_HISTORY: (userId: string) => `/transactions/user/${userId}`,
     },
 
     // Showtimes

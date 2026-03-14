@@ -39,37 +39,67 @@ class TransactionService {
         return [$transactions, $total];
     }
 
-    public function processGatewayVerification($gateway, $transactionCode, $bookingId, $status) {
-        $transaction = null;
-        if ($transactionCode) {
-            $transaction = $this->transactionModel->getByTransactionCode($transactionCode);
-        }
-        if (!$transaction && $bookingId) {
-            $transaction = $this->transactionModel->getByBooking((int)$bookingId);
+    public function processGatewayVerification($gateway, $data) {
+        if ($gateway !== 'Momo' && $gateway !== 'VNPay') {
+            throw new Exception('Unsupported gateway for verification', 400);
         }
 
+        if ($gateway === 'Momo' && !PaymentService::verifyMomoPayment($data)) {
+            throw new Exception('MoMo signature verification failed', 400);
+        }
+
+        if ($gateway === 'VNPay' && !PaymentService::verifyVNPayPayment($data)) {
+            throw new Exception('VNPay signature verification failed', 400);
+        }
+
+        $transactionCode = $data['transaction_code']
+            ?? $data['orderId']
+            ?? $data['vnp_TxnRef']
+            ?? null;
+
+        if (!$transactionCode) {
+            throw new Exception('Transaction code is required for verification', 422);
+        }
+
+        $transaction = $this->transactionModel->getByTransactionCode($transactionCode);
         if (!$transaction) {
-            return null;
+            throw new Exception('Transaction not found', 404);
         }
 
+        $status = $data['status'] ?? $data['resultCode'] ?? $data['vnp_ResponseCode'] ?? null;
         $isSuccess = $this->isSuccessStatus($gateway, $status);
         $newStatus = $isSuccess ? 'Success' : 'Failed';
 
         $this->transactionModel->updateStatus($transaction['transaction_code'], $newStatus);
 
         if ($isSuccess) {
-            $this->bookingModel->confirm($transaction['booking_id']);
+            $this->bookingModel->confirm((int)$transaction['booking_id']);
         }
+
+        // Notify frontend in realtime. Any push failure must not break payment verification.
+        PusherService::triggerPaymentStatus(
+            (int)$transaction['booking_id'],
+            $transaction['transaction_code'],
+            $newStatus,
+            $gateway
+        );
 
         return [
             'transaction_code' => $transaction['transaction_code'],
+            'booking_id' => (int)$transaction['booking_id'],
             'status' => $newStatus,
+            'gateway' => $gateway,
         ];
     }
 
-    public function createPaymentForBooking($gateway, $booking, $amount) {
+    public function createPaymentForBooking($gateway, $booking) {
         if ($booking['status'] !== 'Pending') {
             throw new Exception('Booking is not in pending status', 400);
+        }
+
+        $amount = $this->resolveBookingAmount($booking);
+        if ($amount <= 0) {
+            throw new Exception('Invalid booking amount', 400);
         }
 
         $transaction = $this->transactionModel->getByBooking((int)$booking['id']);
@@ -78,25 +108,25 @@ class TransactionService {
         }
 
         if (!$transaction || $transaction['status'] === 'Failed') {
-            $transaction = $this->transactionModel->create((int)$booking['id'], $gateway, (float)$amount);
+            $transaction = $this->transactionModel->create((int)$booking['id'], $gateway, $amount);
         }
 
         $payload = $this->buildPaymentPayload(
             $gateway,
             (int)$booking['id'],
             $transaction['transaction_code'],
-            (float)$amount
+            $amount
         );
 
         if ($gateway === 'Momo') {
-            $payUrl = PaymentService::createMoMoPayment(
+            $momoPayment = PaymentService::createMoMoPayment(
                 $payload['amount'],
                 $payload['orderId'],
                 $payload['orderInfo'],
                 $payload['returnUrl'],
                 $payload['notifyUrl']
             );
-            return ['pay_url' => $payUrl];
+            return $momoPayment;
         }
 
         if ($gateway === 'VNPay') {
@@ -167,5 +197,15 @@ class TransactionService {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
         return $scheme . '://' . $host;
+    }
+
+    private function resolveBookingAmount($booking) {
+        $final = isset($booking['final_price']) ? (float)$booking['final_price'] : 0.0;
+        if ($final > 0) {
+            return $final;
+        }
+
+        $total = isset($booking['total_price']) ? (float)$booking['total_price'] : 0.0;
+        return $total;
     }
 }

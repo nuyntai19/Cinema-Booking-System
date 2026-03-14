@@ -5,6 +5,9 @@
  * REST API for Cinema Booking System
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // Error reporting for development
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // Don't display errors in output (breaks JSON)
@@ -115,6 +118,12 @@ $router->get('/api/movies/:id/showtimes', 'MovieController@getShowtimes');
 $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
 
 // ============================================
+// GENRE ROUTES
+// ============================================
+$router->get('/api/genres', 'GenreController@index');
+$router->get('/api/genres/:id', 'GenreController@show');
+
+// ============================================
 // CINEMA ROUTES
 // ============================================
 $router->get('/api/cinemas', 'CinemaController@index');
@@ -145,7 +154,10 @@ $router->get('/api/bookings/:id', 'BookingController@show');
 $router->post('/api/bookings', 'BookingController@create'); // Create booking & hold seats
 $router->put('/api/bookings/:id/confirm', 'BookingController@confirm'); // Confirm payment
 $router->put('/api/bookings/:id/cancel', 'BookingController@cancel');
+$router->put('/api/bookings/:id', 'BookingController@update'); // Update booking (change seats, concessions, etc.)
 $router->get('/api/bookings/user/:userId', 'BookingController@getUserBookings');
+$router->get('/api/bookings/showtime/:showtimeId', 'BookingController@getBookingsByShowtime'); // Get all bookings for a showtime (for seat hold status)
+$router->get('/api/bookings/user/showtime/:userId/:showtimeId', 'BookingController@getBookingByUserAndShowtime'); // Get user's booking for a specific showtime (to prevent multiple holds)
 
 // ============================================
 // TRANSACTION ROUTES
@@ -155,9 +167,8 @@ $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getB
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
-$router->post('/api/transactions/momo/create', 'TransactionController@createMoMoPayment');
-$router->post('/api/transactions/vnpay/create', 'TransactionController@createVNPayPayment');
-
+$router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
+$router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
 // ============================================
 // TICKET ROUTES
 // ============================================

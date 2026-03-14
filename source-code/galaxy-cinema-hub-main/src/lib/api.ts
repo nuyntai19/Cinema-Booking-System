@@ -1,6 +1,7 @@
 // API Configuration
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost/backend";
+// Default to the local PHP built-in server (used in this workspace).
+// You can override with VITE_API_URL in your environment (.env.local)
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   // Auth
@@ -19,18 +20,16 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/users/${id}/change-password`,
 
   // Movies
-  MOVIES: `${API_BASE_URL}/api/movies/index.php`,
-  MOVIE_DETAIL: (id: number) =>
-    `${API_BASE_URL}/api/movies/detail.php?id=${id}`,
+  MOVIES: `${API_BASE_URL}/api/movies`,
+  MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/api/movies/${id}`,
   MOVIE_SHOWTIMES: (id: number) =>
-    `${API_BASE_URL}/api/movies/showtimes.php?id=${id}`,
-  MOVIE_REVIEWS: (id: number) =>
-    `${API_BASE_URL}/api/movies/reviews.php?id=${id}`,
+    `${API_BASE_URL}/api/movies/${id}/showtimes`,
+  MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/api/movies/${id}/reviews`,
   MOVIE_UPLOAD_POSTER: (id: number) =>
     `${API_BASE_URL}/api/movies/upload-poster.php?id=${id}`,
 
   // Genres
-  GENRES: `${API_BASE_URL}/api/genres/index.php`,
+  GENRES: `${API_BASE_URL}/api/genres`,
 
   // Cinemas
   CINEMAS: `${API_BASE_URL}/api/cinemas`,
@@ -57,6 +56,14 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/bookings/user/${userId}`,
   CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/confirm`,
   CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/cancel`,
+
+  // Transactions
+  TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
+  USER_TRANSACTIONS: (userId: number) => `${API_BASE_URL}/api/transactions/user/${userId}`,
+  MOMO_PAYMENT: `${API_BASE_URL}/api/transactions/momo`,
+  VNPAY_PAYMENT: `${API_BASE_URL}/api/transactions/vnpay`,
+  MOMO_VERIFY: `${API_BASE_URL}/api/transactions/momo/verify`,
+  VNPAY_VERIFY: `${API_BASE_URL}/api/transactions/vnpay/verify`,
 
   // Promotions & Vouchers
   PROMOTIONS: `${API_BASE_URL}/api/promotions`,

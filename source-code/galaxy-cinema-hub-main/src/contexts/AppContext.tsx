@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, Booking, Seat, ConcessionItem, Showtime, UserRole } from '@/types/cinema';
 import { API_ENDPOINTS } from '@/lib/api';
 
@@ -16,6 +16,8 @@ interface BookingContextType {
   selectedShowtime: Showtime | null;
   selectedSeats: Seat[];
   concessions: ConcessionItem[];
+  bookingsActive: Booking[];
+  checkBookingActive: (showtime_id: string) => boolean;
   setSelectedMovie: (id: string | null) => void;
   setSelectedCinema: (id: string | null) => void;
   setSelectedShowtime: (showtime: Showtime | null) => void;
@@ -165,16 +167,22 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [concessions, setConcessions] = useState<ConcessionItem[]>([]);
+  const [bookingsActive, setBookingsActive] = useState<Booking[]>([]);
 
-  const addSeat = (seat: Seat) => {
-    if (!selectedSeats.find(s => s.id === seat.id)) {
-      setSelectedSeats([...selectedSeats, seat]);
-    }
-  };
+  const addSeat = useCallback((seat: Seat) => {
+    setSelectedSeats(prev => {
+      if (prev.find(s => s.id === seat.id)) return prev;
+      return [...prev, seat];
+    });
+  }, []);
 
-  const removeSeat = (seatId: string) => {
-    setSelectedSeats(selectedSeats.filter(s => s.id !== seatId));
-  };
+  const checkBookingActive = (showtime_id: string) => {
+    return bookingsActive.some(booking => booking.showtimeId === showtime_id);
+  }
+
+  const removeSeat = useCallback((seatId: string) => {
+    setSelectedSeats(prev => prev.filter(s => s.id !== seatId));
+  }, []);
 
   const updateConcession = (id: string, quantity: number) => {
     const existing = concessions.find(c => c.id === id);
@@ -219,6 +227,8 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({ children })
       updateConcession,
       getTotalAmount,
       clearBooking,
+      bookingsActive,
+      checkBookingActive,
     }}>
       {children}
     </BookingContext.Provider>

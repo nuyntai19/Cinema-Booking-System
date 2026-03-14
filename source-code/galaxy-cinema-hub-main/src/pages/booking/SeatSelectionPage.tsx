@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Clock, X, AlertCircle, Shield, Loader } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -21,6 +21,7 @@ import AgeWarningDialog from "@/components/booking/AgeWarningDialog";
 import CurfewWarningDialog from "@/components/booking/CurfewWarningDialog";
 import { Badge } from "@/components/ui/badge";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { BookingService } from "@/services/booking.service";
 
 interface SeatFromAPI {
   id: number;
@@ -132,7 +133,8 @@ const SeatSelectionPage: React.FC = () => {
         else if (seatTypeLower === 'sweetbox' || seatTypeLower === 'couple') type = 'couple';
 
         return ({
-          id: `${seat.row_code}${seat.number}`,
+          // Use DB seat id for booking API; render row/number for display.
+          id: String(seat.id),
           row: seat.row_code,
           number: seat.number,
           type,
@@ -140,7 +142,7 @@ const SeatSelectionPage: React.FC = () => {
             seat.status === 'HOLDING' ? 'held' :
               seat.status === 'SOLD' ? 'sold' :
                 seat.status === 'Maintenance' ? 'maintenance' : 'available',
-          price: seat.calculated_price,
+          price: Number(seat.calculated_price) || 0,
         });
       });
     });
@@ -202,6 +204,72 @@ const SeatSelectionPage: React.FC = () => {
     fetchSeatMap();
   }, [selectedMovie, selectedShowtime, searchParams, navigate, toast, setSelectedShowtime]);
 
+  // Track whether pending booking has been synced to avoid re-syncing on every render
+  const hasSyncedPendingBooking = useRef(false);
+  // Track seat IDs that belong to the user's own pending booking
+  const pendingBookingSeatIds = useRef<Set<string>>(new Set());
+
+  // if user has an active booking for this showtime, sync seats once
+  useEffect(() => {
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
+    const userId = user?.id;
+    if (!showtimeId || !userId) return;
+    if (hasSyncedPendingBooking.current) return;
+
+    let isCancelled = false;
+
+    const syncPendingBookingSeats = async () => {
+      try {
+        const hasPendingBooking = await BookingService.checkBookingPending(userId, showtimeId);
+        if (!hasPendingBooking || isCancelled) return;
+
+        const booking = await BookingService.getBookingByUserAndShowtime(userId, showtimeId);
+        const seatOfBooking = booking.data?.seats || [];
+
+        const seatIds = new Set<string>();
+
+        seatOfBooking.forEach((seat) => {
+          const seatTypeLower = seat.seat_type.toLowerCase();
+          let type: "standard" | "vip" | "couple" = "standard";
+          if (seatTypeLower === "vip") type = "vip";
+          else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple") type = "couple";
+
+          const seatId = String(seat.id);
+          seatIds.add(seatId);
+          removeSeat(seatId);
+
+          addSeat({
+            id: seatId,
+            row: seat.row_number,
+            number: Number(seat.seat_number) || 0,
+            type,
+            status: "selected" as const,
+            price: Number(seat.price) || 0,
+          });
+        });
+
+        if (!isCancelled) {
+          pendingBookingSeatIds.current = seatIds;
+          hasSyncedPendingBooking.current = true;
+
+          // Update seatMap: change user's own held seats to "available" so toggle works visually
+          setSeatMap(prev => prev.map(row =>
+            row.map(s => seatIds.has(s.id) ? { ...s, status: "available" as const } : s)
+          ));
+        }
+      } catch (error) {
+        console.error("Failed to sync pending booking seats:", error);
+      }
+    };
+
+    void syncPendingBookingSeats();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedShowtime, searchParams, user, addSeat, removeSeat]);
+
+
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -232,14 +300,24 @@ const SeatSelectionPage: React.FC = () => {
 
   const handleSeatClick = (seat: Seat | Seat[]) => {
     const seats = Array.isArray(seat) ? seat : [seat];
-    if (seats.some(s => s.status === "sold" || s.status === "held" || s.status === "maintenance")) return;
 
+    // Check if any of the seats are already selected (e.g., synced from pending booking)
     const anySelected = seats.some(s => selectedSeats.find((ss) => ss.id === s.id));
+
+    // If selected → allow deselect
     if (anySelected) {
       seats.forEach(s => removeSeat(s.id));
-    } else {
-      seats.forEach(s => addSeat({ ...s, status: "selected" }));
+      return;
     }
+
+    // Block sold/maintenance seats
+    if (seats.some(s => s.status === "sold" || s.status === "maintenance")) return;
+
+    // Block held seats (from other users)
+    if (seats.some(s => s.status === "held")) return;
+
+    // Add available seat
+    seats.forEach(s => addSeat({ ...s, status: "selected" }));
   };
 
   const getSeatClass = (seat: Seat | Seat[]) => {
@@ -273,6 +351,7 @@ const SeatSelectionPage: React.FC = () => {
   };
 
   const totalPrice = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
+  const formatSeatCode = (seat: Seat) => `${seat.row}${seat.number}`;
 
   const handleContinue = () => {
     if (selectedSeats.length === 0) {
@@ -423,17 +502,19 @@ const SeatSelectionPage: React.FC = () => {
                       const firstSeat = seats[0];
                       const isSold = seats.some(s => s.status === "sold");
                       const isMaintenance = seats.some(s => s.status === "maintenance");
+                      const isHeld = seats.some(s => s.status === "held");
+                      const isInSelectedSeats = seats.some(s => selectedSeats.find(ss => ss.id === s.id));
                       const seatNumbers = isMerged ? `${seats[0].number}-${seats[1].number}` : firstSeat.number;
                       const seatIds = isMerged ? `${seats[0].id},${seats[1].id}` : firstSeat.id;
                       const price = isMerged ? seats[0].price + seats[1].price : firstSeat.price;
+
+                      // Disable only if: sold, maintenance, or held by OTHER user (not in our selectedSeats)
+                      const isDisabled = isSold || isMaintenance || (isHeld && !isInSelectedSeats);
 
                       return (
                         <button
                           key={isMerged ? `merged-${seats[0].id}` : firstSeat.id}
                           onClick={() => handleSeatClick(seat)}
-                          disabled={
-                            isSold || seats.some(s => s.status === "held") || isMaintenance
-                          }
                           className={cn(
                             getSeatClass(seat),
                             !isMerged && "w-6 md:w-8",
@@ -518,7 +599,7 @@ const SeatSelectionPage: React.FC = () => {
                         >
                           {seat.type.toUpperCase()}
                         </span>
-                        <span className="font-medium">{seat.id}</span>
+                        <span className="font-medium">{formatSeatCode(seat)}</span>
                       </div>
                       <span>{seat.price.toLocaleString("vi-VN")}đ</span>
                     </div>

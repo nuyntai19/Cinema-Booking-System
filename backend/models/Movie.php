@@ -62,7 +62,9 @@ class Movie {
                 $params[':search'] = '%' . $filters['search'] . '%';
             }
             
-            $query .= " GROUP BY m.id
+            $query .= " GROUP BY m.id, m.title, m.description, m.duration_minutes,
+                       m.release_date, m.poster_url, m.trailer_url, m.age_rating,
+                       m.origin, m.status, m.director, m.cast, m.created_at, m.updated_at
                        ORDER BY m.release_date DESC
                        LIMIT :limit OFFSET :offset";
             
