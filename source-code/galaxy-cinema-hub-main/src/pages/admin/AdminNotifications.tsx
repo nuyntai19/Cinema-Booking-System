@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Send,
@@ -8,8 +8,11 @@ import {
   CheckCircle,
   Clock,
   Trash2,
-  UserCheck,
-  UsersRound,
+  Loader2,
+  UserRound,
+  UserCog,
+  Shield,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,113 +43,85 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import {
+  NotificationCampaign,
+  NotificationService,
+} from "@/services/notification.service";
 
-interface Notification {
-  id: number;
-  title: string;
-  message: string;
-  targetAudience: "all" | "members" | "gold" | "silver" | "bronze" | "specific";
-  recipientCount: number;
-  readCount: number;
-  createdAt: string;
-  status: "sent" | "scheduled" | "draft";
-}
+type FilterType = "all" | "BOOKING" | "PROMOTION" | "SYSTEM";
 
 const AdminNotifications: React.FC = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterType, setFilterType] = useState<FilterType>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      title: "Khuyến Mãi Tết 2026",
-      message:
-        "Chào mừng Tết Nguyên Đán! Giảm 30% cho tất cả vé xem phim từ 01/01 - 15/02",
-      targetAudience: "all",
-      recipientCount: 2543,
-      readCount: 1876,
-      createdAt: "2026-01-01T10:00:00",
-      status: "sent",
-    },
-    {
-      id: 2,
-      title: "Phim Mới: Dune Part Two",
-      message:
-        "Bom tấn Dune: Part Two đã có mặt tại Galaxy! Đặt vé ngay hôm nay!",
-      targetAudience: "members",
-      recipientCount: 1234,
-      readCount: 987,
-      createdAt: "2026-01-15T14:30:00",
-      status: "sent",
-    },
-    {
-      id: 3,
-      title: "Ưu Đãi Gold Member",
-      message: "Chúc mừng! Bạn nhận được voucher 100k cho lần đặt vé tiếp theo",
-      targetAudience: "gold",
-      recipientCount: 156,
-      readCount: 145,
-      createdAt: "2026-01-20T09:00:00",
-      status: "sent",
-    },
-    {
-      id: 4,
-      title: "Bảo Trì Hệ Thống",
-      message:
-        "Hệ thống sẽ bảo trì từ 02:00 - 04:00 ngày 28/01. Vui lòng đặt vé trước.",
-      targetAudience: "all",
-      recipientCount: 2543,
-      readCount: 2301,
-      createdAt: "2026-01-25T18:00:00",
-      status: "sent",
-    },
-    {
-      id: 5,
-      title: "Cuối Tuần Vui Vẻ",
-      message: "Giảm 20% cho vé cuối tuần! Áp dụng từ thứ 6 đến chủ nhật.",
-      targetAudience: "silver",
-      recipientCount: 534,
-      readCount: 0,
-      createdAt: "2026-01-26T08:00:00",
-      status: "scheduled",
-    },
-  ]);
+  const [notifications, setNotifications] = useState<NotificationCampaign[]>(
+    [],
+  );
+  const [stats, setStats] = useState({
+    total_notifications: 0,
+    total_recipients: 0,
+    total_reads: 0,
+    sent_notifications: 0,
+    scheduled_notifications: 0,
+  });
 
   const [formData, setFormData] = useState({
     title: "",
     message: "",
-    targetAudience: "all" as Notification["targetAudience"],
-    sendImmediately: true,
+    type: "SYSTEM" as "BOOKING" | "PROMOTION" | "SYSTEM",
+    targetAudience: "ALL" as "ALL" | "GUEST" | "USER" | "STAFF" | "ADMIN",
+    sendMode: "immediate" as "immediate" | "scheduled",
+    scheduledAt: "",
   });
 
-  // Statistics
-  const totalNotifs = notifications.length;
-  const sentNotifs = notifications.filter((n) => n.status === "sent").length;
-  const totalRecipients = notifications.reduce(
-    (sum, n) => sum + n.recipientCount,
-    0,
-  );
-  const totalReads = notifications.reduce((sum, n) => sum + n.readCount, 0);
-  const readRate =
-    totalRecipients > 0 ? (totalReads / totalRecipients) * 100 : 0;
+  const readRate = useMemo(() => {
+    if (stats.total_recipients <= 0) return 0;
+    return (stats.total_reads / stats.total_recipients) * 100;
+  }, [stats.total_reads, stats.total_recipients]);
 
-  // Filter
-  const filteredNotifs = notifications.filter((notif) => {
-    const matchesSearch =
-      notif.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      notif.message.toLowerCase().includes(searchQuery.toLowerCase());
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await NotificationService.getAdminNotifications(
+        searchQuery,
+        filterType,
+      );
 
-    const matchesStatus =
-      filterStatus === "all" || notif.status === filterStatus;
+      if (res.success) {
+        setNotifications(res.data.items || []);
+        const apiStats = res.data.stats;
+        setStats({
+          total_notifications: apiStats?.total_notifications ?? 0,
+          total_recipients: apiStats?.total_recipients ?? 0,
+          total_reads: apiStats?.total_reads ?? 0,
+          sent_notifications: apiStats?.sent_notifications ?? 0,
+          scheduled_notifications: apiStats?.scheduled_notifications ?? 0,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách thông báo",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, filterType, toast]);
 
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
-  const handleCreateNotification = () => {
+  const handleCreateNotification = async () => {
     if (!formData.title || !formData.message) {
       toast({
         title: "Lỗi",
@@ -156,89 +131,104 @@ const AdminNotifications: React.FC = () => {
       return;
     }
 
-    // Calculate recipient count based on target audience
-    const recipientCounts: Record<string, number> = {
-      all: 2543,
-      members: 1234,
-      gold: 156,
-      silver: 534,
-      bronze: 544,
-      specific: 50,
-    };
+    if (formData.sendMode === "scheduled" && !formData.scheduledAt) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn thời gian hẹn gửi thông báo",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const newNotif: Notification = {
-      id: notifications.length + 1,
-      title: formData.title,
-      message: formData.message,
-      targetAudience: formData.targetAudience,
-      recipientCount: recipientCounts[formData.targetAudience],
-      readCount: 0,
-      createdAt: new Date().toISOString(),
-      status: formData.sendImmediately ? "sent" : "scheduled",
-    };
+    try {
+      setSubmitting(true);
+      const res = await NotificationService.createAdminNotification({
+        title: formData.title.trim(),
+        message: formData.message.trim(),
+        type: formData.type,
+        target_audience: formData.targetAudience,
+        scheduled_at:
+          formData.sendMode === "scheduled" && formData.scheduledAt
+            ? formData.scheduledAt
+            : undefined,
+      });
 
-    setNotifications([newNotif, ...notifications]);
+      if (res.success) {
+        toast({
+          title:
+            res.data.status === "SCHEDULED"
+              ? "Đã hẹn lịch thông báo"
+              : "Đã gửi thông báo",
+          description:
+            res.data.status === "SCHEDULED"
+              ? `Sẽ gửi lúc ${new Date(formData.scheduledAt).toLocaleString("vi-VN")}`
+              : `Gửi đến ${res.data.recipient_count} người dùng`,
+        });
 
-    toast({
-      title: formData.sendImmediately ? "Đã gửi thông báo" : "Đã lên lịch",
-      description: `Gửi đến ${recipientCounts[formData.targetAudience]} người dùng`,
-    });
+        setIsCreateDialogOpen(false);
+        setFormData({
+          title: "",
+          message: "",
+          type: "SYSTEM",
+          targetAudience: "ALL",
+          sendMode: "immediate",
+          scheduledAt: "",
+        });
 
-    setIsCreateDialogOpen(false);
-    setFormData({
-      title: "",
-      message: "",
-      targetAudience: "all",
-      sendImmediately: true,
-    });
+        await loadNotifications();
+      }
+    } catch (error) {
+      toast({
+        title: "Gửi thông báo thất bại",
+        description:
+          error instanceof Error ? error.message : "Đã có lỗi xảy ra",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeleteNotif = (notif: Notification) => {
-    setNotifications(notifications.filter((n) => n.id !== notif.id));
-
-    toast({
-      title: "Đã xóa",
-      description: `Đã xóa thông báo "${notif.title}"`,
-    });
+  const handleDeleteNotif = async (notif: NotificationCampaign) => {
+    try {
+      await NotificationService.deleteAdminNotification(Number(notif.id));
+      toast({
+        title: "Đã xóa",
+        description: `Đã xóa thông báo "${notif.title}"`,
+      });
+      await loadNotifications();
+    } catch (error) {
+      toast({
+        title: "Xóa thất bại",
+        description:
+          error instanceof Error ? error.message : "Đã có lỗi xảy ra",
+        variant: "destructive",
+      });
+    }
   };
 
-  const getAudienceBadge = (audience: string) => {
+  const getTypeBadge = (type: string) => {
     const configs: Record<
       string,
       { color: string; icon: React.ReactNode; label: string }
     > = {
-      all: {
-        color: "bg-purple-500",
-        icon: <UsersRound className="w-3 h-3" />,
-        label: "Tất cả",
-      },
-      members: {
+      BOOKING: {
         color: "bg-blue-500",
-        icon: <UserCheck className="w-3 h-3" />,
-        label: "Members",
+        icon: <Bell className="w-3 h-3" />,
+        label: "Booking",
       },
-      gold: {
-        color: "bg-yellow-500",
-        icon: <UserCheck className="w-3 h-3" />,
-        label: "Gold",
+      PROMOTION: {
+        color: "bg-orange-500",
+        icon: <Bell className="w-3 h-3" />,
+        label: "Promotion",
       },
-      silver: {
-        color: "bg-gray-400",
-        icon: <UserCheck className="w-3 h-3" />,
-        label: "Silver",
-      },
-      bronze: {
-        color: "bg-orange-600",
-        icon: <UserCheck className="w-3 h-3" />,
-        label: "Bronze",
-      },
-      specific: {
-        color: "bg-green-500",
-        icon: <Users className="w-3 h-3" />,
-        label: "Specific",
+      SYSTEM: {
+        color: "bg-purple-500",
+        icon: <Bell className="w-3 h-3" />,
+        label: "System",
       },
     };
-    const config = configs[audience];
+    const config = configs[type] || configs.SYSTEM;
     return (
       <Badge className={`${config.color} text-white flex items-center gap-1`}>
         {config.icon}
@@ -247,32 +237,76 @@ const AdminNotifications: React.FC = () => {
     );
   };
 
-  const getStatusBadge = (status: string) => {
+  const getAudienceBadge = (audience: string) => {
     const configs: Record<
       string,
       { color: string; icon: React.ReactNode; label: string }
     > = {
-      sent: {
-        color: "bg-green-500",
-        icon: <CheckCircle className="w-3 h-3" />,
-        label: "Đã gửi",
+      ALL: {
+        color: "bg-indigo-500",
+        icon: <Globe className="w-3 h-3" />,
+        label: "Tất cả",
       },
-      scheduled: {
+      GUEST: {
+        color: "bg-slate-500",
+        icon: <UserRound className="w-3 h-3" />,
+        label: "Chưa đăng nhập",
+      },
+      USER: {
         color: "bg-blue-500",
-        icon: <Clock className="w-3 h-3" />,
-        label: "Đã lên lịch",
+        icon: <UserRound className="w-3 h-3" />,
+        label: "Người dùng",
       },
-      draft: {
-        color: "bg-gray-500",
-        icon: <Clock className="w-3 h-3" />,
-        label: "Nháp",
+      STAFF: {
+        color: "bg-amber-500",
+        icon: <UserCog className="w-3 h-3" />,
+        label: "Nhân viên",
+      },
+      ADMIN: {
+        color: "bg-rose-500",
+        icon: <Shield className="w-3 h-3" />,
+        label: "Admin",
       },
     };
-    const config = configs[status];
+    const config = configs[audience] || configs.ALL;
     return (
-      <Badge className={`${config.color} text-white flex items-center gap-1`}>
+      <Badge
+        className={`${config.color} text-white flex items-center gap-1 w-fit`}
+      >
         {config.icon}
         {config.label}
+      </Badge>
+    );
+  };
+
+  const handleSearch = async () => {
+    await loadNotifications();
+  };
+
+  const getStatusBadge = (status: string) => {
+    const normalized = (status || "SENT").toUpperCase();
+    if (normalized === "SCHEDULED") {
+      return (
+        <Badge className="bg-blue-500 text-white flex items-center gap-1 w-fit">
+          <Clock className="w-3 h-3" />
+          Đã hẹn lịch
+        </Badge>
+      );
+    }
+
+    if (normalized === "CANCELLED") {
+      return (
+        <Badge className="bg-gray-500 text-white flex items-center gap-1 w-fit">
+          <Clock className="w-3 h-3" />
+          Đã hủy
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge className="bg-green-500 text-white flex items-center gap-1 w-fit">
+        <CheckCircle className="w-3 h-3" />
+        Đã gửi
       </Badge>
     );
   };
@@ -301,7 +335,9 @@ const AdminNotifications: React.FC = () => {
             <Bell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalNotifs}</div>
+            <div className="text-2xl font-bold">
+              {stats.total_notifications}
+            </div>
             <p className="text-xs text-muted-foreground">All notifications</p>
           </CardContent>
         </Card>
@@ -312,7 +348,9 @@ const AdminNotifications: React.FC = () => {
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sentNotifs}</div>
+            <div className="text-2xl font-bold">
+              {stats.sent_notifications ?? stats.total_notifications}
+            </div>
             <p className="text-xs text-muted-foreground">Sent notifications</p>
           </CardContent>
         </Card>
@@ -324,7 +362,7 @@ const AdminNotifications: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {totalRecipients.toLocaleString()}
+              {stats.total_recipients.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">Total recipients</p>
           </CardContent>
@@ -356,16 +394,28 @@ const AdminNotifications: React.FC = () => {
               />
             </div>
 
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Button variant="outline" onClick={handleSearch} disabled={loading}>
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Search className="w-4 h-4 mr-2" />
+              )}
+              Tìm
+            </Button>
+
+            <Select
+              value={filterType}
+              onValueChange={(value) => setFilterType(value as FilterType)}
+            >
               <SelectTrigger className="w-full md:w-[180px]">
                 <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Trạng thái" />
+                <SelectValue placeholder="Loại" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="sent">Đã gửi</SelectItem>
-                <SelectItem value="scheduled">Đã lên lịch</SelectItem>
-                <SelectItem value="draft">Nháp</SelectItem>
+                <SelectItem value="BOOKING">Booking</SelectItem>
+                <SelectItem value="PROMOTION">Promotion</SelectItem>
+                <SelectItem value="SYSTEM">System</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -375,14 +425,15 @@ const AdminNotifications: React.FC = () => {
       {/* Notifications Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lịch Sử Thông Báo ({filteredNotifs.length})</CardTitle>
+          <CardTitle>Lịch Sử Thông Báo ({notifications.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Thông Báo</TableHead>
-                <TableHead>Đối Tượng</TableHead>
+                <TableHead>Loại</TableHead>
+                <TableHead>Nhóm Nhận</TableHead>
                 <TableHead>Người Nhận</TableHead>
                 <TableHead>Đã Đọc</TableHead>
                 <TableHead>Thời Gian</TableHead>
@@ -391,7 +442,7 @@ const AdminNotifications: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredNotifs.map((notif) => (
+              {notifications.map((notif) => (
                 <TableRow key={notif.id}>
                   <TableCell>
                     <div>
@@ -401,14 +452,15 @@ const AdminNotifications: React.FC = () => {
                       </p>
                     </div>
                   </TableCell>
+                  <TableCell>{getTypeBadge(notif.type)}</TableCell>
                   <TableCell>
-                    {getAudienceBadge(notif.targetAudience)}
+                    {getAudienceBadge(notif.target_audience)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium">
-                        {notif.recipientCount}
+                        {notif.recipient_count}
                       </span>
                     </div>
                   </TableCell>
@@ -416,12 +468,13 @@ const AdminNotifications: React.FC = () => {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
-                          {notif.readCount}/{notif.recipientCount}
+                          {notif.read_count}/{notif.recipient_count}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           (
                           {(
-                            (notif.readCount / notif.recipientCount) *
+                            ((notif.read_count || 0) /
+                              Math.max(1, notif.recipient_count || 1)) *
                             100
                           ).toFixed(0)}
                           %)
@@ -431,14 +484,22 @@ const AdminNotifications: React.FC = () => {
                         <div
                           className="bg-primary h-2 rounded-full transition-all"
                           style={{
-                            width: `${(notif.readCount / notif.recipientCount) * 100}%`,
+                            width: `${
+                              ((notif.read_count || 0) /
+                                Math.max(1, notif.recipient_count || 1)) *
+                              100
+                            }%`,
                           }}
                         />
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(notif.createdAt).toLocaleString("vi-VN")}
+                    {new Date(
+                      notif.status === "SCHEDULED"
+                        ? notif.scheduled_at || notif.created_at
+                        : notif.sent_at || notif.created_at,
+                    ).toLocaleString("vi-VN")}
                   </TableCell>
                   <TableCell>{getStatusBadge(notif.status)}</TableCell>
                   <TableCell className="text-right">
@@ -497,13 +558,40 @@ const AdminNotifications: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="create-type">Loại Thông Báo</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    type: value as "BOOKING" | "PROMOTION" | "SYSTEM",
+                  })
+                }
+              >
+                <SelectTrigger id="create-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SYSTEM">System</SelectItem>
+                  <SelectItem value="PROMOTION">Promotion</SelectItem>
+                  <SelectItem value="BOOKING">Booking</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="create-audience">Đối Tượng Nhận</Label>
               <Select
                 value={formData.targetAudience}
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
-                    targetAudience: value as Notification["targetAudience"],
+                    targetAudience: value as
+                      | "ALL"
+                      | "GUEST"
+                      | "USER"
+                      | "STAFF"
+                      | "ADMIN",
                   })
                 }
               >
@@ -511,39 +599,49 @@ const AdminNotifications: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tất cả người dùng (2,543)</SelectItem>
-                  <SelectItem value="members">Members (1,234)</SelectItem>
-                  <SelectItem value="gold">Gold Members (156)</SelectItem>
-                  <SelectItem value="silver">Silver Members (534)</SelectItem>
-                  <SelectItem value="bronze">Bronze Members (544)</SelectItem>
-                  <SelectItem value="specific">Người dùng cụ thể</SelectItem>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  <SelectItem value="GUEST">
+                    Người dùng chưa đăng nhập
+                  </SelectItem>
+                  <SelectItem value="USER">Người dùng</SelectItem>
+                  <SelectItem value="STAFF">Nhân viên</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="send-immediately"
-                checked={formData.sendImmediately}
-                onCheckedChange={(checked) =>
+            <div className="space-y-2">
+              <Label htmlFor="send-mode">Thời Điểm Gửi</Label>
+              <Select
+                value={formData.sendMode}
+                onValueChange={(value) =>
                   setFormData({
                     ...formData,
-                    sendImmediately: checked as boolean,
+                    sendMode: value as "immediate" | "scheduled",
                   })
                 }
-              />
-              <Label
-                htmlFor="send-immediately"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Gửi ngay lập tức
-              </Label>
+                <SelectTrigger id="send-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="immediate">Gửi ngay</SelectItem>
+                  <SelectItem value="scheduled">Hẹn giờ gửi</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {!formData.sendImmediately && (
+            {formData.sendMode === "scheduled" && (
               <div className="space-y-2">
-                <Label htmlFor="schedule-time">Thời Gian Gửi</Label>
-                <Input id="schedule-time" type="datetime-local" />
+                <Label htmlFor="schedule-time">Thời Gian Hẹn *</Label>
+                <Input
+                  id="schedule-time"
+                  type="datetime-local"
+                  value={formData.scheduledAt}
+                  onChange={(e) =>
+                    setFormData({ ...formData, scheduledAt: e.target.value })
+                  }
+                />
               </div>
             )}
           </div>
@@ -555,9 +653,13 @@ const AdminNotifications: React.FC = () => {
             >
               Hủy
             </Button>
-            <Button onClick={handleCreateNotification}>
-              <Send className="w-4 h-4 mr-2" />
-              {formData.sendImmediately ? "Gửi Ngay" : "Lên Lịch"}
+            <Button onClick={handleCreateNotification} disabled={submitting}>
+              {submitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Gửi Ngay
             </Button>
           </DialogFooter>
         </DialogContent>

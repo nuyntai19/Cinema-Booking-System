@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -27,6 +27,7 @@ const ConcessionsPage: React.FC = () => {
     concessions: selectedConcessions,
     updateConcession,
   } = useBooking();
+  const initialSelectedConcessionsRef = useRef(selectedConcessions);
   const [items, setItems] = useState<ConcessionItem[]>([]);
   const [movie, setMovie] = useState<{
     id: string;
@@ -85,6 +86,13 @@ const ConcessionsPage: React.FC = () => {
         const response = await ConcessionService.getAvailable();
 
         if (response.success && response.data) {
+          const selectedMap = new Map(
+            initialSelectedConcessionsRef.current.map((c) => [
+              c.id,
+              c.quantity,
+            ]),
+          );
+
           // Map API data to ConcessionItem format
           const mappedItems: ConcessionItem[] = (
             response.data as Concession[]
@@ -93,7 +101,7 @@ const ConcessionsPage: React.FC = () => {
             name: c.name,
             nameVi: c.name, // Use same name if no Vietnamese name
             price: Number(c.price) || 0,
-            quantity: 0,
+            quantity: selectedMap.get(String(c.id)) || 0,
             image:
               c.imageUrl ||
               "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
@@ -121,17 +129,25 @@ const ConcessionsPage: React.FC = () => {
   }, [toast]);
 
   const handleQuantityChange = (id: string, delta: number) => {
-    setItems(
-      items.map((item) => {
-        if (item.id === id) {
-          const newQuantity = Math.max(0, item.quantity + delta);
-          const updatedItem = { ...item, quantity: newQuantity };
-          updateConcession(updatedItem);
-          return updatedItem;
-        }
-        return item;
-      }),
+    const currentItem = items.find((item) => item.id === id);
+    if (!currentItem) {
+      return;
+    }
+
+    const newQuantity = Math.max(0, currentItem.quantity + delta);
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: newQuantity } : item,
+      ),
     );
+
+    updateConcession(id, newQuantity, {
+      name: currentItem.name,
+      nameVi: currentItem.nameVi,
+      price: currentItem.price,
+      image: currentItem.image,
+    });
   };
 
   const ticketTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);

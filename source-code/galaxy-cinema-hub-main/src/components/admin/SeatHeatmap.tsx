@@ -4,49 +4,56 @@ import { Armchair } from "lucide-react";
 
 interface SeatHeatmapProps {
   className?: string;
+  items: HeatmapSeat[];
+  stats?: {
+    max_booking_count?: number;
+    zero_booking_seats?: number;
+    average_booking_count?: number;
+  };
 }
 
 interface HeatmapSeat {
   row: string;
   number: number;
-  bookingCount: number;
+  booking_count: number;
 }
 
-const SeatHeatmap: React.FC<SeatHeatmapProps> = ({ className }) => {
-  // Mock data: số lần đặt của mỗi ghế trong tuần qua
-  // Trong thực tế, data này sẽ được tính từ booking history
-  const generateHeatmapData = (): HeatmapSeat[] => {
-    const seats: HeatmapSeat[] = [];
-    const rows = ["A", "B", "C", "D", "E", "F", "G", "H"];
-    const seatsPerRow = 10;
+const SeatHeatmap: React.FC<SeatHeatmapProps> = ({
+  className,
+  items,
+  stats,
+}) => {
+  const heatmapData = React.useMemo(() => {
+    const merged = new Map<string, HeatmapSeat>();
 
-    // Generate random booking counts (0-20 bookings per seat in past week)
-    // Middle rows and center seats typically have higher booking rates
-    rows.forEach((row, rowIndex) => {
-      for (let i = 1; i <= seatsPerRow; i++) {
-        // Center seats (5,6) and middle rows (D,E,F) are most popular
-        const isCenter = i >= 4 && i <= 7;
-        const isMiddleRow = rowIndex >= 3 && rowIndex <= 5;
+    (items || []).forEach((seat) => {
+      const key = `${seat.row}-${seat.number}`;
+      const existing = merged.get(key);
 
-        let baseCount = Math.floor(Math.random() * 8);
-        if (isCenter) baseCount += 5;
-        if (isMiddleRow) baseCount += 4;
-
-        seats.push({
-          row,
-          number: i,
-          bookingCount: Math.min(baseCount, 20),
-        });
+      if (!existing) {
+        merged.set(key, { ...seat });
+        return;
       }
+
+      existing.booking_count += seat.booking_count;
     });
 
-    return seats;
-  };
+    return Array.from(merged.values()).sort((a, b) => {
+      if (a.row === b.row) return a.number - b.number;
+      return a.row.localeCompare(b.row);
+    });
+  }, [items]);
 
-  const heatmapData = React.useMemo(() => generateHeatmapData(), []);
+  if (heatmapData.length === 0) {
+    return (
+      <div className={cn("text-sm text-muted-foreground", className)}>
+        Chưa có dữ liệu ghế trong 7 ngày gần đây.
+      </div>
+    );
+  }
 
   // Calculate max booking count for color scaling
-  const maxBookings = Math.max(...heatmapData.map((s) => s.bookingCount));
+  const maxBookings = Math.max(...heatmapData.map((s) => s.booking_count), 1);
 
   const getHeatColor = (count: number) => {
     if (count === 0) return "bg-gray-100 border-gray-200";
@@ -80,6 +87,15 @@ const SeatHeatmap: React.FC<SeatHeatmapProps> = ({ className }) => {
     }
     seatsByRow[seat.row].push(seat);
   });
+
+  const maxBookingCount = stats?.max_booking_count ?? maxBookings;
+  const zeroBookingSeats =
+    stats?.zero_booking_seats ??
+    heatmapData.filter((s) => s.booking_count === 0).length;
+  const averageBookingCount =
+    stats?.average_booking_count ??
+    heatmapData.reduce((sum, s) => sum + s.booking_count, 0) /
+      heatmapData.length;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -117,19 +133,19 @@ const SeatHeatmap: React.FC<SeatHeatmapProps> = ({ className }) => {
             <div className="flex gap-1.5 flex-1 justify-center">
               {seats.map((seat) => (
                 <div
-                  key={`${seat.row}${seat.number}`}
+                  key={`${row}-${seat.number}`}
                   className={cn(
                     "relative w-7 h-7 rounded border flex items-center justify-center text-[10px] font-medium cursor-pointer transition-all hover:scale-110 group",
-                    getHeatColor(seat.bookingCount),
+                    getHeatColor(seat.booking_count),
                   )}
-                  title={`Ghế ${seat.row}${seat.number}: ${seat.bookingCount} lượt đặt - ${getHeatLabel(seat.bookingCount)}`}
+                  title={`Ghế ${seat.row}${seat.number}: ${seat.booking_count} lượt đặt - ${getHeatLabel(seat.booking_count)}`}
                 >
                   <Armchair className="w-3 h-3 opacity-40" />
 
                   {/* Tooltip on hover */}
                   <div className="absolute bottom-full mb-1 hidden group-hover:block bg-foreground text-background text-xs px-2 py-1 rounded whitespace-nowrap z-10">
                     {seat.row}
-                    {seat.number}: {seat.bookingCount} lượt
+                    {seat.number}: {seat.booking_count} lượt
                   </div>
                 </div>
               ))}
@@ -141,21 +157,16 @@ const SeatHeatmap: React.FC<SeatHeatmapProps> = ({ className }) => {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 pt-4 border-t">
         <div className="text-center">
-          <p className="text-2xl font-bold text-primary">{maxBookings}</p>
+          <p className="text-2xl font-bold text-primary">{maxBookingCount}</p>
           <p className="text-xs text-muted-foreground">Ghế phổ biến nhất</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-primary">
-            {heatmapData.filter((s) => s.bookingCount === 0).length}
-          </p>
+          <p className="text-2xl font-bold text-primary">{zeroBookingSeats}</p>
           <p className="text-xs text-muted-foreground">Ghế chưa đặt lần nào</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-primary">
-            {(
-              heatmapData.reduce((sum, s) => sum + s.bookingCount, 0) /
-              heatmapData.length
-            ).toFixed(1)}
+            {averageBookingCount.toFixed(1)}
           </p>
           <p className="text-xs text-muted-foreground">Trung bình/ghế</p>
         </div>

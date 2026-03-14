@@ -4,6 +4,7 @@ import { QrCode, ShoppingCart, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AppContext";
+import NotificationDropdown from "@/components/NotificationDropdown";
 
 const StaffLayout: React.FC = () => {
   const location = useLocation();
@@ -13,13 +14,18 @@ const StaffLayout: React.FC = () => {
   // Check authentication and redirect if not logged in or not staff
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/login', { replace: true });
+      navigate("/login", { replace: true });
       return;
     }
-    
+
     // Check if user is staff, manager, or admin
-    if (user && user.role !== 'staff' && user.role !== 'manager' && user.role !== 'admin') {
-      navigate('/', { replace: true });
+    if (
+      user &&
+      user.role !== "staff" &&
+      user.role !== "manager" &&
+      user.role !== "admin"
+    ) {
+      navigate("/", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -51,18 +57,21 @@ const StaffLayout: React.FC = () => {
               <div>
                 <h1 className="text-xl font-bold">Galaxy Cinema</h1>
                 <p className="text-sm text-white/70">
-                  Nhân Viên: {user?.email || 'staff@cinema.com'}
+                  Nhân Viên: {user?.email || "staff@cinema.com"}
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              className="text-white hover:text-white hover:bg-white/10"
-              onClick={handleLogout}
-            >
-              <LogOut className="w-5 h-5 mr-2" />
-              Đăng Xuất
-            </Button>
+            <div className="flex items-center gap-2">
+              <NotificationDropdown />
+              <Button
+                variant="ghost"
+                className="text-white hover:text-white hover:bg-white/10"
+                onClick={handleLogout}
+              >
+                <LogOut className="w-5 h-5 mr-2" />
+                Đăng Xuất
+              </Button>
+            </div>
           </div>
         </div>
       </header>

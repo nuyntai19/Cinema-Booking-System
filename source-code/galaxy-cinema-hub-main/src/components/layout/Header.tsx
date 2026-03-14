@@ -86,7 +86,7 @@ const Header: React.FC = () => {
             </form>
 
             {/* Notifications */}
-            {isAuthenticated && <NotificationDropdown />}
+            <NotificationDropdown />
 
             {/* Theme Toggle */}
             <ThemeToggle />

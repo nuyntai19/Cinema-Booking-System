@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Bell, Check, Trash2, Film, Gift, AlertCircle } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Bell, Film, Gift, AlertCircle, Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { useAuth } from "@/contexts/AppContext";
 
 interface Notification {
   id: string;
@@ -19,63 +21,134 @@ interface Notification {
   icon: React.ReactNode;
 }
 
+interface NotificationApiItem {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  is_read: number | boolean;
+  created_at: string;
+}
+
+interface NotificationApiResponse {
+  success: boolean;
+  message: string;
+  data: {
+    items: NotificationApiItem[];
+  };
+}
+
 const NotificationDropdown: React.FC = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: "1",
-      type: "booking",
-      title: "Đặt vé thành công",
-      message: 'Bạn đã đặt vé xem phim "MAI" - Suất 19:00 ngày 25/01/2026',
-      time: "5 phút trước",
-      isRead: false,
-      icon: <Film className="w-5 h-5 text-green-500" />,
-    },
-    {
-      id: "2",
-      type: "promotion",
-      title: "Khuyến mãi mới",
-      message: "Giảm 50% cho vé cuối tuần - Chỉ còn 2 ngày!",
-      time: "2 giờ trước",
-      isRead: false,
-      icon: <Gift className="w-5 h-5 text-primary" />,
-    },
-    {
-      id: "3",
-      type: "booking",
-      title: "Sắp đến giờ chiếu",
-      message: 'Phim "Kung Fu Panda 4" sẽ bắt đầu trong 30 phút',
-      time: "1 ngày trước",
-      isRead: true,
-      icon: <AlertCircle className="w-5 h-5 text-yellow-500" />,
-    },
-    {
-      id: "4",
-      type: "system",
-      title: "Tích điểm thành công",
-      message: "Bạn đã được cộng 50 điểm. Tổng điểm: 1,250",
-      time: "2 ngày trước",
-      isRead: true,
-      icon: <Check className="w-5 h-5 text-blue-500" />,
-    },
-  ]);
+  const { user, isAuthenticated } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const getIconByType = (type: string) => {
+    const normalized = type.toUpperCase();
+    if (normalized === "BOOKING") {
+      return <Film className="w-5 h-5 text-green-500" />;
+    }
+    if (normalized === "PROMOTION") {
+      return <Gift className="w-5 h-5 text-primary" />;
+    }
+    return <AlertCircle className="w-5 h-5 text-yellow-500" />;
+  };
+
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (diffMs < minute) return "Vừa xong";
+    if (diffMs < hour) return `${Math.floor(diffMs / minute)} phút trước`;
+    if (diffMs < day) return `${Math.floor(diffMs / hour)} giờ trước`;
+    return `${Math.floor(diffMs / day)} ngày trước`;
+  };
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const endpoint =
+        isAuthenticated && user?.id
+          ? API_ENDPOINTS.USER_NOTIFICATIONS(Number(user.id))
+          : API_ENDPOINTS.PUBLIC_NOTIFICATIONS;
+
+      const response = await apiCall<NotificationApiResponse>(endpoint);
+
+      const mapped: Notification[] = (response.data?.items || []).map(
+        (item) => {
+          const normalizedType = item.type?.toUpperCase() || "SYSTEM";
+          return {
+            id: String(item.id),
+            type:
+              normalizedType === "BOOKING"
+                ? "booking"
+                : normalizedType === "PROMOTION"
+                  ? "promotion"
+                  : "system",
+            title: item.title,
+            message: item.message,
+            time: formatRelativeTime(item.created_at),
+            isRead: isAuthenticated ? Boolean(Number(item.is_read)) : true,
+            icon: getIconByType(normalizedType),
+          };
+        },
+      );
+
+      setNotifications(mapped);
+    } catch (error) {
+      console.error("Failed to load notifications:", error);
+      setNotifications([]);
+    }
+  }, [isAuthenticated, user?.id]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  const markAsRead = (id: string) => {
+  const badgeCount = isAuthenticated ? unreadCount : notifications.length;
+
+  const markAsRead = async (id: string) => {
+    if (!isAuthenticated) return;
+
+    try {
+      await apiCall(API_ENDPOINTS.MARK_READ(Number(id)), { method: "PUT" });
+    } catch (error) {
+      console.error("Mark as read failed:", error);
+    }
+
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
     );
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const unreadIds = notifications.filter((n) => !n.isRead).map((n) => n.id);
+      await Promise.all(
+        unreadIds.map((id) =>
+          apiCall(API_ENDPOINTS.MARK_READ(Number(id)), { method: "PUT" }),
+        ),
+      );
+    } catch (error) {
+      console.error("Mark all as read failed:", error);
+    }
+
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
   const deleteNotification = (id: string) => {
+    if (!isAuthenticated) return;
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const clearAll = () => {
+    if (!isAuthenticated) return;
     setNotifications([]);
   };
 
@@ -88,9 +161,9 @@ const NotificationDropdown: React.FC = () => {
           className="relative text-secondary-foreground hover:bg-secondary-foreground/10"
         >
           <Bell className="w-5 h-5" />
-          {unreadCount > 0 && (
+          {badgeCount > 0 && (
             <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white text-xs">
-              {unreadCount}
+              {badgeCount}
             </Badge>
           )}
         </Button>
@@ -99,7 +172,7 @@ const NotificationDropdown: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold text-lg">Thông báo</h3>
-          {notifications.length > 0 && unreadCount > 0 && (
+          {isAuthenticated && notifications.length > 0 && unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -143,26 +216,30 @@ const NotificationDropdown: React.FC = () => {
                         <span className="text-xs text-muted-foreground">
                           {notification.time}
                         </span>
-                        <div className="flex gap-1">
-                          {!notification.isRead && (
+                        {isAuthenticated && (
+                          <div className="flex gap-1">
+                            {!notification.isRead && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => markAsRead(notification.id)}
+                                className="h-7 px-2 text-xs"
+                              >
+                                <Check className="w-3 h-3" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => markAsRead(notification.id)}
-                              className="h-7 px-2 text-xs"
+                              onClick={() =>
+                                deleteNotification(notification.id)
+                              }
+                              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                             >
-                              <Check className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteNotification(notification.id)}
-                            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -177,8 +254,7 @@ const NotificationDropdown: React.FC = () => {
           </div>
         )}
 
-        {/* Footer */}
-        {notifications.length > 0 && (
+        {isAuthenticated && notifications.length > 0 && (
           <div className="border-t p-2">
             <Button
               variant="ghost"

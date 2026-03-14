@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import { API_ENDPOINTS, API_BASE_URL, apiCall, getImageUrl } from "@/lib/api";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { Movie, AgeRating, Showtime } from "@/types/cinema";
 import { useBooking, useAuth } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
@@ -134,6 +134,7 @@ const MovieDetailPage: React.FC = () => {
   const [showtimesByCinema, setShowtimesByCinema] = useState<
     Record<string, Showtime[]>
   >({});
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [loadingShowtimes, setLoadingShowtimes] = useState(false);
 
   // Review states
@@ -191,6 +192,14 @@ const MovieDetailPage: React.FC = () => {
     const fetchCinemasAndShowtimes = async () => {
       if (!id) return;
 
+      const toLocalYmd = (dateInput: string) => {
+        const d = new Date(dateInput.replace(" ", "T"));
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      };
+
       try {
         setLoadingShowtimes(true);
 
@@ -202,22 +211,35 @@ const MovieDetailPage: React.FC = () => {
         const cinemaList = cinemasRes.data?.cinemas || [];
         setApiCinemas(cinemaList);
 
-        // Fetch showtimes filtered by movie_id and date
+        // Fetch all showtimes for this movie, then filter by selectedDate on frontend.
         const params = new URLSearchParams();
         params.append("movie_id", id);
-        params.append("date", selectedDate);
-        params.append("limit", "100");
+        params.append("limit", "300");
         const showtimesRes = await apiCall<{
           success: boolean;
           data: { showtimes: APIShowtime[] };
         }>(`${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`);
+
         const rawShowtimes = showtimesRes.data?.showtimes || [];
+        const dates = Array.from(
+          new Set(rawShowtimes.map((s) => toLocalYmd(s.start_time))),
+        ).sort();
+        setAvailableDates(dates);
+
+        if (dates.length > 0 && !dates.includes(selectedDate)) {
+          setSelectedDate(dates[0]);
+          return;
+        }
+
+        const filteredShowtimes = rawShowtimes.filter(
+          (s) => toLocalYmd(s.start_time) === selectedDate,
+        );
 
         // Group showtimes by cinema_id
         const grouped: Record<string, Showtime[]> = {};
-        rawShowtimes.forEach((s) => {
+        filteredShowtimes.forEach((s) => {
           const cinemaKey = String(s.cinema_id);
-          const startDate = new Date(s.start_time);
+          const startDate = new Date(s.start_time.replace(" ", "T"));
           const mapped: Showtime = {
             id: String(s.id),
             movieId: String(s.movie_id),
@@ -320,19 +342,44 @@ const MovieDetailPage: React.FC = () => {
     );
   }
 
-  // Generate dates for next 7 days
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return {
-      value: d.toISOString().split("T")[0],
-      dayName: d.toLocaleDateString("vi-VN", { weekday: "short" }),
-      day: d.getDate(),
-      month: d.getMonth() + 1,
-    };
-  });
+  // Prefer real dates that have showtimes. Fallback to next 7 days if no data yet.
+  const dates =
+    availableDates.length > 0
+      ? availableDates.map((value) => {
+          const d = new Date(`${value}T00:00:00`);
+          return {
+            value,
+            dayName: d.toLocaleDateString("vi-VN", { weekday: "short" }),
+            day: d.getDate(),
+            month: d.getMonth() + 1,
+          };
+        })
+      : Array.from({ length: 7 }, (_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() + i);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return {
+            value: `${y}-${m}-${day}`,
+            dayName: d.toLocaleDateString("vi-VN", { weekday: "short" }),
+            day: d.getDate(),
+            month: d.getMonth() + 1,
+          };
+        });
 
   const handleSelectShowtime = (cinemaId: string, showtime: Showtime) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Vui lòng đăng nhập",
+        description:
+          "Bạn cần đăng nhập để đặt vé. Khách chỉ có thể xem lịch chiếu.",
+        variant: "destructive",
+      });
+      navigate("/login");
+      return;
+    }
+
     // Check age restriction
     if (movie.ageRating === "T18") {
       setPendingShowtime({ cinemaId, showtime });
@@ -391,7 +438,7 @@ const MovieDetailPage: React.FC = () => {
         success: boolean;
         message: string;
         data?: { review_id: number };
-      }>(`${API_BASE_URL}/reviews`, {
+      }>(API_ENDPOINTS.CREATE_REVIEW, {
         method: "POST",
         body: JSON.stringify({
           movie_id: parseInt(id!),
@@ -475,6 +522,10 @@ const MovieDetailPage: React.FC = () => {
     };
     return classes[rating] || "bg-gray-500";
   };
+
+  const hasAnyShowtimes =
+    availableDates.length > 0 ||
+    Object.values(showtimesByCinema).some((times) => times.length > 0);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -608,7 +659,7 @@ const MovieDetailPage: React.FC = () => {
           </div>
 
           {/* Showtimes Section */}
-          {movie.isNowShowing && (
+          {(movie.isNowShowing || loadingShowtimes || hasAnyShowtimes) && (
             <section className="mt-12 pb-12">
               <h2 className="text-2xl font-bold mb-6">Lịch Chiếu</h2>
 

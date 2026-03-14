@@ -54,11 +54,14 @@ class Booking {
             $finalPrice = $totalPrice - $discountAmount;
 
             // Create booking
+            $bookingCode = $this->generateBookingCode();
+
             $stmt = $this->db->prepare(
-                "INSERT INTO bookings (user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
-                 VALUES (:user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
+                "INSERT INTO bookings (booking_code, user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
+                 VALUES (:booking_code, :user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
             );
             $stmt->execute([
+                ':booking_code' => $bookingCode,
                 ':user_id' => $userId,
                 ':showtime_id' => $showtimeId,
                 ':user_voucher_id' => $userVoucherId ?: null,
@@ -109,6 +112,7 @@ class Booking {
 
             return [
                 'booking_id' => $bookingId,
+                'booking_code' => $bookingCode,
                 'hold_expires_at' => $holdExpiresAt,
                 'total_price' => $totalPrice,
                 'discount_amount' => $discountAmount,
@@ -172,7 +176,8 @@ class Booking {
     public function getUserBookings($userId, $page = 1, $limit = 20) {
         $offset = ($page - 1) * $limit;
         $stmt = $this->db->prepare(
-            "SELECT b.*, m.title AS movie_title, s.start_time, c.name AS cinema_name, h.name AS hall_name
+            "SELECT b.*, m.title AS movie_title, m.poster_url, m.duration_minutes, m.age_rating,
+                    s.start_time, c.name AS cinema_name, h.name AS hall_name
              FROM bookings b
              JOIN showtimes s ON b.showtime_id = s.id
              JOIN movies m ON s.movie_id = m.id
@@ -186,6 +191,44 @@ class Booking {
         $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
         $stmt->execute();
+
+        $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($bookings as &$booking) {
+            $bookingId = (int)$booking['id'];
+            $booking['seats'] = $this->getBookingSeatsSummary($bookingId);
+            $booking['concessions'] = $this->getBookingConcessionsSummary($bookingId);
+        }
+        unset($booking);
+
+        return $bookings;
+    }
+
+    private function getBookingSeatsSummary($bookingId) {
+        $stmt = $this->db->prepare(
+            "SELECT GROUP_CONCAT(CONCAT(s.row_code, s.number) ORDER BY s.row_code, s.number SEPARATOR ', ') AS seats
+             FROM tickets t
+             JOIN seats s ON t.seat_id = s.id
+             WHERE t.booking_id = :booking_id"
+        );
+        $stmt->execute([':booking_id' => $bookingId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row['seats'] ?? '';
+    }
+
+    private function getBookingConcessionsSummary($bookingId) {
+        $stmt = $this->db->prepare(
+            "SELECT
+                bc.concession_id AS id,
+                c.name AS concession_name,
+                bc.quantity,
+                CAST(bc.price AS CHAR) AS unit_price,
+                CAST((bc.price * bc.quantity) AS CHAR) AS subtotal,
+                c.category
+             FROM booking_concessions bc
+             JOIN concessions c ON bc.concession_id = c.id
+             WHERE bc.booking_id = :booking_id"
+        );
+        $stmt->execute([':booking_id' => $bookingId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -643,10 +686,20 @@ class Booking {
         }
         $normalized = [];
         foreach ($concessions as $item) {
-            if (!is_array($item) || empty($item['id'])) {
+            if (!is_array($item)) {
                 continue;
             }
-            $id = (int)$item['id'];
+
+            $rawId = $item['id'] ?? $item['concession_id'] ?? null;
+            if (empty($rawId)) {
+                continue;
+            }
+
+            $id = (int)$rawId;
+            if ($id < 1) {
+                continue;
+            }
+
             $quantity = isset($item['quantity']) ? (int)$item['quantity'] : 1;
             if ($quantity < 1) {
                 continue;
@@ -765,6 +818,25 @@ class Booking {
 
     private function generateTicketCode($bookingId, $index) {
         return sprintf('GXY-%06d-%03d', $bookingId, $index);
+    }
+
+    private function generateBookingCode() {
+        $year = date('Y');
+
+        // Retry to avoid rare collision with the unique index on booking_code.
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $suffix = str_pad((string)random_int(0, 99999), 5, '0', STR_PAD_LEFT);
+            $code = sprintf('GXY-%s-%s', $year, $suffix);
+
+            $stmt = $this->db->prepare("SELECT 1 FROM bookings WHERE booking_code = :booking_code LIMIT 1");
+            $stmt->execute([':booking_code' => $code]);
+
+            if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+                return $code;
+            }
+        }
+
+        throw new Exception('Không thể tạo mã đặt vé, vui lòng thử lại');
     }
 
     private function getBookingSeatIds($bookingId) {

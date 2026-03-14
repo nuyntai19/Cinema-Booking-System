@@ -337,15 +337,36 @@ CREATE TABLE reviews (
 -- Bảng Thông Báo
 CREATE TABLE notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     type VARCHAR(50) COMMENT 'BOOKING/PROMOTION/SYSTEM',
-    is_read BOOLEAN DEFAULT FALSE,
+    target_audience ENUM('ALL', 'GUEST', 'USER', 'STAFF', 'ADMIN') NOT NULL DEFAULT 'ALL' COMMENT 'Nhóm nhận thông báo',
+    status ENUM('SCHEDULED', 'SENT', 'CANCELLED') NOT NULL DEFAULT 'SENT' COMMENT 'Trạng thái gửi thông báo',
+    scheduled_at DATETIME NULL COMMENT 'Thời điểm hẹn gửi',
+    sent_at DATETIME NULL COMMENT 'Thời điểm đã phát hành',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by INT NULL COMMENT 'Admin/Manager tạo thông báo',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user_read (user_id, is_read),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_target (target_audience),
+    INDEX idx_type_target (type, target_audience),
+    INDEX idx_status_schedule (status, scheduled_at),
     INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Bảng Theo Dõi Trạng Thái Đọc Thông Báo
+CREATE TABLE notification_reads (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    notification_id INT NOT NULL,
+    user_id INT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT TRUE,
+    read_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_notification_user (notification_id, user_id),
+    INDEX idx_user_read (user_id, is_read),
+    INDEX idx_notification (notification_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng Cấu Hình Hệ Thống

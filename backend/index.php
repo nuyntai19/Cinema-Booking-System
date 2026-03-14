@@ -235,8 +235,12 @@ $router->post('/api/reviews/:id/report', 'ReviewController@report'); // Report r
 // ============================================
 // NOTIFICATION ROUTES
 // ============================================
+$router->get('/api/notifications/public', 'NotificationController@getPublicNotifications');
 $router->get('/api/notifications/user/:userId', 'NotificationController@getUserNotifications');
 $router->put('/api/notifications/:id/read', 'NotificationController@markAsRead');
+$router->get('/api/admin/notifications', 'NotificationController@adminList');
+$router->post('/api/admin/notifications', 'NotificationController@adminCreate');
+$router->delete('/api/admin/notifications/:id', 'NotificationController@adminDelete');
 
 // ============================================
 // ADMIN DASHBOARD ROUTES
@@ -244,6 +248,7 @@ $router->put('/api/notifications/:id/read', 'NotificationController@markAsRead')
 $router->get('/api/admin/stats', 'AdminController@getDashboardStats'); // Admin
 $router->get('/api/admin/revenue', 'AdminController@getRevenueReport'); // Admin
 $router->get('/api/admin/seat-heatmap', 'AdminController@getSeatHeatmap'); // Admin
+$router->get('/api/admin/recent-transactions', 'AdminController@getRecentTransactions'); // Admin
 
 // ============================================
 // SYSTEM CONFIG ROUTES

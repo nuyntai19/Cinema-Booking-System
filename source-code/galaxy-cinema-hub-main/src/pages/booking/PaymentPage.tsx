@@ -308,9 +308,22 @@ const PaymentPage: React.FC = () => {
       }
       return createdBookingId;
     } catch (error: any) {
+      const fieldErrors = error?.errors
+        ? Object.values(error.errors).filter(Boolean).join(" ")
+        : "";
+      const detail =
+        fieldErrors || error?.message || "Có lỗi xảy ra khi xử lý đơn hàng.";
+
+      console.error("Create booking failed", {
+        statusCode: error?.statusCode,
+        message: error?.message,
+        errors: error?.errors,
+        payload: bookingRequest,
+      });
+
       toast({
         title: "Lỗi hệ thống",
-        description: error?.message || "Có lỗi xảy ra khi xử lý đơn hàng.",
+        description: detail,
         variant: "destructive",
       });
       return null;

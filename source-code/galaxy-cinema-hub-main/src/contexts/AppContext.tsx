@@ -1,10 +1,27 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Booking, Seat, ConcessionItem, Showtime, UserRole } from '@/types/cinema';
-import { API_ENDPOINTS } from '@/lib/api';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from "react";
+import {
+  User,
+  Booking,
+  Seat,
+  ConcessionItem,
+  Showtime,
+  UserRole,
+} from "@/types/cinema";
+import { API_ENDPOINTS } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; user?: User }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; user?: User }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -23,7 +40,11 @@ interface BookingContextType {
   setSelectedShowtime: (showtime: Showtime | null) => void;
   addSeat: (seat: Seat) => void;
   removeSeat: (seatId: string) => void;
-  updateConcession: (id: string, quantity: number) => void;
+  updateConcession: (
+    id: string,
+    quantity: number,
+    itemData?: Partial<ConcessionItem>,
+  ) => void;
   getTotalAmount: () => number;
   clearBooking: () => void;
 }
@@ -31,19 +52,21 @@ interface BookingContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   // Initialize user synchronously from localStorage to prevent race conditions
   // (e.g., AdminLayout checking isAuthenticated before useEffect runs)
   const [user, setUser] = useState<User | null>(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
+    const token = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("user");
     if (token && savedUser) {
       try {
         return JSON.parse(savedUser);
       } catch (error) {
-        console.error('Failed to parse saved user:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        console.error("Failed to parse saved user:", error);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         return null;
       }
     }
@@ -53,21 +76,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Helper function to map role_id to role
   const mapRoleIdToRole = (roleId: number): UserRole => {
     switch (roleId) {
-      case 5: return 'admin';
-      case 4: return 'manager';
-      case 3: return 'staff';
+      case 5:
+        return "admin";
+      case 4:
+        return "manager";
+      case 3:
+        return "staff";
       case 2:
       case 1:
-      default: return 'client';
+      default:
+        return "client";
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; user?: User }> => {
+  const login = async (
+    email: string,
+    password: string,
+  ): Promise<{ success: boolean; user?: User }> => {
     try {
       const response = await fetch(API_ENDPOINTS.LOGIN, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
@@ -75,7 +105,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        console.error('Login failed:', data.message);
+        console.error("Login failed:", data.message);
         return { success: false };
       }
 
@@ -92,46 +122,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
 
       // Save token and user to localStorage
-      localStorage.setItem('token', data.data.token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem("token", data.data.token);
+      localStorage.setItem("user", JSON.stringify(userData));
 
       setUser(userData);
       return { success: true, user: userData };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       return { success: false };
     }
   };
 
   const logout = () => {
-    console.log('👋 Logging out...');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    console.log("👋 Logging out...");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUser(null);
 
     // Redirect to home page
-    console.log('🏠 Redirecting to home page...');
-    window.location.href = '/';
+    console.log("🏠 Redirecting to home page...");
+    window.location.href = "/";
   };
 
   const refreshUser = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        console.warn('No token found, cannot refresh user');
+        console.warn("No token found, cannot refresh user");
         return;
       }
 
-      console.log('🔄 Refreshing user data...');
+      console.log("🔄 Refreshing user data...");
       const response = await fetch(API_ENDPOINTS.GET_CURRENT_USER, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
       const data = await response.json();
-      console.log('📦 Refreshed user data:', data);
+      console.log("📦 Refreshed user data:", data);
 
       if (data.success && data.data.user) {
         const userData: User = {
@@ -145,62 +175,92 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           dob: data.data.user.dob,
         };
 
-        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
-        console.log('✅ User data refreshed successfully');
+        console.log("✅ User data refreshed successfully");
       }
     } catch (error) {
-      console.error('❌ Error refreshing user:', error);
+      console.error("❌ Error refreshing user:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refreshUser, isAuthenticated: !!user }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, refreshUser, isAuthenticated: !!user }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const BookingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const BookingProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [selectedMovie, setSelectedMovie] = useState<string | null>(null);
   const [selectedCinema, setSelectedCinema] = useState<string | null>(null);
-  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
+  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(
+    null,
+  );
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [concessions, setConcessions] = useState<ConcessionItem[]>([]);
   const [bookingsActive, setBookingsActive] = useState<Booking[]>([]);
 
   const addSeat = useCallback((seat: Seat) => {
-    setSelectedSeats(prev => {
-      if (prev.find(s => s.id === seat.id)) return prev;
+    setSelectedSeats((prev) => {
+      if (prev.find((s) => s.id === seat.id)) return prev;
       return [...prev, seat];
     });
   }, []);
 
   const checkBookingActive = (showtime_id: string) => {
-    return bookingsActive.some(booking => booking.showtimeId === showtime_id);
-  }
+    return bookingsActive.some((booking) => booking.showtimeId === showtime_id);
+  };
 
   const removeSeat = useCallback((seatId: string) => {
-    setSelectedSeats(prev => prev.filter(s => s.id !== seatId));
+    setSelectedSeats((prev) => prev.filter((s) => s.id !== seatId));
   }, []);
 
-  const updateConcession = (id: string, quantity: number) => {
-    const existing = concessions.find(c => c.id === id);
-    if (existing) {
-      if (quantity === 0) {
-        setConcessions(concessions.filter(c => c.id !== id));
-      } else {
-        setConcessions(concessions.map(c => c.id === id ? { ...c, quantity } : c));
+  const updateConcession = (
+    id: string,
+    quantity: number,
+    itemData?: Partial<ConcessionItem>,
+  ) => {
+    setConcessions((prev) => {
+      if (quantity <= 0) {
+        return prev.filter((c) => c.id !== id);
       }
-    } else if (quantity > 0) {
-      const item = { id, name: '', nameVi: '', price: 0, quantity, image: '' };
-      setConcessions([...concessions, item]);
-    }
+
+      const existing = prev.find((c) => c.id === id);
+      if (existing) {
+        return prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                ...itemData,
+                quantity,
+              }
+            : c,
+        );
+      }
+
+      const item: ConcessionItem = {
+        id,
+        name: itemData?.name ?? "",
+        nameVi: itemData?.nameVi ?? itemData?.name ?? "",
+        price: itemData?.price ?? 0,
+        quantity,
+        image: itemData?.image ?? "",
+      };
+      return [...prev, item];
+    });
   };
 
   const getTotalAmount = () => {
     const seatTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
-    const concessionTotal = concessions.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const concessionTotal = concessions.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
     return seatTotal + concessionTotal;
   };
 
@@ -213,23 +273,25 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   return (
-    <BookingContext.Provider value={{
-      selectedMovie,
-      selectedCinema,
-      selectedShowtime,
-      selectedSeats,
-      concessions,
-      setSelectedMovie,
-      setSelectedCinema,
-      setSelectedShowtime,
-      addSeat,
-      removeSeat,
-      updateConcession,
-      getTotalAmount,
-      clearBooking,
-      bookingsActive,
-      checkBookingActive,
-    }}>
+    <BookingContext.Provider
+      value={{
+        selectedMovie,
+        selectedCinema,
+        selectedShowtime,
+        selectedSeats,
+        concessions,
+        setSelectedMovie,
+        setSelectedCinema,
+        setSelectedShowtime,
+        addSeat,
+        removeSeat,
+        updateConcession,
+        getTotalAmount,
+        clearBooking,
+        bookingsActive,
+        checkBookingActive,
+      }}
+    >
       {children}
     </BookingContext.Provider>
   );
@@ -237,12 +299,13 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };
 
 export const useBooking = () => {
   const context = useContext(BookingContext);
-  if (!context) throw new Error('useBooking must be used within BookingProvider');
+  if (!context)
+    throw new Error("useBooking must be used within BookingProvider");
   return context;
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Calendar, MapPin, Clock, Filter, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import Footer from "@/components/layout/Footer";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { useAuth, useBooking } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
+import { Showtime } from "@/types/cinema";
 
 interface Cinema {
   id: number;
@@ -32,7 +33,9 @@ interface ShowtimeAPI {
 }
 
 const SchedulePage: React.FC = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const { setSelectedMovie, setSelectedShowtime } = useBooking();
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0],
@@ -53,9 +56,10 @@ const SchedulePage: React.FC = () => {
   useEffect(() => {
     const fetchCinemas = async () => {
       try {
-        const response = await apiCall<{ success: boolean; data: { cinemas: Cinema[] } }>(
-          API_ENDPOINTS.CINEMAS
-        );
+        const response = await apiCall<{
+          success: boolean;
+          data: { cinemas: Cinema[] };
+        }>(API_ENDPOINTS.CINEMAS);
         setCinemas(response.data?.cinemas || []);
       } catch (error) {
         console.error("Failed to fetch cinemas:", error);
@@ -81,9 +85,10 @@ const SchedulePage: React.FC = () => {
           params.append("cinema_id", selectedCinema);
         }
 
-        const response = await apiCall<{ success: boolean; data: { showtimes: ShowtimeAPI[] } }>(
-          `${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`
-        );
+        const response = await apiCall<{
+          success: boolean;
+          data: { showtimes: ShowtimeAPI[] };
+        }>(`${API_ENDPOINTS.SHOWTIMES}?${params.toString()}`);
         setShowtimes(response.data?.showtimes || []);
       } catch (error) {
         console.error("Failed to fetch showtimes:", error);
@@ -158,10 +163,11 @@ const SchedulePage: React.FC = () => {
                 <button
                   key={dateStr}
                   onClick={() => setSelectedDate(dateStr)}
-                  className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-lg border-2 transition-all ${isSelected
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:border-primary/50"
-                    }`}
+                  className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-lg border-2 transition-all ${
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card hover:border-primary/50"
+                  }`}
                 >
                   <span
                     className={`text-xs font-medium ${isToday(date) && !isSelected ? "text-primary" : ""}`}
@@ -194,7 +200,11 @@ const SchedulePage: React.FC = () => {
             {cinemas.map((cinema) => (
               <Button
                 key={cinema.id}
-                variant={selectedCinema === cinema.id.toString() ? "default" : "outline"}
+                variant={
+                  selectedCinema === cinema.id.toString()
+                    ? "default"
+                    : "outline"
+                }
                 onClick={() => setSelectedCinema(cinema.id.toString())}
               >
                 {cinema.name}
@@ -225,90 +235,141 @@ const SchedulePage: React.FC = () => {
         {/* Movies Schedule */}
         {!loading && showtimes.length > 0 && (
           <div className="space-y-6">
-            {Object.entries(showtimesByMovie).map(([movieId, movieShowtimes]) => {
-              const firstShowtime = movieShowtimes[0];
-              const posterSrc = firstShowtime.poster_url
-                ? getImageUrl(firstShowtime.poster_url)
-                : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop";
+            {Object.entries(showtimesByMovie).map(
+              ([movieId, movieShowtimes]) => {
+                const firstShowtime = movieShowtimes[0];
+                const posterSrc = firstShowtime.poster_url
+                  ? getImageUrl(firstShowtime.poster_url)
+                  : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop";
 
-              return (
-                <Card key={movieId} className="overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="flex flex-col md:flex-row gap-6 p-6">
-                      {/* Movie Poster */}
-                      <Link to={`/movie/${movieId}`} className="flex-shrink-0">
-                        <img
-                          src={posterSrc}
-                          alt={firstShowtime.movie_title}
-                          className="w-full md:w-32 h-48 object-cover rounded-lg hover:scale-105 transition-transform"
-                        />
-                      </Link>
-
-                      {/* Movie Info & Showtimes */}
-                      <div className="flex-1">
-                        <Link to={`/movie/${movieId}`} className="group">
-                          <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-2">
-                            {firstShowtime.movie_title}
-                          </h3>
+                return (
+                  <Card key={movieId} className="overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="flex flex-col md:flex-row gap-6 p-6">
+                        {/* Movie Poster */}
+                        <Link
+                          to={`/movie/${movieId}`}
+                          className="flex-shrink-0"
+                        >
+                          <img
+                            src={posterSrc}
+                            alt={firstShowtime.movie_title}
+                            className="w-full md:w-32 h-48 object-cover rounded-lg hover:scale-105 transition-transform"
+                          />
                         </Link>
 
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
-                          {firstShowtime.duration_minutes && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {firstShowtime.duration_minutes} phút
-                            </span>
-                          )}
-                          {firstShowtime.age_rating && (
-                            <span className="px-2 py-1 bg-primary/10 text-primary rounded font-medium">
-                              {firstShowtime.age_rating}
-                            </span>
-                          )}
-                        </div>
+                        {/* Movie Info & Showtimes */}
+                        <div className="flex-1">
+                          <Link to={`/movie/${movieId}`} className="group">
+                            <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-2">
+                              {firstShowtime.movie_title}
+                            </h3>
+                          </Link>
 
-                        {/* Showtimes Grid */}
-                        <div>
-                          <h4 className="text-sm font-semibold mb-3 text-muted-foreground">
-                            Suất chiếu:
-                          </h4>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                            {movieShowtimes.map((showtime) => {
-                              const showtimeTime = new Date(
-                                showtime.start_time,
-                              ).toLocaleTimeString("vi-VN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              });
+                          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
+                            {firstShowtime.duration_minutes && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {firstShowtime.duration_minutes} phút
+                              </span>
+                            )}
+                            {firstShowtime.age_rating && (
+                              <span className="px-2 py-1 bg-primary/10 text-primary rounded font-medium">
+                                {firstShowtime.age_rating}
+                              </span>
+                            )}
+                          </div>
 
-                              return (
-                                <Link
-                                  key={showtime.id}
-                                  to={`/booking/seats?movie=${movieId}&showtime=${showtime.id}`}
-                                  onClick={() => {
-                                    setSelectedMovie(String(movieId));
-                                    setSelectedShowtime({
-                                      id: String(showtime.id),
-                                      time: showtimeTime,
-                                      date: showtime.start_time.split(' ')[0],
-                                      start_time: showtime.start_time,
-                                      hall: showtime.hall_name,
-                                      cinema: showtime.cinema_name,
-                                    } as any);
-                                  }}
-                                  className="px-3 py-2 text-center rounded-lg border-2 border-border hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all font-medium text-sm min-w-[120px]"
-                                >
-                                  {showtimeTime} - {new Date(new Date(showtime.start_time).getTime() + (firstShowtime.duration_minutes || 0) * 60000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-                                </Link>
-                              );
-                            })}
+                          {/* Showtimes Grid */}
+                          <div>
+                            <h4 className="text-sm font-semibold mb-3 text-muted-foreground">
+                              Suất chiếu:
+                            </h4>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                              {movieShowtimes.map((showtime) => {
+                                const showtimeTime = new Date(
+                                  showtime.start_time,
+                                ).toLocaleTimeString("vi-VN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+
+                                return (
+                                  <Link
+                                    key={showtime.id}
+                                    to={`/booking/seats?movie=${movieId}&showtime=${showtime.id}`}
+                                    onClick={(e) => {
+                                      if (!isAuthenticated) {
+                                        e.preventDefault();
+                                        toast({
+                                          title: "Vui lòng đăng nhập",
+                                          description:
+                                            "Bạn cần đăng nhập để đặt vé. Khách chỉ có thể xem lịch chiếu.",
+                                          variant: "destructive",
+                                        });
+                                        navigate("/login");
+                                        return;
+                                      }
+
+                                      setSelectedMovie(String(movieId));
+                                      const showtimePayload: Showtime = {
+                                        id: String(showtime.id),
+                                        movieId: String(showtime.movie_id),
+                                        cinemaId: String(showtime.cinema_id),
+                                        roomId: String(showtime.cinema_hall_id),
+                                        time: showtimeTime,
+                                        date: showtime.start_time.split(" ")[0],
+                                        start_time: showtime.start_time,
+                                        hall: showtime.hall_name,
+                                        cinema: showtime.cinema_name,
+                                        hall_name: showtime.hall_name,
+                                        cinema_name: showtime.cinema_name,
+                                        endTime: new Date(
+                                          new Date(
+                                            showtime.start_time,
+                                          ).getTime() +
+                                            (firstShowtime.duration_minutes ||
+                                              0) *
+                                              60000,
+                                        ).toLocaleTimeString("vi-VN", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        }),
+                                        price: {
+                                          standard:
+                                            Number(showtime.base_price) || 0,
+                                          vip: Number(showtime.base_price) || 0,
+                                          couple:
+                                            Number(showtime.base_price) || 0,
+                                        },
+                                        availableSeats: 0,
+                                        totalSeats: 0,
+                                      };
+                                      setSelectedShowtime(showtimePayload);
+                                    }}
+                                    className="px-3 py-2 text-center rounded-lg border-2 border-border hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all font-medium text-sm min-w-[120px]"
+                                  >
+                                    {showtimeTime} -{" "}
+                                    {new Date(
+                                      new Date(showtime.start_time).getTime() +
+                                        (firstShowtime.duration_minutes || 0) *
+                                          60000,
+                                    ).toLocaleTimeString("vi-VN", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </Link>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              },
+            )}
           </div>
         )}
       </div>

@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  TrendingUp,
   Ticket,
   Users,
   DollarSign,
@@ -17,37 +16,150 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { movies, mockTransactions } from "@/data/mockData";
 import { cn } from "@/lib/utils";
 import SeatHeatmap from "@/components/admin/SeatHeatmap";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
+
+interface DashboardStats {
+  today_revenue: number;
+  today_tickets: number;
+  today_fill_rate: number;
+  vn_ratio: number;
+  vn_count: number;
+  international_count: number;
+  changes: {
+    revenue: number;
+    tickets: number;
+    fill_rate: number;
+  };
+}
+
+interface RevenueItem {
+  day: string;
+  date: string;
+  revenue: number;
+}
+
+interface HeatmapItem {
+  row: string;
+  number: number;
+  booking_count: number;
+}
+
+interface HeatmapStats {
+  max_booking_count: number;
+  zero_booking_seats: number;
+  average_booking_count: number;
+}
+
+interface RecentTransaction {
+  transaction_code: string;
+  customer_name: string;
+  customer_phone: string;
+  payment_method: string;
+  amount: number;
+  status: string;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
 
 const AdminDashboard: React.FC = () => {
-  const vnMovies = movies.filter((m) => m.origin === "VN");
-  const vnRatio = (vnMovies.length / movies.length) * 100;
+  const [stats, setStats] = React.useState<DashboardStats | null>(null);
+  const [revenueData, setRevenueData] = React.useState<RevenueItem[]>([]);
+  const [heatmapItems, setHeatmapItems] = React.useState<HeatmapItem[]>([]);
+  const [heatmapStats, setHeatmapStats] = React.useState<
+    HeatmapStats | undefined
+  >(undefined);
+  const [transactions, setTransactions] = React.useState<RecentTransaction[]>(
+    [],
+  );
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadDashboardData = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [statsRes, revenueRes, heatmapRes, txRes] = await Promise.all([
+        apiCall<ApiResponse<DashboardStats>>(API_ENDPOINTS.ADMIN_STATS),
+        apiCall<ApiResponse<{ items: RevenueItem[] }>>(
+          API_ENDPOINTS.ADMIN_REVENUE,
+        ),
+        apiCall<ApiResponse<{ items: HeatmapItem[]; stats: HeatmapStats }>>(
+          API_ENDPOINTS.ADMIN_SEAT_HEATMAP,
+        ),
+        apiCall<ApiResponse<{ items: RecentTransaction[] }>>(
+          API_ENDPOINTS.ADMIN_RECENT_TRANSACTIONS,
+        ),
+      ]);
+
+      setStats(statsRes.data);
+      setRevenueData(
+        (revenueRes.data.items || []).map((item) => ({
+          ...item,
+          revenue: Number(item.revenue) || 0,
+        })),
+      );
+      setHeatmapItems(heatmapRes.data.items || []);
+      setHeatmapStats(heatmapRes.data.stats);
+      setTransactions(txRes.data.items || []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Không tải được dữ liệu dashboard",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
+  if (loading) {
+    return <div className="p-6">Đang tải dữ liệu dashboard...</div>;
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="p-6 space-y-3">
+        <p className="text-destructive font-medium">Không thể tải Dashboard</p>
+        <p className="text-sm text-muted-foreground">
+          {error || "Dữ liệu không hợp lệ"}
+        </p>
+      </div>
+    );
+  }
+
+  const vnRatio = stats.vn_ratio;
   const isVNRatioLow = vnRatio < 15;
 
-  const stats = [
+  const statCards = [
     {
-      title: "Doanh Thu Hôm Nay",
-      value: "12.450.000đ",
-      change: "+12%",
-      trend: "up",
+      title: "Tổng Doanh Thu",
+      value: `${Math.round(stats.today_revenue).toLocaleString("vi-VN")}đ`,
+      change: `${stats.changes.revenue >= 0 ? "+" : ""}${stats.changes.revenue.toFixed(1)}%`,
+      trend: stats.changes.revenue >= 0 ? "up" : "down",
       icon: DollarSign,
       color: "bg-green-500",
     },
     {
-      title: "Vé Đã Bán",
-      value: "342",
-      change: "+8%",
-      trend: "up",
+      title: "Tổng Vé Đã Bán",
+      value: String(stats.today_tickets),
+      change: `${stats.changes.tickets >= 0 ? "+" : ""}${stats.changes.tickets.toFixed(1)}%`,
+      trend: stats.changes.tickets >= 0 ? "up" : "down",
       icon: Ticket,
       color: "bg-blue-500",
     },
     {
-      title: "Tỷ Lệ Lấp Đầy",
-      value: "68%",
-      change: "-3%",
-      trend: "down",
+      title: "Tỷ Lệ Lấp Đầy Tổng",
+      value: `${stats.today_fill_rate.toFixed(1)}%`,
+      change: `${stats.changes.fill_rate >= 0 ? "+" : ""}${stats.changes.fill_rate.toFixed(1)}%`,
+      trend: stats.changes.fill_rate >= 0 ? "up" : "down",
       icon: Users,
       color: "bg-purple-500",
     },
@@ -62,17 +174,8 @@ const AdminDashboard: React.FC = () => {
     },
   ];
 
-  // Mock revenue data for last 7 days
-  const revenueData = [
-    { day: "T2", value: 8.5 },
-    { day: "T3", value: 6.2 },
-    { day: "T4", value: 9.1 },
-    { day: "T5", value: 7.8 },
-    { day: "T6", value: 11.2 },
-    { day: "T7", value: 15.4 },
-    { day: "CN", value: 12.5 },
-  ];
-  const maxRevenue = Math.max(...revenueData.map((d) => d.value));
+  const maxRevenue = Math.max(...revenueData.map((d) => d.revenue), 1);
+  const hasRevenue = revenueData.some((d) => d.revenue > 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -100,7 +203,7 @@ const AdminDashboard: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
+        {statCards.map((stat, index) => (
           <Card
             key={index}
             className={cn(
@@ -147,28 +250,43 @@ const AdminDashboard: React.FC = () => {
         {/* Revenue Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Doanh Thu 7 Ngày Qua</CardTitle>
-            <CardDescription>Triệu VND</CardDescription>
+            <CardTitle>7 Mốc Doanh Thu Gần Nhất</CardTitle>
+            <CardDescription>Triệu VND (toàn bộ thời gian)</CardDescription>
           </CardHeader>
           <CardContent>
+            {!hasRevenue && (
+              <div className="text-sm text-muted-foreground mb-3">
+                Chưa có doanh thu ở các mốc hiện tại.
+              </div>
+            )}
             <div className="flex items-end justify-between gap-2 h-48">
               {revenueData.map((item, index) => (
                 <div
                   key={index}
                   className="flex-1 flex flex-col items-center gap-2"
                 >
-                  <div
-                    className="w-full bg-primary/20 hover:bg-primary/30 rounded-t-lg transition-colors relative group"
-                    style={{ height: `${(item.value / maxRevenue) * 100}%` }}
-                  >
-                    <div
-                      className="absolute bottom-0 left-0 right-0 bg-primary rounded-t-lg transition-all"
-                      style={{ height: "100%" }}
-                    />
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {item.value}M
-                    </div>
-                  </div>
+                  {/** Use pixel height so bars always render even when parent height is auto. */}
+                  {(() => {
+                    const ratio =
+                      maxRevenue > 0 ? item.revenue / maxRevenue : 0;
+                    const barHeightPx =
+                      item.revenue > 0 ? Math.max(ratio * 160, 12) : 2;
+
+                    return (
+                      <div
+                        className="w-full bg-emerald-100 hover:bg-emerald-200 rounded-t-lg transition-colors relative group"
+                        style={{ height: `${barHeightPx}px` }}
+                      >
+                        <div
+                          className="absolute bottom-0 left-0 right-0 bg-emerald-500 rounded-t-lg transition-all"
+                          style={{ height: "100%" }}
+                        />
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                          {(item.revenue / 1_000_000).toFixed(2)}M
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <span className="text-xs text-muted-foreground">
                     {item.day}
                   </span>
@@ -228,12 +346,12 @@ const AdminDashboard: React.FC = () => {
             <div className="flex justify-center gap-4 mt-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-sm">Phim Việt ({vnMovies.length})</span>
+                <span className="text-sm">Phim Việt ({stats.vn_count})</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-muted" />
                 <span className="text-sm">
-                  Quốc tế ({movies.length - vnMovies.length})
+                  Quốc tế ({stats.international_count})
                 </span>
               </div>
             </div>
@@ -246,11 +364,11 @@ const AdminDashboard: React.FC = () => {
         <CardHeader>
           <CardTitle>Bản Đồ Nhiệt Ghế Ngồi</CardTitle>
           <CardDescription>
-            Thống kê mức độ phổ biến của từng ghế trong 7 ngày qua
+            Thống kê mức độ phổ biến của từng ghế trên toàn bộ dữ liệu
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SeatHeatmap />
+          <SeatHeatmap items={heatmapItems} stats={heatmapStats} />
         </CardContent>
       </Card>
 
@@ -283,23 +401,25 @@ const AdminDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {mockTransactions.map((tx) => (
+                {transactions.map((tx) => (
                   <tr
-                    key={tx.id}
+                    key={tx.transaction_code}
                     className="border-b border-border hover:bg-muted/50"
                   >
-                    <td className="py-3 px-4 font-mono text-sm">{tx.id}</td>
+                    <td className="py-3 px-4 font-mono text-sm">
+                      {tx.transaction_code}
+                    </td>
                     <td className="py-3 px-4">
                       <div>
-                        <p className="font-medium">{tx.customerName}</p>
+                        <p className="font-medium">{tx.customer_name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {tx.customerPhone}
+                          {tx.customer_phone}
                         </p>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       <Badge variant="outline" className="uppercase">
-                        {tx.paymentMethod}
+                        {tx.payment_method}
                       </Badge>
                     </td>
                     <td className="py-3 px-4 font-medium">
@@ -308,23 +428,33 @@ const AdminDashboard: React.FC = () => {
                     <td className="py-3 px-4">
                       <Badge
                         className={cn(
-                          tx.status === "success" &&
+                          tx.status === "Success" &&
                             "bg-green-100 text-green-700 hover:bg-green-100",
-                          tx.status === "pending" &&
+                          tx.status === "Pending" &&
                             "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
-                          tx.status === "failed" &&
+                          tx.status === "Failed" &&
                             "bg-red-100 text-red-700 hover:bg-red-100",
                         )}
                       >
-                        {tx.status === "success"
+                        {tx.status === "Success"
                           ? "Thành công"
-                          : tx.status === "pending"
+                          : tx.status === "Pending"
                             ? "Đang xử lý"
                             : "Thất bại"}
                       </Badge>
                     </td>
                   </tr>
                 ))}
+                {transactions.length === 0 && (
+                  <tr>
+                    <td
+                      className="py-6 px-4 text-center text-muted-foreground"
+                      colSpan={5}
+                    >
+                      Chưa có giao dịch nào.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

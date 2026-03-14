@@ -13,6 +13,7 @@ import {
   Star,
   Bell,
   Settings,
+  Home,
   LogOut,
   Menu,
   ChevronLeft,
@@ -31,18 +32,18 @@ const AdminLayout: React.FC = () => {
   // Check authentication and redirect if not logged in or not admin
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/login', { replace: true });
+      navigate("/login", { replace: true });
       return;
     }
 
     // Check if user is admin (role = 'admin')
-    if (user && user.role !== 'admin') {
-      navigate('/', { replace: true });
+    if (user && user.role !== "admin") {
+      navigate("/", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
   // Don't render anything while checking authentication
-  if (!isAuthenticated || !user || user.role !== 'admin') {
+  if (!isAuthenticated || !user || user.role !== "admin") {
     return null;
   }
 
@@ -142,6 +143,18 @@ const AdminLayout: React.FC = () => {
               </div>
             </div>
           )}
+          <Link to="/">
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full mb-1 text-secondary-foreground/70 hover:bg-sidebar-accent hover:text-secondary-foreground",
+                collapsed ? "px-0 justify-center" : "justify-start",
+              )}
+            >
+              <Home className="w-5 h-5 shrink-0" />
+              {!collapsed && <span className="ml-3">Giao diện khách hàng</span>}
+            </Button>
+          </Link>
           <Link to="/">
             <Button
               variant="ghost"

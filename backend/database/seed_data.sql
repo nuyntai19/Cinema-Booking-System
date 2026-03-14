@@ -434,11 +434,17 @@ INSERT INTO reviews (user_id, movie_id, rating, comment, status) VALUES
 -- ============================================
 -- 12. NOTIFICATIONS
 -- ============================================
-INSERT INTO notifications (user_id, title, message, type, is_read) VALUES
-(4, 'Đặt vé thành công', 'Bạn đã đặt vé xem phim MAI thành công. Mã vé: GXY-000001-001', 'BOOKING', TRUE),
-(4, 'Ưu đãi mới', 'Giảm 20% cho tất cả suất chiếu cuối tuần. Mã: WEEKEND20', 'PROMOTION', FALSE),
-(5, 'Sinh nhật vui vẻ!', 'Chúc mừng sinh nhật! Bạn nhận được voucher giảm 20% cho lần đặt vé tiếp theo.', 'PROMOTION', FALSE),
-(6, 'Nâng cấp hạng thành viên', 'Chúc mừng! Bạn đã được nâng lên hạng Platinum với ưu đãi giảm 15%', 'SYSTEM', TRUE);
+INSERT INTO notifications (title, message, type, target_audience, status, sent_at, is_active, created_by) VALUES
+('Đặt vé thành công', 'Bạn đã đặt vé xem phim MAI thành công. Mã vé: GXY-000001-001', 'BOOKING', 'USER', 'SENT', NOW(), TRUE, 5),
+('Ưu đãi mới', 'Giảm 20% cho tất cả suất chiếu cuối tuần. Mã: WEEKEND20', 'PROMOTION', 'ALL', 'SENT', NOW(), TRUE, 5),
+('Thông báo nhân sự', 'Nhân viên vui lòng kiểm tra lịch ca làm mới trong tuần này.', 'SYSTEM', 'STAFF', 'SENT', NOW(), TRUE, 5),
+('Bảng điều hành', 'Báo cáo doanh thu tháng đã sẵn sàng trong mục quản trị.', 'SYSTEM', 'ADMIN', 'SENT', NOW(), TRUE, 5),
+('Khách vãng lai', 'Đăng nhập ngay để nhận ưu đãi thành viên và tích điểm.', 'PROMOTION', 'GUEST', 'SENT', NOW(), TRUE, 5);
+
+INSERT INTO notification_reads (notification_id, user_id, is_read, read_at)
+SELECT n.id, 4, TRUE, NOW()
+FROM notifications n
+WHERE n.title IN ('Đặt vé thành công', 'Ưu đãi mới');
 
 -- ============================================
 -- 13. SYSTEM CONFIGS

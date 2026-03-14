@@ -1,7 +1,8 @@
 // API Configuration
 // Default to the local PHP built-in server (used in this workspace).
 // You can override with VITE_API_URL in your environment (.env.local)
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   // Auth
@@ -22,11 +23,10 @@ export const API_ENDPOINTS = {
   // Movies
   MOVIES: `${API_BASE_URL}/api/movies`,
   MOVIE_DETAIL: (id: number) => `${API_BASE_URL}/api/movies/${id}`,
-  MOVIE_SHOWTIMES: (id: number) =>
-    `${API_BASE_URL}/api/movies/${id}/showtimes`,
+  MOVIE_SHOWTIMES: (id: number) => `${API_BASE_URL}/api/movies/${id}/showtimes`,
   MOVIE_REVIEWS: (id: number) => `${API_BASE_URL}/api/movies/${id}/reviews`,
   MOVIE_UPLOAD_POSTER: (id: number) =>
-    `${API_BASE_URL}/api/movies/upload-poster.php?id=${id}`,
+    `${API_BASE_URL}/api/movies/${id}/upload-poster`,
 
   // Genres
   GENRES: `${API_BASE_URL}/api/genres`,
@@ -59,13 +59,15 @@ export const API_ENDPOINTS = {
 
   // Transactions
   TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
-  USER_TRANSACTIONS: (userId: number) => `${API_BASE_URL}/api/transactions/user/${userId}`,
+  USER_TRANSACTIONS: (userId: number) =>
+    `${API_BASE_URL}/api/transactions/user/${userId}`,
   MOMO_PAYMENT: `${API_BASE_URL}/api/transactions/momo`,
   VNPAY_PAYMENT: `${API_BASE_URL}/api/transactions/vnpay`,
   MOMO_VERIFY: `${API_BASE_URL}/api/transactions/momo/verify`,
   VNPAY_VERIFY: `${API_BASE_URL}/api/transactions/vnpay/verify`,
 
   // Promotions & Vouchers
+  PROMOTIONS_ACTIVE: `${API_BASE_URL}/api/promotions/active`,
   PROMOTIONS: `${API_BASE_URL}/api/promotions`,
   USER_VOUCHERS: (userId: number) =>
     `${API_BASE_URL}/api/vouchers/user/${userId}`,
@@ -80,22 +82,30 @@ export const API_ENDPOINTS = {
   CREATE_REVIEW: `${API_BASE_URL}/api/reviews`,
 
   // Reviews (Admin)
-  REVIEWS: `${API_BASE_URL}/api/reviews/index.php`,
-  REVIEW_DETAIL: (id: number) =>
-    `${API_BASE_URL}/api/reviews/detail.php?id=${id}`,
-  REVIEW_APPROVE: (id: number) =>
-    `${API_BASE_URL}/api/reviews/approve.php?id=${id}`,
-  REVIEW_REJECT: (id: number) =>
-    `${API_BASE_URL}/api/reviews/reject.php?id=${id}`,
-  REVIEW_REPORT: (id: number) =>
-    `${API_BASE_URL}/api/reviews/report.php?id=${id}`,
+  REVIEWS: `${API_BASE_URL}/api/reviews`,
+  REVIEW_DETAIL: (id: number) => `${API_BASE_URL}/api/reviews/${id}`,
+  REVIEW_APPROVE: (id: number) => `${API_BASE_URL}/api/reviews/${id}/approve`,
+  REVIEW_REJECT: (id: number) => `${API_BASE_URL}/api/reviews/${id}/reject`,
+  REVIEW_REPORT: (id: number) => `${API_BASE_URL}/api/reviews/${id}/report`,
 
   // Notifications
+  PUBLIC_NOTIFICATIONS: `${API_BASE_URL}/api/notifications/public`,
   USER_NOTIFICATIONS: (userId: number) =>
     `${API_BASE_URL}/api/notifications/user/${userId}`,
   MARK_READ: (id: number) => `${API_BASE_URL}/api/notifications/${id}/read`,
+  ADMIN_NOTIFICATIONS: `${API_BASE_URL}/api/admin/notifications`,
+  ADMIN_NOTIFICATION_DETAIL: (id: number) =>
+    `${API_BASE_URL}/api/admin/notifications/${id}`,
+
+  // Admin dashboard
+  ADMIN_STATS: `${API_BASE_URL}/api/admin/stats`,
+  ADMIN_REVENUE: `${API_BASE_URL}/api/admin/revenue`,
+  ADMIN_SEAT_HEATMAP: `${API_BASE_URL}/api/admin/seat-heatmap`,
+  ADMIN_RECENT_TRANSACTIONS: `${API_BASE_URL}/api/admin/recent-transactions`,
 
   // Loyalty
+  LOYALTY_POINTS: (userId: number) =>
+    `${API_BASE_URL}/api/loyalty/points/${userId}`,
   LOYALTY_HISTORY: (userId: number) =>
     `${API_BASE_URL}/api/loyalty/history/${userId}`,
   EARN_POINTS: `${API_BASE_URL}/api/loyalty/earn`,
@@ -103,6 +113,10 @@ export const API_ENDPOINTS = {
 
   // Memberships
   MEMBERSHIPS: `${API_BASE_URL}/api/memberships`,
+  MEMBERSHIP_USER_TIER: (userId: number) =>
+    `${API_BASE_URL}/api/memberships/user/${userId}`,
+  MEMBERSHIP_CHECK_UPGRADE: (userId: number) =>
+    `${API_BASE_URL}/api/memberships/check-upgrade/${userId}`,
 };
 
 // Helper function for API calls
@@ -137,7 +151,25 @@ export const apiCall = async <T = unknown>(
 
   try {
     const response = await fetch(endpoint, config);
-    const data = await response.json();
+    const contentType = response.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json");
+    const raw = await response.text();
+
+    let data: any = null;
+    if (isJson) {
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(
+          `Phản hồi API không phải JSON hợp lệ (${response.status}) tại ${endpoint}`,
+        );
+      }
+    } else {
+      // If API returns HTML/text, surface a precise diagnostic.
+      throw new Error(
+        `API trả về ${contentType || "text/plain"} thay vì JSON (${response.status}) tại ${endpoint}`,
+      );
+    }
 
     if (!response.ok) {
       // Better error handling for 403
