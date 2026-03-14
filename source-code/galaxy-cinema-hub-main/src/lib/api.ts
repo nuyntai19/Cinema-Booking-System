@@ -1,5 +1,3 @@
-import { M, V } from "vitest/dist/chunks/reporters.d.BFLkQcL6.js";
-
 // API Configuration
 // Default to the local PHP built-in server (used in this workspace).
 // You can override with VITE_API_URL in your environment (.env.local)
@@ -31,7 +29,7 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/movies/upload-poster.php?id=${id}`,
 
   // Genres
-  GENRES: `${API_BASE_URL}/api/genres/index.php`,
+  GENRES: `${API_BASE_URL}/api/genres`,
 
   // Cinemas
   CINEMAS: `${API_BASE_URL}/api/cinemas`,

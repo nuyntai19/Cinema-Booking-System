@@ -118,6 +118,12 @@ $router->get('/api/movies/:id/showtimes', 'MovieController@getShowtimes');
 $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
 
 // ============================================
+// GENRE ROUTES
+// ============================================
+$router->get('/api/genres', 'GenreController@index');
+$router->get('/api/genres/:id', 'GenreController@show');
+
+// ============================================
 // CINEMA ROUTES
 // ============================================
 $router->get('/api/cinemas', 'CinemaController@index');
