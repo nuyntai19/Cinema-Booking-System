@@ -4,6 +4,7 @@
  */
 class Booking {
     private $db;
+    private $hasBookingCodeColumn = null;
 
     public function __construct($db) {
         $this->db = $db;
@@ -53,24 +54,44 @@ class Booking {
 
             $finalPrice = $totalPrice - $discountAmount;
 
-            // Create booking
-            $bookingCode = $this->generateBookingCode();
+            // Create booking (supports both old and new DB schema)
+            $supportsBookingCode = $this->hasBookingCodeColumn();
+            $bookingCode = $supportsBookingCode ? $this->generateBookingCode() : null;
 
-            $stmt = $this->db->prepare(
-                "INSERT INTO bookings (booking_code, user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
-                 VALUES (:booking_code, :user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
-            );
-            $stmt->execute([
-                ':booking_code' => $bookingCode,
-                ':user_id' => $userId,
-                ':showtime_id' => $showtimeId,
-                ':user_voucher_id' => $userVoucherId ?: null,
-                ':total_price' => $totalPrice,
-                ':discount_amount' => $discountAmount,
-                ':final_price' => $finalPrice,
-            ]);
+            if ($supportsBookingCode) {
+                $stmt = $this->db->prepare(
+                    "INSERT INTO bookings (booking_code, user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
+                     VALUES (:booking_code, :user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
+                );
+                $stmt->execute([
+                    ':booking_code' => $bookingCode,
+                    ':user_id' => $userId,
+                    ':showtime_id' => $showtimeId,
+                    ':user_voucher_id' => $userVoucherId ?: null,
+                    ':total_price' => $totalPrice,
+                    ':discount_amount' => $discountAmount,
+                    ':final_price' => $finalPrice,
+                ]);
+            } else {
+                $stmt = $this->db->prepare(
+                    "INSERT INTO bookings (user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
+                     VALUES (:user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
+                );
+                $stmt->execute([
+                    ':user_id' => $userId,
+                    ':showtime_id' => $showtimeId,
+                    ':user_voucher_id' => $userVoucherId ?: null,
+                    ':total_price' => $totalPrice,
+                    ':discount_amount' => $discountAmount,
+                    ':final_price' => $finalPrice,
+                ]);
+            }
 
             $bookingId = (int)$this->db->lastInsertId();
+
+            if (!$bookingCode) {
+                $bookingCode = sprintf('GXY-%s-%06d', date('Y'), $bookingId);
+            }
 
             // Create tickets (HOLDING)
             $holdExpiresAt = date('Y-m-d H:i:s', time() + $this->getSeatHoldDuration());
@@ -821,6 +842,11 @@ class Booking {
     }
 
     private function generateBookingCode() {
+        if (!$this->hasBookingCodeColumn()) {
+            $suffix = str_pad((string)random_int(0, 99999), 5, '0', STR_PAD_LEFT);
+            return sprintf('GXY-%s-%s', date('Y'), $suffix);
+        }
+
         $year = date('Y');
 
         // Retry to avoid rare collision with the unique index on booking_code.
@@ -837,6 +863,21 @@ class Booking {
         }
 
         throw new Exception('Không thể tạo mã đặt vé, vui lòng thử lại');
+    }
+
+    private function hasBookingCodeColumn() {
+        if ($this->hasBookingCodeColumn !== null) {
+            return $this->hasBookingCodeColumn;
+        }
+
+        try {
+            $stmt = $this->db->query("SHOW COLUMNS FROM bookings LIKE 'booking_code'");
+            $this->hasBookingCodeColumn = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $this->hasBookingCodeColumn = false;
+        }
+
+        return $this->hasBookingCodeColumn;
     }
 
     private function getBookingSeatIds($bookingId) {

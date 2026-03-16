@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/Database.php';
 class Promotion {
     private $db;
     private $table = 'promotions';
+    private $hasMaxDiscountColumn = null;
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
@@ -66,7 +67,16 @@ class Promotion {
 
     public function create($data) {
         try {
-            $query = "INSERT INTO {$this->table} (code, description, discount_amount, discount_type, min_order_value, max_discount, start_date, end_date, is_auto_apply, usage_limit) VALUES (:code, :description, :discount_amount, :discount_type, :min_order_value, :max_discount, :start_date, :end_date, :is_auto_apply, :usage_limit)";
+            $hasMaxDiscount = $this->hasColumn('max_discount');
+            $columns = ['code', 'description', 'discount_amount', 'discount_type', 'min_order_value', 'start_date', 'end_date', 'is_auto_apply', 'usage_limit'];
+            $values = [':code', ':description', ':discount_amount', ':discount_type', ':min_order_value', ':start_date', ':end_date', ':is_auto_apply', ':usage_limit'];
+
+            if ($hasMaxDiscount) {
+                $columns[] = 'max_discount';
+                $values[] = ':max_discount';
+            }
+
+            $query = "INSERT INTO {$this->table} (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $values) . ")";
             $stmt = $this->db->prepare($query);
             
             // Convert boolean to int for is_auto_apply
@@ -79,7 +89,9 @@ class Promotion {
             $stmt->bindParam(':discount_amount', $data['discount_amount']);
             $stmt->bindParam(':discount_type', $data['discount_type']);
             $stmt->bindParam(':min_order_value', $data['min_order_value']);
-            $stmt->bindParam(':max_discount', $maxDiscount);
+            if ($hasMaxDiscount) {
+                $stmt->bindParam(':max_discount', $maxDiscount);
+            }
             $stmt->bindParam(':start_date', $data['start_date']);
             $stmt->bindParam(':end_date', $data['end_date']);
             $stmt->bindParam(':is_auto_apply', $isAutoApply, PDO::PARAM_INT);
@@ -99,7 +111,10 @@ class Promotion {
 
     public function update($id, $data) {
         try {
-            $allowed = ['code', 'description', 'discount_amount', 'discount_type', 'min_order_value', 'max_discount', 'start_date', 'end_date', 'is_auto_apply', 'usage_limit'];
+            $allowed = ['code', 'description', 'discount_amount', 'discount_type', 'min_order_value', 'start_date', 'end_date', 'is_auto_apply', 'usage_limit'];
+            if ($this->hasColumn('max_discount')) {
+                $allowed[] = 'max_discount';
+            }
             $fields = [];
             $params = ['id' => $id];
             foreach ($data as $k => $v) {
@@ -152,6 +167,29 @@ class Promotion {
         } catch (PDOException $e) {
             error_log('Promotion GetActive Error: '.$e->getMessage());
             return [];
+        }
+    }
+
+    private function hasColumn($columnName) {
+        if ($columnName === 'max_discount' && $this->hasMaxDiscountColumn !== null) {
+            return $this->hasMaxDiscountColumn;
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE :column_name");
+            $stmt->execute([':column_name' => $columnName]);
+            $exists = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = $exists;
+            }
+
+            return $exists;
+        } catch (Exception $e) {
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = false;
+            }
+            return false;
         }
     }
 }

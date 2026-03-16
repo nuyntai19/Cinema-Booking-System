@@ -10,6 +10,7 @@ class VoucherController {
     private $voucherModel;
     private $promoModel;
     private $userModel;
+    private $hasMaxDiscountColumn = null;
 
     // Points required for each reward tier
     private static $rewardPointsMap = [
@@ -210,7 +211,8 @@ class VoucherController {
 
             // --- 2) If found user_voucher, apply it ---
             if ($voucherId) {
-                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.code as promo_code, p.usage_limit, p.id as promotion_id FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE' LIMIT 1";
+                $maxDiscountSelect = $this->hasPromotionColumn('max_discount') ? ', p.max_discount' : '';
+                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value{$maxDiscountSelect}, p.code as promo_code, p.usage_limit, p.id as promotion_id FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE' LIMIT 1";
                 $stmt = $db->prepare($query);
                 $stmt->bindParam(':id', $voucherId, PDO::PARAM_INT);
                 $stmt->execute();
@@ -318,6 +320,30 @@ class VoucherController {
             'final_price' => round($final, 2),
             'type' => $type,
         ]);
+    }
+
+    private function hasPromotionColumn($columnName) {
+        if ($columnName === 'max_discount' && $this->hasMaxDiscountColumn !== null) {
+            return $this->hasMaxDiscountColumn;
+        }
+
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare("SHOW COLUMNS FROM promotions LIKE :column_name");
+            $stmt->execute([':column_name' => $columnName]);
+            $exists = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = $exists;
+            }
+
+            return $exists;
+        } catch (Exception $e) {
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = false;
+            }
+            return false;
+        }
     }
 
     public function markAsUsed($voucherId) {

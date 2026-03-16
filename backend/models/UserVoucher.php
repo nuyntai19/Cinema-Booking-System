@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/Database.php';
 class UserVoucher {
     private $db;
     private $table = 'user_vouchers';
+    private $hasMaxDiscountColumn = null;
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
@@ -26,9 +27,10 @@ class UserVoucher {
 
     public function getByUser($userId, $status = 'ACTIVE') {
         try {
+            $maxDiscountSelect = $this->hasPromotionColumn('max_discount') ? ', p.max_discount' : '';
             $query = "SELECT uv.id, uv.user_id, uv.promotion_id, uv.code as voucher_code, uv.status, uv.assigned_at, uv.used_at,
                 p.code as promo_code, p.description, p.discount_amount, p.discount_type,
-                p.min_order_value, p.max_discount, p.start_date, p.end_date, p.is_auto_apply, p.usage_limit,
+                p.min_order_value{$maxDiscountSelect}, p.start_date, p.end_date, p.is_auto_apply, p.usage_limit,
                 (SELECT COUNT(*) FROM user_vouchers WHERE promotion_id = p.id AND status = 'USED') as used_count
                 FROM {$this->table} uv
                 LEFT JOIN promotions p ON uv.promotion_id = p.id
@@ -49,6 +51,29 @@ class UserVoucher {
         } catch (PDOException $e) {
             error_log('UserVoucher GetByUser Error: '.$e->getMessage());
             return [];
+        }
+    }
+
+    private function hasPromotionColumn($columnName) {
+        if ($columnName === 'max_discount' && $this->hasMaxDiscountColumn !== null) {
+            return $this->hasMaxDiscountColumn;
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM promotions LIKE :column_name");
+            $stmt->execute([':column_name' => $columnName]);
+            $exists = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = $exists;
+            }
+
+            return $exists;
+        } catch (Exception $e) {
+            if ($columnName === 'max_discount') {
+                $this->hasMaxDiscountColumn = false;
+            }
+            return false;
         }
     }
 
