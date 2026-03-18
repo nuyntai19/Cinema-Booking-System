@@ -51,6 +51,26 @@ interface SeatMapResponse {
   };
 }
 
+interface MovieData {
+  id: string | number;
+  title: string;
+  poster_url?: string;
+  poster?: string;
+  duration?: number;
+  duration_minutes?: number;
+  age_rating?: string;
+  ageRating?: string;
+}
+
+interface ValidationError {
+  isValid: boolean;
+  userAge?: number;
+  requiredAge?: number;
+  message?: string;
+  showtimeEnd?: string;
+  curfewTime?: string;
+}
+
 const SeatSelectionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -67,15 +87,40 @@ const SeatSelectionPage: React.FC = () => {
     setSelectedShowtime,
   } = useBooking();
 
+  // Helper to safely convert string to AgeRating type
+  const normalizeAgeRating = (
+    value: string | undefined,
+  ): "P" | "K" | "T13" | "T16" | "T18" | "C" => {
+    const ageRatings: ("P" | "K" | "T13" | "T16" | "T18" | "C")[] = [
+      "P",
+      "K",
+      "T13",
+      "T16",
+      "T18",
+      "C",
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (ageRatings.includes(value as any) ? value : "P") as
+      | "P"
+      | "K"
+      | "T13"
+      | "T16"
+      | "T18"
+      | "C";
+  };
+
   const [seatMap, setSeatMap] = useState<Seat[][]>([]);
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
   const [ageWarningOpen, setAgeWarningOpen] = useState(false);
   const [curfewWarningOpen, setCurfewWarningOpen] = useState(false);
-  const [ageValidation, setAgeValidation] = useState<any>(null);
-  const [curfewValidation, setCurfewValidation] = useState<any>(null);
+  const [ageValidation, setAgeValidation] = useState<ValidationError | null>(
+    null,
+  );
+  const [curfewValidation, setCurfewValidation] =
+    useState<ValidationError | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [movie, setMovie] = useState<any>(null);
+  const [movie, setMovie] = useState<MovieData | null>(null);
   const hasShownAuthWarning = useRef(false);
 
   useEffect(() => {
@@ -105,6 +150,7 @@ const SeatSelectionPage: React.FC = () => {
     if (showtimeParam && !selectedShowtime) {
       // We don't have the full showtime object yet, but we'll fetch its data
       // For now, minimal object to satisfy the context check
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSelectedShowtime({ id: showtimeParam } as any);
     }
   }, [
@@ -124,16 +170,23 @@ const SeatSelectionPage: React.FC = () => {
       try {
         const response = await apiCall<{
           success: boolean;
-          data: { movie: any };
+          data: { movie: MovieData };
         }>(API_ENDPOINTS.MOVIE_DETAIL(parseInt(movieId)));
         if (response.success && response.data?.movie) {
           const m = response.data.movie;
           setMovie({
             id: String(m.id),
             title: m.title,
-            poster: m.poster_url ? getImageUrl(m.poster_url) : "",
-            duration: m.duration || m.duration_minutes,
-            ageRating: m.age_rating || "P",
+            poster_url: m.poster_url || m.poster || "",
+            poster: m.poster_url
+              ? getImageUrl(m.poster_url)
+              : m.poster
+                ? getImageUrl(m.poster)
+                : "",
+            duration: m.duration || m.duration_minutes || 0,
+            duration_minutes: m.duration_minutes || m.duration || 0,
+            age_rating: normalizeAgeRating(m.age_rating || m.ageRating),
+            ageRating: normalizeAgeRating(m.age_rating || m.ageRating),
           });
         }
       } catch (error) {
@@ -219,6 +272,7 @@ const SeatSelectionPage: React.FC = () => {
             start_time: seatMapData.showtime.start_time,
             hall: seatMapData.showtime.hall_name,
             cinema: seatMapData.showtime.cinema_name,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any);
         }
 
@@ -435,7 +489,8 @@ const SeatSelectionPage: React.FC = () => {
 
     // Check age validation
     if (movie && user?.dob) {
-      const ageCheck = validateAge(user.dob, movie.ageRating);
+      const ageRating = normalizeAgeRating(movie.age_rating || movie.ageRating);
+      const ageCheck = validateAge(user.dob, ageRating);
       if (!ageCheck.isValid) {
         setAgeValidation(ageCheck);
         setAgeWarningOpen(true);
@@ -445,10 +500,11 @@ const SeatSelectionPage: React.FC = () => {
 
     // Check curfew validation
     if (movie && selectedShowtime && user?.dob) {
+      const movieDuration = movie.duration || movie.duration_minutes || 0;
       const showtimeEnd = calculateShowtimeEnd(
-        selectedShowtime.date,
-        selectedShowtime.time,
-        movie.duration,
+        selectedShowtime.date || "",
+        selectedShowtime.time || "",
+        movieDuration,
         systemConfig.defaultCleanupDuration,
       );
       const curfewCheck = validateCurfew(user.dob, showtimeEnd, systemConfig);
@@ -506,7 +562,10 @@ const SeatSelectionPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mb-4 md:mb-6 p-3 md:p-4 bg-card rounded-xl border border-border">
           <div className="flex items-center gap-3 md:gap-4">
             <img
-              src={movie.poster}
+              src={
+                movie.poster ||
+                (movie.poster_url ? getImageUrl(movie.poster_url) : "")
+              }
               alt={movie.title}
               className="w-10 h-15 md:w-12 md:h-18 object-cover rounded-lg"
             />
@@ -516,9 +575,9 @@ const SeatSelectionPage: React.FC = () => {
                   {movie.title}
                 </h1>
                 <Badge
-                  className={`${getAgeRatingColor(movie.ageRating)} text-white text-xs`}
+                  className={`${getAgeRatingColor(normalizeAgeRating(movie.age_rating || movie.ageRating))} text-white text-xs`}
                 >
-                  {movie.ageRating}
+                  {normalizeAgeRating(movie.age_rating || movie.ageRating)}
                 </Badge>
               </div>
               <p className="text-xs md:text-sm text-muted-foreground">
@@ -527,7 +586,9 @@ const SeatSelectionPage: React.FC = () => {
               </p>
               <p className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 mt-1">
                 <Shield className="w-3 h-3" />
-                {formatAgeRating(movie.ageRating)}
+                {formatAgeRating(
+                  normalizeAgeRating(movie.age_rating || movie.ageRating),
+                )}
               </p>
             </div>
           </div>

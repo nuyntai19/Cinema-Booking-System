@@ -45,6 +45,7 @@ export const API_ENDPOINTS = {
 
   // Showtimes
   SHOWTIMES: `${API_BASE_URL}/api/showtimes`,
+  SHOWTIMES_AUTO_GENERATE: `${API_BASE_URL}/api/showtimes/auto-generate`,
   SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seats`,
   SHOWTIME_SEAT_MAP: (id: number) =>
     `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
@@ -72,6 +73,8 @@ export const API_ENDPOINTS = {
   USER_VOUCHERS: (userId: number) =>
     `${API_BASE_URL}/api/vouchers/user/${userId}`,
   APPLY_VOUCHER: `${API_BASE_URL}/api/vouchers/apply`,
+  REWARD_TIERS: `${API_BASE_URL}/api/vouchers/reward-tiers`,
+  REDEEM_POINTS_VOUCHER: `${API_BASE_URL}/api/vouchers/redeem-points`,
 
   // Concessions
   CONCESSIONS: `${API_BASE_URL}/api/concessions`,
@@ -120,6 +123,8 @@ export const API_ENDPOINTS = {
 };
 
 // Helper function for API calls
+let hasWarnedMissingToken = false;
+
 export const apiCall = async <T = unknown>(
   endpoint: string,
   options?: RequestInit,
@@ -127,7 +132,9 @@ export const apiCall = async <T = unknown>(
   const token = localStorage.getItem("token");
 
   // Debug: Log token status
-  if (!token) {
+  console.log("📡 apiCall to:", endpoint, "- Token present:", !!token);
+  if (!token && !hasWarnedMissingToken) {
+    hasWarnedMissingToken = true;
     console.warn(
       "⚠️ No auth token found in localStorage. User may need to login again.",
     );

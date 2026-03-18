@@ -92,18 +92,28 @@ const AdminNotifications: React.FC = () => {
         filterType,
       );
 
-      if (res.success) {
-        setNotifications(res.data.items || []);
-        const apiStats = res.data.stats;
-        setStats({
-          total_notifications: apiStats?.total_notifications ?? 0,
-          total_recipients: apiStats?.total_recipients ?? 0,
-          total_reads: apiStats?.total_reads ?? 0,
-          sent_notifications: apiStats?.sent_notifications ?? 0,
-          scheduled_notifications: apiStats?.scheduled_notifications ?? 0,
+      console.log("📩 Admin Notifications API Response:", res);
+
+      if (!res.success) {
+        toast({
+          title: "Lỗi",
+          description: res.message || "API trả về lỗi",
+          variant: "destructive",
         });
+        return;
       }
+
+      setNotifications(res.data.items || []);
+      const apiStats = res.data.stats;
+      setStats({
+        total_notifications: apiStats?.total_notifications ?? 0,
+        total_recipients: apiStats?.total_recipients ?? 0,
+        total_reads: apiStats?.total_reads ?? 0,
+        sent_notifications: apiStats?.sent_notifications ?? 0,
+        scheduled_notifications: apiStats?.scheduled_notifications ?? 0,
+      });
     } catch (error) {
+      console.error("❌ LoadNotifications Error:", error);
       toast({
         title: "Lỗi",
         description:

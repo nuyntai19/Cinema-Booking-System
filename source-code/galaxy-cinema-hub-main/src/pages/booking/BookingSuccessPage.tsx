@@ -1,23 +1,60 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
-import {
-  QrCode,
-  Check,
-  Calendar,
-  MapPin,
-  Clock,
-  Download,
-  Home,
-} from "lucide-react";
+import { Check, Calendar, MapPin, Clock, Download, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const BookingSuccessPage: React.FC = () => {
   const location = useLocation();
-  const { ticketCode, movie, seats, total, discount, promoCode } =
-    location.state || {};
+  const {
+    ticketCode,
+    ticketCodes,
+    movie,
+    seats,
+    total,
+    discount,
+    promoCode,
+    showtime,
+  } = location.state || {};
+  const normalizedTicketCodes: string[] = Array.isArray(ticketCodes)
+    ? ticketCodes.filter(Boolean)
+    : ticketCode
+      ? [ticketCode]
+      : [];
+  const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
 
-  if (!ticketCode) {
+  const activeTicketCode = useMemo(() => {
+    if (normalizedTicketCodes.length === 0) {
+      return null;
+    }
+    return normalizedTicketCodes[
+      Math.min(selectedTicketIndex, normalizedTicketCodes.length - 1)
+    ];
+  }, [normalizedTicketCodes, selectedTicketIndex]);
+
+  const qrImageUrl = activeTicketCode
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(activeTicketCode)}`
+    : null;
+
+  const seatText = Array.isArray(seats)
+    ? seats
+        .map((seat: any) =>
+          seat?.row && seat?.number
+            ? `${seat.row}${seat.number}`
+            : seat?.id || "",
+        )
+        .filter(Boolean)
+        .join(", ")
+    : "";
+
+  const showtimeDate = showtime?.date || showtime?.start_time || null;
+  const showtimeTimeText =
+    showtime?.time && showtime?.hall
+      ? `${showtime.time} - ${showtime.hall}`
+      : showtime?.time || "";
+  const cinemaText = showtime?.cinema || "Galaxy Nguyễn Du";
+
+  if (!activeTicketCode) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -65,15 +102,45 @@ const BookingSuccessPage: React.FC = () => {
           {/* QR Code */}
           <div className="flex justify-center py-6">
             <div className="bg-white rounded-xl p-4 shadow-2xl">
-              <QrCode className="w-32 h-32 text-gray-900" />
+              {qrImageUrl ? (
+                <img
+                  src={qrImageUrl}
+                  alt="QR vé"
+                  className="w-32 h-32 object-contain"
+                />
+              ) : null}
             </div>
           </div>
+
+          {normalizedTicketCodes.length > 1 && (
+            <div className="px-6 pb-2">
+              <p className="text-white/60 text-xs mb-2 text-center">
+                Chọn mã vé để quét
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {normalizedTicketCodes.map((code, index) => (
+                  <button
+                    key={code}
+                    onClick={() => setSelectedTicketIndex(index)}
+                    className={cn(
+                      "px-2 py-1 rounded text-xs border",
+                      index === selectedTicketIndex
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-white/10 text-white border-white/20",
+                    )}
+                  >
+                    Vé {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Ticket Code */}
           <div className="text-center pb-4">
             <p className="text-white/60 text-sm mb-1">Mã vé</p>
             <p className="text-white text-xl font-mono font-bold tracking-wider">
-              {ticketCode}
+              {activeTicketCode}
             </p>
           </div>
 
@@ -97,7 +164,7 @@ const BookingSuccessPage: React.FC = () => {
               <MapPin className="w-5 h-5 text-primary" />
               <div>
                 <p className="text-white/60 text-xs">Rạp</p>
-                <p className="text-white font-medium">Galaxy Nguyễn Du</p>
+                <p className="text-white font-medium">{cinemaText}</p>
               </div>
             </div>
 
@@ -106,7 +173,10 @@ const BookingSuccessPage: React.FC = () => {
               <div>
                 <p className="text-white/60 text-xs">Ngày chiếu</p>
                 <p className="text-white font-medium">
-                  {new Date().toLocaleDateString("vi-VN", {
+                  {(showtimeDate
+                    ? new Date(showtimeDate)
+                    : new Date()
+                  ).toLocaleDateString("vi-VN", {
                     weekday: "long",
                     day: "2-digit",
                     month: "2-digit",
@@ -120,7 +190,9 @@ const BookingSuccessPage: React.FC = () => {
               <Clock className="w-5 h-5 text-primary" />
               <div>
                 <p className="text-white/60 text-xs">Suất chiếu</p>
-                <p className="text-white font-medium">18:30 - Phòng 3</p>
+                <p className="text-white font-medium">
+                  {showtimeTimeText || "Đang cập nhật"}
+                </p>
               </div>
             </div>
 
@@ -131,7 +203,7 @@ const BookingSuccessPage: React.FC = () => {
               <div>
                 <p className="text-white/60 text-xs">Ghế</p>
                 <p className="text-white font-medium">
-                  {seats?.map((s: any) => s.id).join(", ")}
+                  {seatText || "Đang cập nhật"}
                 </p>
               </div>
             </div>
@@ -165,10 +237,10 @@ const BookingSuccessPage: React.FC = () => {
           <Link to="/" className="block">
             <Button
               variant="outline"
-              className="w-full h-12 border-white/30 text-white hover:bg-white/10 hover:text-white"
+              className="w-full h-12 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
             >
               <Home className="w-5 h-5 mr-2" />
-              <span className="text-white">Về Trang Chủ</span>
+              <span>Quay về trang chủ</span>
             </Button>
           </Link>
         </div>

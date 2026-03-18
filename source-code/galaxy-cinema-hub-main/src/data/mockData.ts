@@ -413,7 +413,7 @@ export const systemConfig: SystemConfig = {
   curfewTimeU13: "22:00", // Trẻ dưới 13 tuổi không xem phim kết thúc sau 22h
   curfewTimeU16: "23:00", // Trẻ dưới 16 tuổi không xem phim kết thúc sau 23h
   minVietnameseQuota: 15, // Tối thiểu 15% suất chiếu phim Việt
-  seatHoldDuration: 10, // Giữ ghế 10 phút
+  seatHoldDuration: 5, // Giữ ghế 5 phút
   defaultCleanupDuration: 15, // 15 phút dọn phòng
   loyaltyPointsRate: 10000, // 10.000đ = 1 điểm
   membershipTiers: {

@@ -13,7 +13,7 @@ services:
       - mysql_data:/var/lib/mysql
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./backend/database/seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql:ro
-    command: --default-time-zone=+07:00
+    command: --default-time-zone=+07:00 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
   app:
     build:

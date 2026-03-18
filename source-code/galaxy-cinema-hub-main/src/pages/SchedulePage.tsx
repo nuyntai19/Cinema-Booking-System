@@ -293,12 +293,26 @@ const SchedulePage: React.FC = () => {
                                   hour: "2-digit",
                                   minute: "2-digit",
                                 });
+                                const isPastShowtime =
+                                  new Date(showtime.start_time).getTime() <=
+                                  Date.now();
 
                                 return (
                                   <Link
                                     key={showtime.id}
                                     to={`/booking/seats?movie=${movieId}&showtime=${showtime.id}`}
                                     onClick={(e) => {
+                                      if (isPastShowtime) {
+                                        e.preventDefault();
+                                        toast({
+                                          title: "Suất chiếu đã qua giờ",
+                                          description:
+                                            "Vui lòng chọn suất chiếu khác còn hiệu lực.",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+
                                       if (!isAuthenticated) {
                                         e.preventDefault();
                                         toast({
@@ -347,7 +361,11 @@ const SchedulePage: React.FC = () => {
                                       };
                                       setSelectedShowtime(showtimePayload);
                                     }}
-                                    className="px-3 py-2 text-center rounded-lg border-2 border-border hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all font-medium text-sm min-w-[120px]"
+                                    className={`px-3 py-2 text-center rounded-lg border-2 transition-all font-medium text-sm min-w-[120px] ${
+                                      isPastShowtime
+                                        ? "border-border/60 bg-muted text-muted-foreground cursor-not-allowed pointer-events-auto"
+                                        : "border-border hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                                    }`}
                                   >
                                     {showtimeTime} -{" "}
                                     {new Date(

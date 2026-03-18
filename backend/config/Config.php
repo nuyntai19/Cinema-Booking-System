@@ -23,7 +23,7 @@ class Config
     public static $max_file_size = 5242880; // 5MB in bytes
 
     // Booking Settings
-    public static $seat_hold_duration = 600; // 10 minutes in seconds
+    public static $seat_hold_duration = 300; // 5 minutes in seconds
     public static $min_vietnamese_quota = 15; // 15% minimum Vietnamese movies
 
     // Loyalty Settings

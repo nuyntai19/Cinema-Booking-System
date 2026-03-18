@@ -247,6 +247,7 @@ const MovieDetailPage: React.FC = () => {
             roomId: s.hall_name,
             date: startDate.toISOString().split("T")[0],
             time: startDate.toTimeString().slice(0, 5),
+            start_time: s.start_time,
             price: {
               standard: s.base_price || 90000,
               vip: (s.base_price || 90000) * 1.5,
@@ -369,6 +370,15 @@ const MovieDetailPage: React.FC = () => {
         });
 
   const handleSelectShowtime = (cinemaId: string, showtime: Showtime) => {
+    if (getShowtimeTimestamp(showtime) <= Date.now()) {
+      toast({
+        title: "Suất chiếu đã qua giờ",
+        description: "Vui lòng chọn suất chiếu khác còn hiệu lực.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!isAuthenticated) {
       toast({
         title: "Vui lòng đăng nhập",
@@ -526,6 +536,18 @@ const MovieDetailPage: React.FC = () => {
   const hasAnyShowtimes =
     availableDates.length > 0 ||
     Object.values(showtimesByCinema).some((times) => times.length > 0);
+
+  const getShowtimeTimestamp = (showtime: Showtime): number => {
+    if (showtime.start_time) {
+      const ts = new Date(showtime.start_time.replace(" ", "T")).getTime();
+      if (!Number.isNaN(ts)) return ts;
+    }
+
+    const fallbackTs = new Date(
+      `${showtime.date}T${showtime.time}:00`,
+    ).getTime();
+    return Number.isNaN(fallbackTs) ? 0 : fallbackTs;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -720,19 +742,25 @@ const MovieDetailPage: React.FC = () => {
                         <AccordionContent className="px-4 pb-4">
                           {cinemaShowtimes.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
-                              {cinemaShowtimes.map((showtime) => (
-                                <Button
-                                  key={showtime.id}
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleSelectShowtime(cinemaKey, showtime)
-                                  }
-                                  className="hover:bg-primary hover:text-primary-foreground hover:border-primary"
-                                >
-                                  {showtime.time}
-                                </Button>
-                              ))}
+                              {cinemaShowtimes.map((showtime) => {
+                                const isPastShowtime =
+                                  getShowtimeTimestamp(showtime) <= Date.now();
+
+                                return (
+                                  <Button
+                                    key={showtime.id}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isPastShowtime}
+                                    onClick={() =>
+                                      handleSelectShowtime(cinemaKey, showtime)
+                                    }
+                                    className="hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                                  >
+                                    {showtime.time}
+                                  </Button>
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className="text-muted-foreground text-sm">

@@ -11,7 +11,7 @@ class HoldSeatService {
         $this->redis = new Redis();
         $this->redis->connect(Config::$redis_host, Config::$redis_port);
     }   
-    public function holdSeats($showtimeId, $seatIds, $userId, $holdDuration = 600) {
+    public function holdSeats($showtimeId, $seatIds, $userId, $holdDuration = 300) {
 
         $lua = "
             for i, key in ipairs(KEYS) do

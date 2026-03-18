@@ -5,9 +5,32 @@ class Notification {
     private $db;
     private $table = 'notifications';
     private $readTable = 'notification_reads';
+    private $hasTargetUserColumn = null;
+    private $hasReadTable = null;
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
+    }
+
+    private function supportsTargetUser() {
+        if ($this->hasTargetUserColumn !== null) {
+            return $this->hasTargetUserColumn;
+        }
+
+        $stmt = $this->db->query("SHOW COLUMNS FROM {$this->table} LIKE 'target_user_id'");
+        $this->hasTargetUserColumn = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        return $this->hasTargetUserColumn;
+    }
+
+    private function supportsReadTable() {
+        if ($this->hasReadTable !== null) {
+            return $this->hasReadTable;
+        }
+
+        $stmt = $this->db->prepare('SHOW TABLES LIKE :table_name');
+        $stmt->execute([':table_name' => $this->readTable]);
+        $this->hasReadTable = (bool)$stmt->fetch(PDO::FETCH_NUM);
+        return $this->hasReadTable;
     }
 
     public function publishDueNotifications() {
@@ -36,6 +59,8 @@ class Notification {
     }
 
     private function countRecipientsByAudience($audience) {
+        error_log('Notification::countRecipientsByAudience - audience: ' . $audience);
+        
         $audience = strtoupper((string)$audience);
         if ($audience === 'GUEST') {
             // Public notification: guest + logged-in users.
@@ -52,12 +77,28 @@ class Notification {
         }
 
         $sql = 'SELECT COUNT(*) AS total FROM users WHERE ' . implode(' AND ', $where);
-        $stmt = $this->db->query($sql);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int)($row['total'] ?? 0);
+        error_log('Notification::countRecipientsByAudience SQL: ' . $sql);
+        
+        try {
+            $stmt = $this->db->query($sql);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $count = (int)($row['total'] ?? 0);
+            error_log('Notification::countRecipientsByAudience result: ' . $count);
+            return $count;
+        } catch (Exception $e) {
+            error_log('Notification::countRecipientsByAudience ERROR: ' . $e->getMessage());
+            return 0;
+        }
     }
 
     private function countReadsByNotification($notificationId, $audience) {
+        error_log('Notification::countReadsByNotification - notifId: ' . $notificationId . ', audience: ' . $audience);
+        
+        if (!$this->supportsReadTable()) {
+            error_log('Notification::countReadsByNotification - notification_reads table not supported');
+            return 0;
+        }
+
         $audience = strtoupper((string)$audience);
         if ($audience === 'GUEST') {
             // Public notification: count reads from all active users.
@@ -79,29 +120,57 @@ class Notification {
                 WHERE nr.notification_id = :notification_id
                   AND u.status = 'Active'" . $whereRole;
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':notification_id' => (int)$notificationId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int)($row['total'] ?? 0);
+        error_log('Notification::countReadsByNotification SQL: ' . $sql);
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':notification_id' => (int)$notificationId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $count = (int)($row['total'] ?? 0);
+            error_log('Notification::countReadsByNotification result: ' . $count);
+            return $count;
+        } catch (Exception $e) {
+            error_log('Notification::countReadsByNotification ERROR: ' . $e->getMessage());
+            return 0;
+        }
     }
 
     public function getUserNotifications($userId, $roleId, $limit = 30) {
         $this->publishDueNotifications();
 
         $audience = $this->getAudienceForRoleId($roleId);
-        $sql = "SELECT n.id, n.title, n.message, n.type, n.target_audience,
-                   n.status, n.scheduled_at, n.sent_at,
-                       CASE WHEN nr.id IS NULL THEN 0 ELSE 1 END AS is_read,
+        $targetUserWhere = $this->supportsTargetUser()
+            ? ' AND (n.target_user_id IS NULL OR n.target_user_id = :user_id)'
+            : '';
+
+        if ($this->supportsReadTable()) {
+            $sql = "SELECT n.id, n.title, n.message, n.type, n.target_audience,
+                       n.status, n.scheduled_at, n.sent_at,
+                           CASE WHEN nr.id IS NULL THEN 0 ELSE 1 END AS is_read,
+                           n.created_at
+                    FROM {$this->table} n
+                    LEFT JOIN {$this->readTable} nr
+                        ON nr.notification_id = n.id
+                       AND nr.user_id = :user_id
+                    WHERE n.is_active = 1
+                  AND n.status = 'SENT'
+                  AND n.target_audience IN ('ALL', 'GUEST', :audience)
+                                {$targetUserWhere}
+                    ORDER BY n.created_at DESC
+                    LIMIT :limit";
+        } else {
+            $sql = "SELECT n.id, n.title, n.message, n.type, n.target_audience,
+                       n.status, n.scheduled_at, n.sent_at,
+                       0 AS is_read,
                        n.created_at
-                FROM {$this->table} n
-                LEFT JOIN {$this->readTable} nr
-                    ON nr.notification_id = n.id
-                   AND nr.user_id = :user_id
-                WHERE n.is_active = 1
-              AND n.status = 'SENT'
-              AND n.target_audience IN ('ALL', 'GUEST', :audience)
-                ORDER BY n.created_at DESC
-                LIMIT :limit";
+                    FROM {$this->table} n
+                    WHERE n.is_active = 1
+                      AND n.status = 'SENT'
+                      AND n.target_audience IN ('ALL', 'GUEST', :audience)
+                      {$targetUserWhere}
+                    ORDER BY n.created_at DESC
+                    LIMIT :limit";
+        }
 
         $stmt = $this->db->prepare($sql);
         $stmt->bindValue(':user_id', (int)$userId, PDO::PARAM_INT);
@@ -115,6 +184,9 @@ class Notification {
     public function getPublicNotifications($limit = 20) {
         $this->publishDueNotifications();
 
+                $targetUserWhere = $this->supportsTargetUser()
+                        ? ' AND n.target_user_id IS NULL'
+                        : '';
         $sql = "SELECT n.id, n.title, n.message, n.type, n.target_audience,
                        n.status, n.scheduled_at, n.sent_at,
                        0 AS is_read,
@@ -123,6 +195,7 @@ class Notification {
                 WHERE n.is_active = 1
                   AND n.status = 'SENT'
                   AND n.target_audience IN ('ALL', 'GUEST')
+                                    {$targetUserWhere}
                 ORDER BY n.created_at DESC
                 LIMIT :limit";
 
@@ -134,6 +207,11 @@ class Notification {
     }
 
     public function markAsRead($id, $userId) {
+        if (!$this->supportsReadTable()) {
+            // Old schema: silently treat as successful to avoid API 500.
+            return true;
+        }
+
         $sql = "INSERT INTO {$this->readTable} (notification_id, user_id, is_read, read_at)
                 VALUES (:notification_id, :user_id, 1, NOW())
                 ON DUPLICATE KEY UPDATE is_read = 1, read_at = NOW()";
@@ -170,24 +248,35 @@ class Notification {
             {$whereSql}
             ORDER BY created_at DESC";
 
-        $stmt = $this->db->prepare($sql);
-        foreach ($params as $key => $value) {
-            $stmt->bindValue($key, $value);
-        }
-        $stmt->execute();
+        error_log('Notification::listCampaigns SQL: ' . $sql);
+        error_log('Notification::listCampaigns params: ' . json_encode($params));
 
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $result = [];
-        foreach ($rows as $row) {
-            $recipientCount = $this->countRecipientsByAudience($row['target_audience']);
-            $readCount = $this->countReadsByNotification($row['id'], $row['target_audience']);
-            $row['recipient_count'] = $recipientCount;
-            $row['read_count'] = $readCount;
-            $result[] = $row;
-        }
+        try {
+            $stmt = $this->db->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->execute();
 
-        return $result;
-    }
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log('Notification::listCampaigns rows count: ' . count($rows));
+
+            $result = [];
+            foreach ($rows as $row) {
+                $recipientCount = $this->countRecipientsByAudience($row['target_audience']);
+                $readCount = $this->countReadsByNotification($row['id'], $row['target_audience']);
+                $row['recipient_count'] = $recipientCount;
+                $row['read_count'] = $readCount;
+                $result[] = $row;
+            }
+
+            error_log('Notification::listCampaigns result count: ' . count($result));
+            return $result;
+        } catch (Exception $e) {
+            error_log('Notification::listCampaigns ERROR: ' . $e->getMessage());
+            error_log('Notification::listCampaigns TRACE: ' . $e->getTraceAsString());
+            return [];
+        }
 
     public function createCampaign($title, $message, $type, $targetAudience, $createdBy = null, $scheduledAt = null) {
         $scheduledAt = $scheduledAt ? trim((string)$scheduledAt) : null;
@@ -231,6 +320,31 @@ class Notification {
             'recipient_count' => $this->countRecipientsByAudience(strtoupper((string)$targetAudience ?: 'ALL')),
             'status' => $status,
         ];
+    }
+
+    public function createUserNotification($userId, $title, $message, $type = 'BOOKING') {
+        $userId = (int)$userId;
+        if ($userId <= 0) {
+            return false;
+        }
+
+        if ($this->supportsTargetUser()) {
+            $sql = "INSERT INTO {$this->table}
+                        (title, message, type, target_audience, target_user_id, status, sent_at, is_active)
+                    VALUES
+                        (:title, :message, :type, 'USER', :target_user_id, 'SENT', NOW(), 1)";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute([
+                ':title' => $title,
+                ':message' => $message,
+                ':type' => strtoupper((string)$type ?: 'BOOKING'),
+                ':target_user_id' => $userId,
+            ]);
+        }
+
+        // Fallback for old schema without target_user_id.
+        $this->createCampaign($title, $message, $type, 'USER', null, null);
+        return true;
     }
 
     public function deleteCampaignBySeedId($seedId) {

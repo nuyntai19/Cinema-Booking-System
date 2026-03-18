@@ -57,6 +57,7 @@ interface BookingHistory {
   status: "completed" | "upcoming" | "cancelled";
   paymentMethod: string;
   bookingDate: string;
+  ticketCodes: string[];
   qrCode?: string;
 }
 
@@ -72,6 +73,7 @@ const BookingHistoryPage: React.FC = () => {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [bookings, setBookings] = useState<BookingHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -100,71 +102,101 @@ const BookingHistoryPage: React.FC = () => {
 
         const result = await response.json();
 
-        // Map API data to frontend format
-        const mappedBookings: BookingHistory[] = result.data.items.map(
-          (booking: {
-            id: number;
-            booking_code?: string;
-            movie_title: string;
-            poster_url: string;
-            duration_minutes: number;
-            age_rating: string;
-            start_time: string;
-            status: string;
-            cinema_name: string;
-            hall_name: string;
-            seats?: string;
-            concessions?: Concession[];
-            total_price?: string;
-            discount_amount?: string;
-            final_price?: string;
-            payment_method?: string;
-            created_at: string;
-            [key: string]: unknown;
-          }) => {
-            const startTime = new Date(booking.start_time);
-            const bookingDate = booking.start_time.split(" ")[0]; // YYYY-MM-DD
-            const bookingTime = startTime.toLocaleTimeString("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
+        const sourceItems = Array.isArray(result?.data?.items)
+          ? result.data.items
+          : [];
 
-            // Determine booking status
-            let status: "completed" | "upcoming" | "cancelled" = "upcoming";
-            const now = new Date();
-            if (booking.status === "Cancelled") {
-              status = "cancelled";
-            } else if (startTime < now) {
-              status = "completed";
-            }
+        // Only include bookings that have completed payment.
+        const mappedBookings: BookingHistory[] = sourceItems
+          .filter((booking: { status: string; payment_status?: string }) => {
+            const paymentStatus = (booking.payment_status || "").toLowerCase();
+            const isPaidBooking = booking.status === "Paid";
+            const isCancelledAfterPaid =
+              booking.status === "Cancelled" && paymentStatus === "success";
+            return isPaidBooking || isCancelledAfterPaid;
+          })
+          .map(
+            (booking: {
+              id: number;
+              booking_code?: string;
+              movie_title: string;
+              poster_url: string;
+              duration_minutes: number;
+              age_rating: string;
+              start_time: string;
+              status: string;
+              cinema_name: string;
+              hall_name: string;
+              seats?: string;
+              concessions?: Concession[];
+              total_price?: string;
+              discount_amount?: string;
+              final_price?: string;
+              payment_method?: string;
+              payment_status?: string;
+              ticket_codes?: string[];
+              created_at: string;
+              [key: string]: unknown;
+            }) => {
+              const startTime = new Date(booking.start_time);
+              const bookingDate = booking.start_time.split(" ")[0]; // YYYY-MM-DD
+              const bookingTime = startTime.toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
-            return {
-              id: booking.id.toString(),
-              bookingCode: booking.booking_code || "",
-              movie: {
-                title: booking.movie_title,
-                poster: getImageUrl(booking.poster_url),
-                duration: booking.duration_minutes,
-                ageRating: booking.age_rating,
-              },
-              cinema: booking.cinema_name,
-              room: booking.hall_name,
-              date: bookingDate,
-              time: bookingTime,
-              seats: booking.seats ? booking.seats.split(", ") : [],
-              concessions: booking.concessions || [],
-              originalPrice: parseFloat(booking.total_price || "0"),
-              discountAmount: parseFloat(booking.discount_amount || "0"),
-              totalPrice: parseFloat(
-                booking.final_price || booking.total_price,
-              ),
-              status: status,
-              paymentMethod: booking.payment_method || "Chưa thanh toán",
-              bookingDate: booking.created_at,
-              qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.booking_code || ""}`,
-            };
-          },
-        );
+              // Determine booking status
+              let status: "completed" | "upcoming" | "cancelled" = "upcoming";
+              const now = new Date();
+              if (booking.status === "Cancelled") {
+                status = "cancelled";
+              } else if (booking.status === "Paid" && startTime < now) {
+                status = "completed";
+              }
+
+              const isPaymentSuccess =
+                booking.status === "Paid" ||
+                (booking.payment_status || "").toLowerCase() === "success";
+              const paymentMethodText = booking.payment_method
+                ? isPaymentSuccess
+                  ? `${booking.payment_method} (Đã thanh toán)`
+                  : booking.payment_method
+                : isPaymentSuccess
+                  ? "Đã thanh toán"
+                  : "Chưa thanh toán";
+              const ticketCodes = Array.isArray(booking.ticket_codes)
+                ? booking.ticket_codes.filter(Boolean)
+                : [];
+              const qrPayload = ticketCodes[0] || booking.booking_code || "";
+
+              return {
+                id: booking.id.toString(),
+                bookingCode: booking.booking_code || "",
+                movie: {
+                  title: booking.movie_title,
+                  poster: getImageUrl(booking.poster_url),
+                  duration: booking.duration_minutes,
+                  ageRating: booking.age_rating,
+                },
+                cinema: booking.cinema_name,
+                room: booking.hall_name,
+                date: bookingDate,
+                time: bookingTime,
+                seats: booking.seats ? booking.seats.split(", ") : [],
+                concessions: booking.concessions || [],
+                originalPrice: parseFloat(booking.total_price || "0"),
+                discountAmount: parseFloat(booking.discount_amount || "0"),
+                totalPrice: parseFloat(
+                  booking.final_price || booking.total_price,
+                ),
+                status: status,
+                paymentMethod: paymentMethodText,
+                bookingDate: booking.created_at,
+                ticketCodes,
+                qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}`,
+              };
+            },
+          );
 
         setBookings(mappedBookings);
       } catch (error) {
@@ -237,6 +269,7 @@ const BookingHistoryPage: React.FC = () => {
 
   const handleViewTicket = (booking: BookingHistory) => {
     setSelectedBooking(booking);
+    setSelectedTicketIndex(0);
     setShowTicketDialog(true);
   };
 
@@ -470,10 +503,33 @@ const BookingHistoryPage: React.FC = () => {
               </div>
 
               {/* QR Code */}
-              {selectedBooking.qrCode && (
+              {(selectedBooking.qrCode ||
+                selectedBooking.ticketCodes.length > 0) && (
                 <div className="flex justify-center bg-white p-6 rounded-lg">
+                  {selectedBooking.ticketCodes.length > 1 && (
+                    <div className="w-full mb-4 flex flex-wrap gap-2 justify-center">
+                      {selectedBooking.ticketCodes.map((_, index) => (
+                        <Button
+                          key={`ticket-${index}`}
+                          size="sm"
+                          variant={
+                            selectedTicketIndex === index
+                              ? "default"
+                              : "outline"
+                          }
+                          onClick={() => setSelectedTicketIndex(index)}
+                        >
+                          Vé {index + 1}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                   <img
-                    src={selectedBooking.qrCode}
+                    src={
+                      selectedBooking.ticketCodes.length > 0
+                        ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(selectedBooking.ticketCodes[Math.min(selectedTicketIndex, selectedBooking.ticketCodes.length - 1)])}`
+                        : selectedBooking.qrCode
+                    }
                     alt="QR Code"
                     className="w-48 h-48"
                   />

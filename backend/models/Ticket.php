@@ -137,15 +137,15 @@ class Ticket
         $stmt = $this->db->prepare("
             SELECT 
                 t.*,
-                s.seat_number,
-                s.row_number,
+                s.`number` AS seat_number,
+                s.row_code AS `row_number`,
                 st.name AS seat_type_name,
-                st.price AS seat_type_price
+                st.price_multiplier AS seat_type_price
             FROM tickets t
             JOIN seats s ON t.seat_id = s.id
             JOIN seat_types st ON s.seat_type_id = st.id
             WHERE t.booking_id = ?
-            ORDER BY s.row_number, s.seat_number
+            ORDER BY s.row_code, s.`number`
         ");
 
         $stmt->execute([$bookingId]);

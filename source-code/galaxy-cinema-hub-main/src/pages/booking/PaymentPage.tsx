@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CreditCard,
@@ -7,7 +7,6 @@ import {
   Tag,
   Clock,
   QrCode,
-  Check,
   X,
   ArrowLeft,
   Ticket,
@@ -24,9 +23,11 @@ import { useBooking } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AppContext";
 import { movies } from "@/data/mockData";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
+import { getPusherClient } from "@/lib/pusher";
 import { PaymentMethod } from "@/types/cinema";
 import { cn } from "@/lib/utils";
 import { BookingService } from "@/services/booking.service";
+import { TicketService } from "@/services/ticket.service";
 import { TransactionService } from "@/services/transacsion.service";
 import {
   Dialog,
@@ -35,6 +36,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 const PaymentPage: React.FC = () => {
@@ -57,6 +68,11 @@ const PaymentPage: React.FC = () => {
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
   const [appliedVoucherId, setAppliedVoucherId] = useState<number | null>(null);
+  const [showCancelPaymentConfirm, setShowCancelPaymentConfirm] =
+    useState(false);
+  const [isCancellingPayment, setIsCancellingPayment] = useState(false);
+  const paymentHandledRef = useRef(false);
+  const timeoutHandledRef = useRef(false);
 
   // Promotions & vouchers for display
   const [activePromos, setActivePromos] = useState<any[]>([]);
@@ -202,28 +218,217 @@ const PaymentPage: React.FC = () => {
   const grandTotal = subtotal - discount - membershipDiscountAmount;
   const seatCodes = selectedSeats.map((s) => `${s.row}${s.number}`);
 
+  const resetPaymentSession = () => {
+    setShowQRModal(false);
+    setMomoQrImageUrl(null);
+    setCurrentBookingId(null);
+    setQRTimeLeft(300);
+    paymentHandledRef.current = false;
+    timeoutHandledRef.current = false;
+  };
+
+  const cancelPaymentSession = async (
+    title: string,
+    description: string,
+    navigateToSeats = false,
+  ) => {
+    if (isCancellingPayment) {
+      return;
+    }
+
+    setIsCancellingPayment(true);
+    try {
+      if (currentBookingId) {
+        try {
+          await BookingService.cancel(String(currentBookingId));
+        } catch {
+          // Ignore cancel errors: hold will still expire server-side.
+        }
+      }
+
+      resetPaymentSession();
+
+      toast({
+        title,
+        description,
+        variant: "destructive",
+      });
+
+      if (navigateToSeats) {
+        // Let toast render before route transition so user can see feedback.
+        setTimeout(() => navigate("/booking/seats"), 150);
+      }
+    } finally {
+      setIsCancellingPayment(false);
+    }
+  };
+
   // QR Timer
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (showQRModal && qrTimeLeft > 0) {
       timer = setInterval(() => {
-        setQRTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            setShowQRModal(false);
-            toast({
-              title: "Hết thời gian thanh toán",
-              description: "Giao dịch đã bị hủy do quá thời gian",
-              variant: "destructive",
-            });
-            return 0;
-          }
-          return prev - 1;
-        });
+        setQRTimeLeft((prev) => Math.max(prev - 1, 0));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [showQRModal, qrTimeLeft, toast]);
+  }, [showQRModal, qrTimeLeft]);
+
+  useEffect(() => {
+    if (!showQRModal || qrTimeLeft > 0 || timeoutHandledRef.current) {
+      return;
+    }
+
+    timeoutHandledRef.current = true;
+
+    const releaseHoldOnTimeout = async () => {
+      await cancelPaymentSession(
+        "Thanh toán thất bại",
+        "Đã hết 5 phút thanh toán. Ghế đã được giải phóng.",
+      );
+    };
+
+    void releaseHoldOnTimeout();
+  }, [showQRModal, qrTimeLeft, currentBookingId, toast]);
+
+  // Guard against accidental leave while waiting for payment confirmation.
+  useEffect(() => {
+    if (!showQRModal || !currentBookingId || paymentHandledRef.current) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (paymentHandledRef.current) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePopState = () => {
+      if (paymentHandledRef.current) {
+        return;
+      }
+
+      setShowCancelPaymentConfirm(true);
+      window.history.pushState(
+        { paymentGuard: true },
+        "",
+        window.location.href,
+      );
+    };
+
+    // Insert a guarded history entry so browser Back triggers confirmation first.
+    window.history.pushState({ paymentGuard: true }, "", window.location.href);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [showQRModal, currentBookingId]);
+
+  useEffect(() => {
+    if (!showQRModal || !currentBookingId || paymentHandledRef.current) {
+      return;
+    }
+
+    const completeFromGateway = async () => {
+      if (paymentHandledRef.current) {
+        return;
+      }
+      paymentHandledRef.current = true;
+
+      toast({
+        title: "Thanh toán thành công",
+        description: "Đã nhận xác nhận thanh toán từ cổng thanh toán.",
+      });
+
+      let ticketCodes: string[] = [];
+      try {
+        const ticketRes = await TicketService.getByBooking(
+          String(currentBookingId),
+        );
+        const rawTickets = Array.isArray(ticketRes?.data) ? ticketRes.data : [];
+        ticketCodes = rawTickets
+          .map(
+            (ticket: any) => ticket?.ticket_code || ticket?.ticketCode || null,
+          )
+          .filter((code: string | null): code is string => Boolean(code));
+      } catch {
+        // Non-blocking: success page can still show booking info without ticket list.
+      }
+
+      setShowQRModal(false);
+      navigate("/booking/success", {
+        state: {
+          bookingId: currentBookingId,
+          ticketCode: ticketCodes[0] || null,
+          ticketCodes,
+          movie,
+          seats: selectedSeats,
+          total: grandTotal,
+          discount: discount + membershipDiscountAmount,
+          promoCode: discount > 0 ? promoCode : null,
+          showtime: selectedShowtime,
+        },
+      });
+      clearBooking();
+      setCurrentBookingId(null);
+      setShowCancelPaymentConfirm(false);
+    };
+
+    const pusher = getPusherClient();
+    const channelName = `booking.${currentBookingId}`;
+    const channel = pusher?.subscribe(channelName);
+    const onPaymentUpdated = (payload: { status?: string }) => {
+      const status = (payload?.status || "").toLowerCase();
+      if (status === "success") {
+        void completeFromGateway();
+      }
+    };
+    channel?.bind("payment-status-updated", onPaymentUpdated);
+
+    const pollTimer = setInterval(async () => {
+      if (paymentHandledRef.current || !currentBookingId) {
+        return;
+      }
+      try {
+        const tx = await TransactionService.getTransactionDetails(
+          String(currentBookingId),
+        );
+        const txStatus = (tx?.data?.status || "").toLowerCase();
+        if (txStatus === "success") {
+          void completeFromGateway();
+        }
+      } catch {
+        // Ignore intermittent network errors while waiting for callback.
+      }
+    }, 4000);
+
+    return () => {
+      clearInterval(pollTimer);
+      if (channel) {
+        channel.unbind("payment-status-updated", onPaymentUpdated);
+      }
+      if (pusher && channelName) {
+        pusher.unsubscribe(channelName);
+      }
+    };
+  }, [
+    showQRModal,
+    currentBookingId,
+    toast,
+    navigate,
+    movie,
+    selectedSeats,
+    grandTotal,
+    discount,
+    membershipDiscountAmount,
+    promoCode,
+    clearBooking,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -294,6 +499,41 @@ const PaymentPage: React.FC = () => {
     };
 
     try {
+      const existingBooking = await BookingService.getBookingByUserAndShowtime(
+        userId,
+        showTimeId,
+      );
+
+      if (
+        existingBooking.success &&
+        existingBooking.data?.status === "Pending"
+      ) {
+        const existingBookingId = toPositiveInt(existingBooking.data.id);
+        if (existingBookingId) {
+          const updateResponse = await BookingService.updateBooking(
+            existingBookingId,
+            {
+              seat_ids: seatIds,
+              concessions: concessionsData,
+              user_voucher_id: appliedVoucherId || undefined,
+            },
+          );
+
+          if (!updateResponse.success) {
+            toast({
+              title: "Cập nhật đơn giữ ghế thất bại",
+              description:
+                updateResponse.message ||
+                "Không thể cập nhật đơn giữ ghế hiện tại.",
+              variant: "destructive",
+            });
+            return null;
+          }
+
+          return existingBookingId;
+        }
+      }
+
       const response = await BookingService.create(bookingRequest);
       const createdBookingId = toPositiveInt(
         (response as any)?.data?.booking_id,
@@ -332,13 +572,19 @@ const PaymentPage: React.FC = () => {
 
   const processPayment = async (method: PaymentMethod) => {
     setIsProcessing(true);
+    let bookingId: number | null = currentBookingId;
     try {
-      const bookingId = await createBooking();
+      paymentHandledRef.current = false;
+
       if (!bookingId) {
-        return;
+        bookingId = await createBooking();
+        if (!bookingId) {
+          return;
+        }
+        // Save booking ID for retrying payment without creating duplicate holds.
+        setCurrentBookingId(bookingId);
       }
-      // Save booking ID for later confirmation
-      setCurrentBookingId(bookingId);
+
       if (method === "momo") {
         const momoResponse = await TransactionService.momoPayment({
           booking_id: bookingId,
@@ -347,9 +593,12 @@ const PaymentPage: React.FC = () => {
         const payUrl = momoResponse?.data?.pay_url;
         const qrPayload = qrCodeUrl || payUrl;
         if (!qrPayload) {
+          await BookingService.cancel(String(bookingId));
+          setCurrentBookingId(null);
           toast({
             title: "Không tạo được mã QR MoMo",
-            description: "Hệ thống không trả về dữ liệu QR thanh toán.",
+            description:
+              "Giao dịch đã được hủy vì hệ thống không trả về dữ liệu QR.",
             variant: "destructive",
           });
           return;
@@ -364,6 +613,23 @@ const PaymentPage: React.FC = () => {
 
       setShowQRModal(true);
       setQRTimeLeft(300);
+      timeoutHandledRef.current = false;
+    } catch (error) {
+      if (bookingId) {
+        try {
+          await BookingService.cancel(String(bookingId));
+        } catch {
+          // Ignore cancellation error in client-side recovery.
+        }
+      }
+      setCurrentBookingId(null);
+      setShowQRModal(false);
+      setMomoQrImageUrl(null);
+      toast({
+        title: "Thanh toán thất bại",
+        description: "Không thể khởi tạo giao dịch. Vui lòng thử lại.",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -437,112 +703,6 @@ const PaymentPage: React.FC = () => {
   const isPromoEligible = (promo: any) => {
     const minOrder = Number(promo.min_order_value || 0);
     return subtotal >= minOrder;
-  };
-
-  const handlePayment = () => {
-    setShowQRModal(true);
-    setQRTimeLeft(300);
-  };
-
-  const handleSimulateSuccess = async () => {
-    if (!currentBookingId) {
-      toast({
-        title: "Lỗi",
-        description: "Không tìm thấy thông tin đặt vé",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Confirm booking to update status from Pending -> Paid and tickets from HOLDING -> SOLD
-      await BookingService.confirm(currentBookingId.toString());
-
-      // Earn loyalty points for this purchase (backend uses final_price from DB)
-      let earnedPoints = 0;
-      if (user?.id) {
-        try {
-          const pointsRes: any = await apiCall(API_ENDPOINTS.EARN_POINTS, {
-            method: "POST",
-            body: JSON.stringify({
-              user_id: parseInt(user.id),
-              booking_id: currentBookingId,
-            }),
-          });
-          earnedPoints = pointsRes?.data?.earned_points || 0;
-        } catch {
-          // Non-blocking
-        }
-      }
-
-      // Check for tier upgrade after earning points
-      let upgraded = false;
-      let newTierName = "";
-      let newDiscount = 0;
-      if (user?.id) {
-        try {
-          const upgradeRes: any = await apiCall(
-            API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(parseInt(user.id)),
-          );
-          if (upgradeRes?.data?.upgraded) {
-            upgraded = true;
-            newTierName = upgradeRes.data.eligible_tier?.rank_name || "";
-            newDiscount = parseFloat(
-              upgradeRes.data.eligible_tier?.discount_rate || "0",
-            );
-          }
-        } catch {
-          // Non-blocking
-        }
-      }
-
-      if (earnedPoints > 0) {
-        toast({
-          title: "🎉 Tích điểm thành công!",
-          description: `Bạn nhận được ${earnedPoints.toLocaleString("vi-VN")} điểm thưởng cho đơn hàng này.`,
-        });
-      }
-
-      if (upgraded) {
-        setTimeout(() => {
-          toast({
-            title: "🏆 Chúc mừng lên hạng!",
-            description: `Bạn đã được thăng hạng lên ${newTierName}! Giảm ${newDiscount}% cho mỗi vé xem phim.`,
-          });
-        }, 1000);
-      }
-
-      setTimeout(() => {
-        setShowQRModal(false);
-        navigate("/booking/success", {
-          state: {
-            ticketCode: `GXY-2024-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-            movie,
-            seats: selectedSeats,
-            total: grandTotal,
-            discount: discount + membershipDiscountAmount,
-            promoCode: discount > 0 ? promoCode : null,
-          },
-        });
-        clearBooking();
-        setCurrentBookingId(null);
-      }, 1500);
-    } catch (error) {
-      console.error("Failed to confirm booking:", error);
-      toast({
-        title: "Lỗi xác nhận đặt vé",
-        description: "Có lỗi xảy ra khi xác nhận đặt vé",
-        variant: "destructive",
-      });
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSimulateFailure = () => {
-    setShowQRModal(false);
-    navigate("/booking/failed");
   };
 
   if (!selectedMovie) {
@@ -959,7 +1119,22 @@ const PaymentPage: React.FC = () => {
       </main>
 
       {/* QR Payment Modal */}
-      <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
+      <Dialog
+        open={showQRModal}
+        onOpenChange={(open) => {
+          if (open) {
+            setShowQRModal(true);
+            return;
+          }
+
+          if (!paymentHandledRef.current && currentBookingId) {
+            setShowCancelPaymentConfirm(true);
+            return;
+          }
+
+          setShowQRModal(false);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -1005,38 +1180,46 @@ const PaymentPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Simulation Buttons */}
           <div className="border-t border-border pt-4">
-            <p className="text-xs text-muted-foreground text-center mb-3">
-              Demo: Mô phỏng kết quả thanh toán
+            <p className="text-xs text-muted-foreground text-center">
+              Hệ thống sẽ tự động cập nhật khi MoMo xác nhận thanh toán.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={handleSimulateSuccess}
-                disabled={isProcessing}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isProcessing ? (
-                  <span className="animate-pulse">Đang xử lý...</span>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Thành công
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleSimulateFailure}
-                variant="destructive"
-                disabled={isProcessing}
-              >
-                <X className="w-4 h-4 mr-2" />
-                Thất bại
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showCancelPaymentConfirm}
+        onOpenChange={setShowCancelPaymentConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bạn muốn hủy thanh toán?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Nếu hủy, đơn giữ ghế hiện tại sẽ bị xóa và bạn cần thực hiện lại
+              từ bước chọn ghế.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancellingPayment}>
+              Tiếp tục thanh toán
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isCancellingPayment}
+              onClick={async () => {
+                setShowCancelPaymentConfirm(false);
+                await cancelPaymentSession(
+                  "Thanh toán thất bại",
+                  "Bạn đã hủy thanh toán. Ghế đã được giải phóng.",
+                  true,
+                );
+              }}
+            >
+              {isCancellingPayment ? "Đang hủy..." : "Hủy thanh toán"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

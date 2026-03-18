@@ -98,7 +98,7 @@ const NotificationDropdown: React.FC = () => {
 
       setNotifications(mapped);
     } catch (error) {
-      console.error("Failed to load notifications:", error);
+      // Avoid noisy console spam in UI when notification service is temporarily unavailable.
       setNotifications([]);
     }
   }, [isAuthenticated, user?.id]);

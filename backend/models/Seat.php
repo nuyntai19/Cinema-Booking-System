@@ -256,10 +256,17 @@ class Seat
     public function canDeleteSeats($hallId)
     {
         try {
+            // Kiểm tra suất chiếu sắp tới
             $sql = "SELECT COUNT(*) FROM showtimes WHERE cinema_hall_id = :hall_id AND start_time > NOW()";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':hall_id' => $hallId]);
-            return $stmt->fetchColumn() == 0;
+            if ($stmt->fetchColumn() > 0) return false;
+
+            // Kiểm tra tickets đã tồn tại tham chiếu đến ghế của hall này
+            $sql2 = "SELECT COUNT(*) FROM tickets t JOIN seats s ON t.seat_id = s.id WHERE s.cinema_hall_id = :hall_id";
+            $stmt2 = $this->db->prepare($sql2);
+            $stmt2->execute([':hall_id' => $hallId]);
+            return $stmt2->fetchColumn() == 0;
         } catch (PDOException $e) {
             error_log("Seat canDeleteSeats Error: " . $e->getMessage());
             return false;

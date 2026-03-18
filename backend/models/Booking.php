@@ -18,6 +18,7 @@ class Booking {
         if (!$showtime) {
             throw new Exception('Suất chiếu không tồn tại');
         }
+        $this->ensureShowtimeIsBookable($showtime);
 
         $seatIds = array_values(array_unique(array_map('intval', $seatIds)));
 
@@ -177,12 +178,22 @@ class Booking {
         $offset = ($page - 1) * $limit;
         $stmt = $this->db->prepare(
             "SELECT b.*, m.title AS movie_title, m.poster_url, m.duration_minutes, m.age_rating,
-                    s.start_time, c.name AS cinema_name, h.name AS hall_name
+                    s.start_time, c.name AS cinema_name, h.name AS hall_name,
+                    tx.payment_method, tx.status AS payment_status
              FROM bookings b
              JOIN showtimes s ON b.showtime_id = s.id
              JOIN movies m ON s.movie_id = m.id
              JOIN cinema_halls h ON s.cinema_hall_id = h.id
              JOIN cinemas c ON h.cinema_id = c.id
+             LEFT JOIN (
+                SELECT t1.booking_id, t1.payment_method, t1.status
+                FROM transactions t1
+                INNER JOIN (
+                    SELECT booking_id, MAX(id) AS max_id
+                    FROM transactions
+                    GROUP BY booking_id
+                ) latest ON latest.max_id = t1.id
+             ) tx ON tx.booking_id = b.id
              WHERE b.user_id = :user_id
              ORDER BY b.created_at DESC
              LIMIT :limit OFFSET :offset"
@@ -197,6 +208,7 @@ class Booking {
             $bookingId = (int)$booking['id'];
             $booking['seats'] = $this->getBookingSeatsSummary($bookingId);
             $booking['concessions'] = $this->getBookingConcessionsSummary($bookingId);
+            $booking['ticket_codes'] = $this->getBookingTicketCodes($bookingId);
         }
         unset($booking);
 
@@ -230,6 +242,20 @@ class Booking {
         );
         $stmt->execute([':booking_id' => $bookingId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function getBookingTicketCodes($bookingId) {
+        $stmt = $this->db->prepare(
+            "SELECT ticket_code
+             FROM tickets
+             WHERE booking_id = :booking_id
+             ORDER BY id ASC"
+        );
+        $stmt->execute([':booking_id' => $bookingId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return array_values(array_filter(array_map(function ($row) {
+            return $row['ticket_code'] ?? null;
+        }, $rows)));
     }
 
     public function countUserBookings($userId) {
@@ -349,6 +375,25 @@ class Booking {
             } catch (Exception $e) {
                 // Log but do not prevent booking confirmation
                 error_log('Loyalty award error: ' . $e->getMessage());
+            }
+
+            // Notify this exact account after successful payment.
+            try {
+                require_once __DIR__ . '/Notification.php';
+                $booking = $booking ?? $this->getById($id);
+                if ($booking && !empty($booking['user_id'])) {
+                    $notification = new Notification();
+                    $title = 'Thanh toán thành công';
+                    $message = sprintf(
+                        'Bạn đã thanh toán thành công đơn vé %s cho phim "%s".',
+                        $booking['booking_code'] ?? ('#' . (int)$id),
+                        $booking['movie_title'] ?? 'Không xác định'
+                    );
+                    $notification->createUserNotification((int)$booking['user_id'], $title, $message, 'BOOKING');
+                }
+            } catch (Exception $e) {
+                // Do not break confirmation if notification fails.
+                error_log('Booking notification error: ' . $e->getMessage());
             }
 
             $this->db->commit();
@@ -475,6 +520,17 @@ class Booking {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    private function ensureShowtimeIsBookable($showtime) {
+        $startTime = isset($showtime['start_time']) ? strtotime((string)$showtime['start_time']) : false;
+        if ($startTime === false) {
+            throw new Exception('Suất chiếu không hợp lệ');
+        }
+
+        if ($startTime <= time()) {
+            throw new Exception('Suất chiếu đã qua giờ, không thể đặt vé');
+        }
+    }
+
     private function getSeatDetails($seatIds, $hallId) {
         list($placeholders, $params) = $this->buildInClause($seatIds, 'seat');
         $sql =
@@ -520,6 +576,7 @@ class Booking {
         if (!$showtime) {
             throw new Exception('Suất chiếu không tồn tại');
         }
+        $this->ensureShowtimeIsBookable($showtime);
 
         $seatIds = array_values(array_unique(array_map('intval', $seatIds)));
 
@@ -764,7 +821,7 @@ class Booking {
         if ($row && is_numeric($row['config_value'])) {
             return (int)$row['config_value'];
         }
-        return isset(Config::$seat_hold_duration) ? (int)Config::$seat_hold_duration : 600;
+        return isset(Config::$seat_hold_duration) ? (int)Config::$seat_hold_duration : 300;
     }
 
     private function getPricingAdjustment($startTime) {

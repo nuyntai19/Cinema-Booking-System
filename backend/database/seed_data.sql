@@ -4,6 +4,7 @@
 -- ============================================
 
 USE galaxy_cinema;
+SET NAMES utf8mb4;
 
 -- ============================================
 -- 1. ROLES & MEMBERSHIPS
@@ -54,12 +55,12 @@ INSERT INTO genres (name) VALUES
 ('Tài Liệu');
 
 INSERT INTO movies (title, duration_minutes, age_rating, origin, poster_url, trailer_url, description, release_date, status) VALUES
-('MAI', 135, 'T16', 'Vietnam', 'https://example.com/mai.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', '2026-02-10', 'Now Showing'),
-('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'https://example.com/dao.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', '2026-02-25', 'Now Showing'),
-('Kung Fu Panda 4', 95, 'P', 'International', 'https://example.com/kfp4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', '2026-03-08', 'Now Showing'),
-('Dune: Part Two', 166, 'T13', 'International', 'https://example.com/dune2.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', '2026-03-01', 'Now Showing'),
-('Godzilla x Kong', 115, 'T13', 'International', 'https://example.com/godzilla.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', '2026-03-29', 'Coming Soon'),
-('Lật Mặt 7', 140, 'T16', 'Vietnam', 'https://example.com/latmat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', '2026-04-26', 'Coming Soon');
+('MAI', 135, 'T16', 'Vietnam', 'uploads/posters/MAI.jpg', 'https://youtube.com/watch?v=xyz', 'Câu chuyện về cuộc đời của Mai', '2026-02-10', 'Now Showing'),
+('Đào, Phở và Piano', 110, 'K', 'Vietnam', 'uploads/posters/dao-pho-va-piano.jpg', 'https://youtube.com/watch?v=abc', 'Bối cảnh Hà Nội 1954', '2026-02-25', 'Now Showing'),
+('Kung Fu Panda 4', 95, 'P', 'International', 'uploads/posters/kung-fu-panda-4.jpg', 'https://youtube.com/watch?v=def', 'Po trở lại với nhiệm vụ mới', '2026-03-08', 'Now Showing'),
+('Dune: Part Two', 166, 'T13', 'International', 'uploads/posters/dune-part-two.jpg', 'https://youtube.com/watch?v=ghi', 'Hành trình báo thù của Paul Atreides', '2026-03-01', 'Now Showing'),
+('Godzilla x Kong', 115, 'T13', 'International', 'uploads/posters/Godzilla_vs_Kong_VN_poster.jpg', 'https://youtube.com/watch?v=jkl', 'Hai titan đại chiến', '2026-03-29', 'Coming Soon'),
+('Lật Mặt 7', 140, 'T16', 'Vietnam', 'uploads/posters/LatMat7.jpg', 'https://youtube.com/watch?v=mno', 'Phần tiếp theo của Lật Mặt', '2026-04-26', 'Coming Soon');
 
 INSERT INTO movie_genres (movie_id, genre_id) VALUES
 (1, 3), (1, 7), -- MAI: Tình cảm, Tâm lý
@@ -451,7 +452,7 @@ WHERE n.title IN ('Đặt vé thành công', 'Ưu đãi mới');
 -- ============================================
 INSERT INTO system_configs (config_key, config_value, description) VALUES
 ('min_vietnamese_quota', '15', 'Tỷ lệ phim Việt tối thiểu (%)'),
-('seat_hold_duration', '600', 'Thời gian giữ ghế (giây) - 10 phút'),
+('seat_hold_duration', '300', 'Thời gian giữ ghế (giây) - 5 phút'),
 ('cleanup_duration', '15', 'Thời gian dọn phòng giữa 2 suất chiếu (phút)'),
 ('curfew_u13', '22:00:00', 'Giờ giới nghiêm cho dưới 13 tuổi'),
 ('curfew_u16', '23:00:00', 'Giờ giới nghiêm cho dưới 16 tuổi'),

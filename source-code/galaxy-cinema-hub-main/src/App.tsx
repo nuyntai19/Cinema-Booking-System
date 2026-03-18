@@ -25,6 +25,7 @@ import ConcessionsPage from "./pages/booking/ConcessionsPage";
 import PaymentPage from "./pages/booking/PaymentPage";
 import BookingSuccessPage from "./pages/booking/BookingSuccessPage";
 import BookingFailedPage from "./pages/booking/BookingFailedPage";
+import BookingFlowGuard from "./components/booking/BookingFlowGuard";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminMovies from "./pages/admin/AdminMovies";
@@ -57,6 +58,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <BookingFlowGuard />
               <Routes>
                 {/* Client Routes */}
                 <Route path="/" element={<HomePage />} />

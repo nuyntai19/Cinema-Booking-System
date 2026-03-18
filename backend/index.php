@@ -5,6 +5,22 @@
  * REST API for Cinema Booking System
  */
 
+if (PHP_SAPI === 'cli-server') {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $staticFile = realpath(__DIR__ . $requestPath);
+    $backendRoot = realpath(__DIR__);
+
+    if (
+        $requestPath !== false &&
+        $staticFile !== false &&
+        $backendRoot !== false &&
+        strncmp($staticFile, $backendRoot, strlen($backendRoot)) === 0 &&
+        is_file($staticFile)
+    ) {
+        return false;
+    }
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -142,6 +158,7 @@ $router->get('/api/cinemas/:id/showtimes', 'CinemaController@getShowtimes');
 $router->get('/api/showtimes', 'ShowtimeController@index');
 $router->get('/api/showtimes/:id', 'ShowtimeController@show');
 $router->post('/api/showtimes', 'ShowtimeController@create'); // Manager
+$router->post('/api/showtimes/auto-generate', 'ShowtimeController@autoGenerate'); // Manager
 $router->put('/api/showtimes/:id', 'ShowtimeController@update'); // Manager
 $router->delete('/api/showtimes/:id', 'ShowtimeController@delete'); // Manager
 $router->get('/api/showtimes/:id/seats', 'ShowtimeController@getAvailableSeats');
