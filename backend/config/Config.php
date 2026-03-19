@@ -24,9 +24,9 @@ class Config
 
     // Cloudinary Settings
     public static $cloudinary_enabled = false;
-    public static $cloudinary_cloud_name = '';
-    public static $cloudinary_api_key = '';
-    public static $cloudinary_api_secret = '';
+    public static $cloudinary_cloud_name = 'galaxy-cinema';
+    public static $cloudinary_api_key = '977851276553852';
+    public static $cloudinary_api_secret = 'CCHVgQ44S9FGHYLXIVUGCO1jVHw';
     public static $cloudinary_folder = 'galaxy-cinema';
 
     // Booking Settings
