@@ -281,11 +281,8 @@ const AdminMovies: React.FC = () => {
 
       setLoading(true);
 
-      // Upload poster if a file is selected
-      let posterUrl = formData.poster_url;
-      if (posterFile) {
-        posterUrl = await uploadPosterFile(posterFile);
-      }
+      // For create flow: create movie first, then upload poster using created movie ID
+      const posterUrl = formData.poster_url || null;
 
       const payload = {
         title: formData.title,
@@ -302,10 +299,29 @@ const AdminMovies: React.FC = () => {
         genre_ids: formData.genre_ids,
       };
 
-      await apiCall(API_ENDPOINTS.MOVIES, {
+      const createResponse = await apiCall<{
+        data?: { movie?: { id?: number } };
+      }>(API_ENDPOINTS.MOVIES, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
+      if (posterFile) {
+        const createdMovieId = Number(createResponse?.data?.movie?.id || 0);
+        if (createdMovieId > 0) {
+          const uploadedPosterUrl = await uploadPosterFile(
+            posterFile,
+            createdMovieId,
+          );
+
+          if (uploadedPosterUrl) {
+            await apiCall(API_ENDPOINTS.MOVIE_DETAIL(createdMovieId), {
+              method: "PUT",
+              body: JSON.stringify({ ...payload, poster_url: uploadedPosterUrl }),
+            });
+          }
+        }
+      }
 
       toast({
         title: "Thành công",

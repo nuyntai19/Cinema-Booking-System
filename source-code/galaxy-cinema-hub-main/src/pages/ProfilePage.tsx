@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   User,
   Mail,
@@ -10,6 +10,8 @@ import {
   X,
   Key,
   Lock,
+  Camera,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +38,7 @@ import {
   determineMembershipTier,
   getMembershipDiscount,
 } from "@/lib/validation";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -49,7 +51,7 @@ const ProfilePage: React.FC = () => {
     phone: user?.phone || "",
     dob: user?.dob || "",
   });
-  
+
   // Change password dialog state
   const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -58,6 +60,9 @@ const ProfilePage: React.FC = () => {
     newPassword: "",
     confirmPassword: "",
   });
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Load user profile data on mount
   useEffect(() => {
@@ -93,7 +98,7 @@ const ProfilePage: React.FC = () => {
       // Re-fetch tier (may have changed after point deduction)
       const utJson: any = await apiCall(API_ENDPOINTS.MEMBERSHIP_USER_TIER(uid));
       if (utJson.success) setLiveUserTier(utJson.data?.tier || null);
-    } catch {}
+    } catch { }
   };
 
   // Map backend snake_case → frontend camelCase
@@ -138,7 +143,7 @@ const ProfilePage: React.FC = () => {
         // Check and auto-upgrade tier first
         try {
           await apiCall(API_ENDPOINTS.MEMBERSHIP_CHECK_UPGRADE(uid));
-        } catch {}
+        } catch { }
 
         // Loyalty history
         const lhJson: any = await apiCall(API_ENDPOINTS.LOYALTY_HISTORY(uid));
@@ -222,6 +227,90 @@ const ProfilePage: React.FC = () => {
     }
   }, [user]);
 
+  const handleAvatarFileChange = (file: File | null) => {
+    if (!file) {
+      setAvatarFile(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Lỗi",
+        description: "File phải là ảnh JPG, PNG hoặc GIF",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Lỗi",
+        description: "Kích thước ảnh không được vượt quá 2MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAvatarFile(file);
+  };
+
+  const handleUploadAvatar = async () => {
+    if (!user?.id || !avatarFile) {
+      return;
+    }
+
+    try {
+      setIsUploadingAvatar(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Chưa đăng nhập");
+      }
+
+      const uploadData = new FormData();
+      uploadData.append("avatar", avatarFile);
+
+      const response = await fetch(
+        API_ENDPOINTS.USER_UPLOAD_AVATAR(parseInt(user.id)),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: uploadData,
+        },
+      );
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || "Upload avatar thất bại");
+      }
+
+      toast({
+        title: "Thành công",
+        description: "Avatar đã được cập nhật",
+      });
+
+      setAvatarFile(null);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+
+      if (refreshUser) {
+        await refreshUser();
+      }
+    } catch (error) {
+      toast({
+        title: "Lỗi upload avatar",
+        description:
+          error instanceof Error ? error.message : "Không thể upload avatar",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -269,7 +358,7 @@ const ProfilePage: React.FC = () => {
           description: "Thông tin của bạn đã được cập nhật",
         });
         setIsEditing(false);
-        
+
         // Refresh user data if available
         if (refreshUser) {
           await refreshUser();
@@ -509,7 +598,7 @@ const ProfilePage: React.FC = () => {
               <CardContent className="space-y-3 md:space-y-4">
                 <div className="flex items-center gap-3 md:gap-4 pb-3 md:pb-4 border-b">
                   <Avatar className="w-16 h-16 md:w-20 md:h-20">
-                    <AvatarImage src={user?.avatar} />
+                    <AvatarImage src={getImageUrl(user?.avatar)} />
                     <AvatarFallback className="text-xl md:text-2xl">
                       {user?.name?.charAt(0)}
                     </AvatarFallback>
@@ -521,6 +610,48 @@ const ProfilePage: React.FC = () => {
                     <p className="text-xs md:text-sm text-muted-foreground">
                       {user?.email}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleAvatarFileChange(e.target.files?.[0] || null)
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={isUploadingAvatar}
+                      >
+                        <Camera className="w-4 h-4 mr-2" />
+                        Chọn ảnh avatar
+                      </Button>
+
+                      {avatarFile && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleUploadAvatar}
+                          disabled={isUploadingAvatar}
+                        >
+                          {isUploadingAvatar ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4 mr-2" />
+                          )}
+                          {isUploadingAvatar ? "Đang upload..." : "Lưu avatar"}
+                        </Button>
+                      )}
+                    </div>
+                    {avatarFile && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Đã chọn: {avatarFile.name}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -602,7 +733,7 @@ const ProfilePage: React.FC = () => {
                       Đổi mật khẩu định kỳ để bảo mật tài khoản
                     </p>
                   </div>
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={() => setIsChangePasswordDialogOpen(true)}
                   >

@@ -6,69 +6,75 @@ require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../utils/JWT.php';
 require_once __DIR__ . '/../config/Config.php';
+require_once __DIR__ . '/../service/CloudinaryService.php';
 
 /**
  * MovieController
  * Quản lý phim
  * Phụ trách: TUẤN TÀI
  */
-class MovieController {
+class MovieController
+{
     private $movieModel;
     private $genreModel;
     private $movieGenreModel;
-    
-    public function __construct() {
+
+    public function __construct()
+    {
         $this->movieModel = new Movie();
         $this->genreModel = new Genre();
         $this->movieGenreModel = new MovieGenre();
     }
-    
+
     /**
      * Helper: Get current user from JWT token
      */
-    private function getCurrentUser() {
+    private function getCurrentUser()
+    {
         try {
             $headers = getallheaders();
             $authHeader = $headers['Authorization'] ?? '';
-            
+
             if (empty($authHeader)) {
                 return null;
             }
-            
+
             $token = str_replace('Bearer ', '', $authHeader);
             $payload = JWT::decode($token, Config::$jwt_secret);
-            
+
             return $payload;
         } catch (Exception $e) {
             error_log("JWT decode error in MovieController: " . $e->getMessage());
             return null;
         }
     }
-    
+
     /**
      * Helper: Check if user is admin or manager
      */
-    private function isAdminOrManager() {
+    private function isAdminOrManager()
+    {
         $user = $this->getCurrentUser();
-        
+
         if (!$user) {
             return false;
         }
-        
+
         // role_id: 4 = Manager, 5 = Admin
         return in_array($user['role_id'], [4, 5]);
     }
-    
+
     /**
      * Helper: Check if user is admin
      */
-    private function isAdmin() {
+    private function isAdmin()
+    {
         $user = $this->getCurrentUser();
-        
+
         if (!$user) {
             return false;
         }
-        
+
         // role_id: 5 = Admin
         return $user['role_id'] == 5;
     }
@@ -76,31 +82,32 @@ class MovieController {
     // ============================================
     // PUBLIC FUNCTIONS
     // ============================================
-    
+
     /**
      * GET /api/movies
      * Lấy danh sách phim với filter và pagination
      * Public access
      */
-    public function index() {
+    public function index()
+    {
         try {
             // Get query parameters
             $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
-            
+
             // Build filters
             $filters = [];
             if (isset($_GET['status'])) $filters['status'] = $_GET['status'];
             if (isset($_GET['origin'])) $filters['origin'] = $_GET['origin'];
             if (isset($_GET['genre_id'])) $filters['genre_id'] = (int)$_GET['genre_id'];
             if (isset($_GET['search'])) $filters['search'] = $_GET['search'];
-            
+
             // Get movies
             $movies = $this->movieModel->getAll($filters, $page, $limit);
             $total = $this->movieModel->count($filters);
-            
+
             $totalPages = ceil($total / $limit);
-            
+
             return Response::success([
                 'movies' => $movies,
                 'pagination' => [
@@ -110,99 +117,99 @@ class MovieController {
                     'total_pages' => $totalPages
                 ]
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController Index Error: " . $e->getMessage());
             return Response::error('Lỗi khi lấy danh sách phim', 500);
         }
     }
-    
+
     /**
      * GET /api/movies/{id}
      * Lấy chi tiết phim theo ID
      * Public access
      */
-    public function show($id) {
+    public function show($id)
+    {
         try {
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             $movie = $this->movieModel->getById($id);
-            
+
             if (!$movie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             return Response::success(['movie' => $movie]);
-            
         } catch (Exception $e) {
             error_log("MovieController Show Error: " . $e->getMessage());
             return Response::error('Lỗi khi lấy thông tin phim', 500);
         }
     }
-    
+
     /**
      * GET /api/movies/{id}/showtimes
      * Lấy suất chiếu của phim
      * Public access
      */
-    public function getShowtimes($id) {
+    public function getShowtimes($id)
+    {
         try {
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             // Check if movie exists
             $movie = $this->movieModel->getById($id);
             if (!$movie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             // Build filters
             $filters = [];
             if (isset($_GET['date'])) $filters['date'] = $_GET['date'];
             if (isset($_GET['cinema_id'])) $filters['cinema_id'] = (int)$_GET['cinema_id'];
-            
+
             $showtimes = $this->movieModel->getShowtimes($id, $filters);
-            
+
             return Response::success([
                 'movie_id' => $id,
                 'showtimes' => $showtimes,
                 'total' => count($showtimes)
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController GetShowtimes Error: " . $e->getMessage());
             return Response::error('Lỗi khi lấy suất chiếu', 500);
         }
     }
-    
+
     /**
      * GET /api/movies/{id}/reviews
      * Lấy reviews của phim
      * Public access
      */
-    public function getReviews($id) {
+    public function getReviews($id)
+    {
         try {
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             // Check if movie exists
             $movie = $this->movieModel->getById($id);
             if (!$movie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
-            
+
             $reviews = $this->movieModel->getReviews($id, $page, $limit);
-            
+
             // Get rating statistics
             $ratingStats = $this->movieModel->calculateAverageRating($id);
-            
+
             return Response::success([
                 'movie_id' => $id,
                 'reviews' => $reviews,
@@ -212,7 +219,6 @@ class MovieController {
                     'limit' => $limit
                 ]
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController GetReviews Error: " . $e->getMessage());
             return Response::error('Lỗi khi lấy reviews', 500);
@@ -222,22 +228,23 @@ class MovieController {
     // ============================================
     // ADMIN/MANAGER FUNCTIONS
     // ============================================
-    
+
     /**
      * POST /api/movies
      * Tạo phim mới
      * Authorization: Admin/Manager only
      */
-    public function create() {
+    public function create()
+    {
         try {
             // Check permission
             if (!$this->isAdminOrManager()) {
                 return Response::error('Không có quyền truy cập', 403);
             }
-            
+
             // Get request body
             $input = json_decode(file_get_contents('php://input'), true);
-            
+
             // Validate required fields
             $requiredFields = ['title', 'duration', 'release_date', 'origin'];
             foreach ($requiredFields as $field) {
@@ -245,35 +252,35 @@ class MovieController {
                     return Response::error("Thiếu trường bắt buộc: {$field}", 400);
                 }
             }
-            
+
             // Validate duration
             if ($input['duration'] <= 0) {
                 return Response::error('Thời lượng phim phải lớn hơn 0', 400);
             }
-            
+
             // Validate age_rating - must match ENUM in database
             $validAgeRatings = ['P', 'K', 'T13', 'T16', 'T18', 'C'];
             if (isset($input['age_rating']) && !in_array($input['age_rating'], $validAgeRatings)) {
                 return Response::error('Phân loại độ tuổi không hợp lệ', 400);
             }
-            
+
             // Validate release date format
             if (!strtotime($input['release_date'])) {
                 return Response::error('Ngày phát hành không hợp lệ', 400);
             }
-            
+
             // Validate origin - must match ENUM in database
             $validOrigins = ['Vietnam', 'International'];
             if (!in_array($input['origin'], $validOrigins)) {
                 return Response::error('Quốc gia không hợp lệ (Vietnam hoặc International)', 400);
             }
-            
+
             // Validate status - must match ENUM in database
             $validStatuses = ['Now Showing', 'Coming Soon', 'Ended'];
             if (isset($input['status']) && !in_array($input['status'], $validStatuses)) {
                 return Response::error('Trạng thái không hợp lệ', 400);
             }
-            
+
             // Validate genre_ids if provided
             if (isset($input['genre_ids']) && is_array($input['genre_ids'])) {
                 foreach ($input['genre_ids'] as $genreId) {
@@ -282,53 +289,53 @@ class MovieController {
                     }
                 }
             }
-            
+
             // Create movie
             $movieId = $this->movieModel->create($input);
-            
+
             if (!$movieId) {
                 return Response::error('Không thể tạo phim', 500);
             }
-            
+
             // Get created movie
             $movie = $this->movieModel->getById($movieId);
-            
+
             return Response::success([
                 'message' => 'Tạo phim thành công',
                 'movie' => $movie
             ], 201);
-            
         } catch (Exception $e) {
             error_log("MovieController Create Error: " . $e->getMessage());
             return Response::error('Lỗi khi tạo phim', 500);
         }
     }
-    
+
     /**
      * PUT /api/movies/{id}
      * Cập nhật phim
      * Authorization: Admin/Manager only
      */
-    public function update($id) {
+    public function update($id)
+    {
         try {
             // Check permission
             if (!$this->isAdminOrManager()) {
                 return Response::error('Không có quyền truy cập', 403);
             }
-            
+
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             // Check if movie exists
             $existingMovie = $this->movieModel->getById($id);
             if (!$existingMovie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             // Get request body
             $input = json_decode(file_get_contents('php://input'), true);
-            
+
             // Validate required fields
             $requiredFields = ['title', 'duration', 'release_date', 'origin', 'status'];
             foreach ($requiredFields as $field) {
@@ -336,12 +343,12 @@ class MovieController {
                     return Response::error("Thiếu trường bắt buộc: {$field}", 400);
                 }
             }
-            
+
             // Validate duration
             if ($input['duration'] <= 0) {
                 return Response::error('Thời lượng phim phải lớn hơn 0', 400);
             }
-            
+
             // Validate genre_ids if provided
             if (isset($input['genre_ids']) && is_array($input['genre_ids'])) {
                 foreach ($input['genre_ids'] as $genreId) {
@@ -350,140 +357,161 @@ class MovieController {
                     }
                 }
             }
-            
+
             // Update movie
             $result = $this->movieModel->update($id, $input);
-            
+
             if (!$result) {
                 return Response::error('Không thể cập nhật phim', 500);
             }
-            
+
             // Get updated movie
             $movie = $this->movieModel->getById($id);
-            
+
             return Response::success([
                 'message' => 'Cập nhật phim thành công',
                 'movie' => $movie
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController Update Error: " . $e->getMessage());
             return Response::error('Lỗi khi cập nhật phim', 500);
         }
     }
-    
+
     /**
      * DELETE /api/movies/{id}
      * Xóa phim (soft delete)
      * Authorization: Admin only
      */
-    public function delete($id) {
+    public function delete($id)
+    {
         try {
             // Check permission - Only Admin can delete
             if (!$this->isAdmin()) {
                 return Response::error('Không có quyền truy cập', 403);
             }
-            
+
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             // Check if movie exists
             $movie = $this->movieModel->getById($id);
             if (!$movie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             // Soft delete - set status to 'Deleted'
             $result = $this->movieModel->delete($id);
-            
+
             if (!$result) {
                 return Response::error('Không thể xóa phim', 500);
             }
-            
+
             return Response::success([
                 'message' => 'Xóa phim thành công',
                 'movie_id' => $id
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController Delete Error: " . $e->getMessage());
             return Response::error('Lỗi khi xóa phim', 500);
         }
     }
-    
+
     /**
      * POST /api/movies/{id}/poster
      * Upload poster cho phim
      * Authorization: Admin/Manager only
      */
-    public function uploadPoster($id) {
+    public function uploadPoster($id)
+    {
         try {
             // Check permission
             if (!$this->isAdminOrManager()) {
                 return Response::error('Không có quyền truy cập', 403);
             }
-            
+
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
-            
+
             // Check if movie exists
             $movie = $this->movieModel->getById($id);
             if (!$movie) {
                 return Response::error('Không tìm thấy phim', 404);
             }
-            
+
             // Check if file was uploaded
             if (!isset($_FILES['poster']) || $_FILES['poster']['error'] !== UPLOAD_ERR_OK) {
                 return Response::error('Không có file được upload hoặc có lỗi xảy ra', 400);
             }
-            
+
             $file = $_FILES['poster'];
-            
+
             // Validate file type
             $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
             if (!in_array($file['type'], $allowedTypes)) {
                 return Response::error('Chỉ chấp nhận file ảnh (JPEG, PNG, WebP)', 400);
             }
-            
+
             // Validate file size (max 5MB)
             $maxSize = 5 * 1024 * 1024; // 5MB
             if ($file['size'] > $maxSize) {
                 return Response::error('Kích thước file không được vượt quá 5MB', 400);
             }
-            
+
+            if (Config::isCloudinaryRequested() && !Config::isCloudinaryConfigured()) {
+                return Response::error('Cloudinary đã được bật nhưng chưa cấu hình đủ biến môi trường', 500);
+            }
+
+            if (Config::useCloudinary()) {
+                $cloudinaryService = new CloudinaryService();
+                $uploadResult = $cloudinaryService->uploadImage($file, 'posters', 'movie_' . $id);
+                $posterUrl = $uploadResult['url'];
+                $result = $this->movieModel->uploadPoster($id, $posterUrl);
+
+                if (!$result) {
+                    return Response::error('Không thể cập nhật poster URL', 500);
+                }
+
+                return Response::success([
+                    'message' => 'Upload poster thành công',
+                    'poster_url' => $posterUrl,
+                    'storage' => 'cloudinary'
+                ]);
+            }
+
             // Create upload directory if not exists
             $uploadDir = __DIR__ . '/../uploads/posters/';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
-            
+
             // Generate unique filename
             $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
             $filename = 'movie_' . $id . '_' . time() . '.' . $extension;
             $uploadPath = $uploadDir . $filename;
-            
+
             // Move uploaded file
             if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
                 return Response::error('Không thể lưu file', 500);
             }
-            
+
             // Update poster URL in database
             $posterUrl = 'uploads/posters/' . $filename;
             $result = $this->movieModel->uploadPoster($id, $posterUrl);
-            
+
             if (!$result) {
                 // Delete uploaded file if database update fails
                 unlink($uploadPath);
                 return Response::error('Không thể cập nhật poster URL', 500);
             }
-            
+
             return Response::success([
                 'message' => 'Upload poster thành công',
-                'poster_url' => $posterUrl
+                'poster_url' => $posterUrl,
+                'storage' => 'local'
             ]);
-            
         } catch (Exception $e) {
             error_log("MovieController UploadPoster Error: " . $e->getMessage());
             return Response::error('Lỗi khi upload poster', 500);

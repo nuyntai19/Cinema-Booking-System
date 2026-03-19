@@ -202,6 +202,23 @@ class Concession
     }
 
     /**
+     * Cập nhật ảnh concession
+     * @param int $id
+     * @param string $imageUrl
+     * @return bool
+     */
+    public function uploadImage($id, $imageUrl)
+    {
+        $stmt = $this->db->prepare("\
+            UPDATE concessions
+            SET image_url = ?
+            WHERE id = ?
+        ");
+
+        return $stmt->execute([$imageUrl, $id]);
+    }
+
+    /**
      * Lấy top concessions bán chạy
      * @param int $limit
      * @param string $startDate
