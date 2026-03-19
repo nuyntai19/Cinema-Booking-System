@@ -42,6 +42,35 @@ const NotificationDropdown: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  const getHiddenStorageKey = useCallback(() => {
+    const userKey = user?.id ? `user_${user.id}` : "guest";
+    return `hidden_notifications_${userKey}`;
+  }, [user?.id]);
+
+  const getHiddenNotificationIds = useCallback((): Set<string> => {
+    if (!isAuthenticated) return new Set<string>();
+
+    try {
+      const raw = localStorage.getItem(getHiddenStorageKey());
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return new Set<string>();
+      return new Set<string>(parsed.map((id) => String(id)));
+    } catch {
+      return new Set<string>();
+    }
+  }, [getHiddenStorageKey, isAuthenticated]);
+
+  const saveHiddenNotificationIds = useCallback(
+    (ids: Set<string>) => {
+      if (!isAuthenticated) return;
+      localStorage.setItem(
+        getHiddenStorageKey(),
+        JSON.stringify(Array.from(ids)),
+      );
+    },
+    [getHiddenStorageKey, isAuthenticated],
+  );
+
   const getIconByType = (type: string) => {
     const normalized = type.toUpperCase();
     if (normalized === "BOOKING") {
@@ -96,12 +125,51 @@ const NotificationDropdown: React.FC = () => {
         },
       );
 
-      setNotifications(mapped);
+      const hiddenIds = getHiddenNotificationIds();
+      setNotifications(mapped.filter((item) => !hiddenIds.has(item.id)));
     } catch (error) {
+      if (isAuthenticated) {
+        try {
+          // If user-specific endpoint fails (e.g., stale user id in storage),
+          // still show public notifications instead of an empty dropdown.
+          const fallbackResponse = await apiCall<NotificationApiResponse>(
+            API_ENDPOINTS.PUBLIC_NOTIFICATIONS,
+          );
+
+          const mappedFallback: Notification[] = (
+            fallbackResponse.data?.items || []
+          ).map((item) => {
+            const normalizedType = item.type?.toUpperCase() || "SYSTEM";
+            return {
+              id: String(item.id),
+              type:
+                normalizedType === "BOOKING"
+                  ? "booking"
+                  : normalizedType === "PROMOTION"
+                    ? "promotion"
+                    : "system",
+              title: item.title,
+              message: item.message,
+              time: formatRelativeTime(item.created_at),
+              isRead: true,
+              icon: getIconByType(normalizedType),
+            };
+          });
+
+          const hiddenIds = getHiddenNotificationIds();
+          setNotifications(
+            mappedFallback.filter((item) => !hiddenIds.has(item.id)),
+          );
+          return;
+        } catch {
+          // no-op, fall through to empty list
+        }
+      }
+
       // Avoid noisy console spam in UI when notification service is temporarily unavailable.
       setNotifications([]);
     }
-  }, [isAuthenticated, user?.id]);
+  }, [getHiddenNotificationIds, isAuthenticated, user?.id]);
 
   useEffect(() => {
     loadNotifications();
@@ -144,11 +212,19 @@ const NotificationDropdown: React.FC = () => {
 
   const deleteNotification = (id: string) => {
     if (!isAuthenticated) return;
+    const hiddenIds = getHiddenNotificationIds();
+    hiddenIds.add(id);
+    saveHiddenNotificationIds(hiddenIds);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const clearAll = () => {
     if (!isAuthenticated) return;
+
+    const hiddenIds = getHiddenNotificationIds();
+    notifications.forEach((notification) => hiddenIds.add(notification.id));
+    saveHiddenNotificationIds(hiddenIds);
+
     setNotifications([]);
   };
 

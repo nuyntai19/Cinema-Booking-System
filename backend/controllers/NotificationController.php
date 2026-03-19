@@ -9,12 +9,27 @@ class NotificationController extends BaseController {
 
     public function getUserNotifications($userId) {
         AuthMiddleware::authenticate();
-        self::authorizeUserId((int)$userId);
 
         try {
+            $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
+            $authRole = (string)($_REQUEST['auth_user_role'] ?? '');
+            $requestedUserId = (int)$userId;
+
+            // Prevent path/user mismatch from hiding notifications for normal users.
+            // Admin/Manager may query arbitrary user ids; others always query self.
+            if ($authRole === 'Admin' || $authRole === 'Manager') {
+                $effectiveUserId = $requestedUserId > 0 ? $requestedUserId : $authUserId;
+            } else {
+                $effectiveUserId = $authUserId;
+            }
+
+            if ($effectiveUserId <= 0) {
+                Response::forbidden('Insufficient permissions');
+            }
+
             $roleId = (int)($_REQUEST['auth_user_role_id'] ?? 2);
             $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 30;
-            $items = $this->model->getUserNotifications((int)$userId, $roleId, $limit);
+            $items = $this->model->getUserNotifications($effectiveUserId, $roleId, $limit);
         } catch (Throwable $e) {
             error_log('NotificationController@getUserNotifications error: ' . $e->getMessage());
             $items = [];
@@ -54,49 +69,13 @@ class NotificationController extends BaseController {
     }
 
     public function adminList() {
-        $logFile = __DIR__ . '/../admin_notifications_debug.log';
-        file_put_contents($logFile, "=== adminList called at " . date('Y-m-d H:i:s') . " ===\n", FILE_APPEND);
-        file_put_contents($logFile, "REQUEST_URI: " . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
-        file_put_contents($logFile, "REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
-        
-        // Try to authenticate, but don't fail if no token - just proceed without auth
-        $isAuthenticated = false;
-        try {
-            AuthMiddleware::authenticate();
-            $isAuthenticated = true;
-            file_put_contents($logFile, "✓ Authentication passed\n", FILE_APPEND);
-        } catch (Exception $e) {
-            file_put_contents($logFile, "⚠ Authentication failed (proceeding without auth): " . $e->getMessage() . "\n", FILE_APPEND);
-        }
-        
-        // Require manager role only if authenticated
-        if ($isAuthenticated) {
-            try {
-                $userRole = $_REQUEST['auth_user_role'] ?? null;
-                file_put_contents($logFile, "Checking role: " . $userRole . "\n", FILE_APPEND);
-                
-                if (!in_array($userRole, ['Admin', 'Manager'])) {
-                    file_put_contents($logFile, "✗ Insufficient permissions\n", FILE_APPEND);
-                    Response::forbidden('Insufficient permissions');
-                }
-                file_put_contents($logFile, "✓ Role check passed\n", FILE_APPEND);
-            } catch (Exception $e) {
-                file_put_contents($logFile, "✗ Role check error: " . $e->getMessage() . "\n", FILE_APPEND);
-                Response::forbidden('Role check failed');
-            }
-        }
+        AuthMiddleware::requireManager();
 
         try {
             $search = trim((string)($_GET['search'] ?? ''));
             $type = trim((string)($_GET['type'] ?? 'all'));
 
-            file_put_contents($logFile, "Params - search: '$search', type: '$type'\n", FILE_APPEND);
-            error_log('NotificationController@adminList - search: ' . $search . ', type: ' . $type);
-
             $campaigns = $this->model->listCampaigns($search, $type);
-
-            file_put_contents($logFile, "Campaigns count: " . count($campaigns) . "\n", FILE_APPEND);
-            error_log('NotificationController@adminList - campaigns count: ' . count($campaigns));
 
             $stats = [
                 'total_notifications' => count($campaigns),
@@ -113,14 +92,8 @@ class NotificationController extends BaseController {
                     return strtoupper((string)($n['status'] ?? 'SENT')) === 'SCHEDULED';
                 })),
             ];
-            
-            file_put_contents($logFile, "Stats: " . json_encode($stats) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "✓ SUCCESS - returning " . count($campaigns) . " campaigns\n", FILE_APPEND);
         } catch (Throwable $e) {
-            file_put_contents($logFile, "ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-            file_put_contents($logFile, "TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
             error_log('NotificationController@adminList error: ' . $e->getMessage());
-            error_log('NotificationController@adminList trace: ' . $e->getTraceAsString());
             $campaigns = [];
             $stats = [
                 'total_notifications' => 0,

@@ -27,7 +27,13 @@ class Notification {
             return $this->hasReadTable;
         }
 
-        $stmt = $this->db->prepare('SHOW TABLES LIKE :table_name');
+        $sql = 'SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                  AND table_name = :table_name
+                LIMIT 1';
+
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([':table_name' => $this->readTable]);
         $this->hasReadTable = (bool)$stmt->fetch(PDO::FETCH_NUM);
         return $this->hasReadTable;
@@ -58,8 +64,21 @@ class Notification {
         return 'USER';
     }
 
-    private function countRecipientsByAudience($audience) {
-        error_log('Notification::countRecipientsByAudience - audience: ' . $audience);
+    private function countRecipientsByAudience($audience, $targetUserId = null) {
+        error_log('Notification::countRecipientsByAudience - audience: ' . $audience . ', targetUserId: ' . (string)$targetUserId);
+
+        if ($this->supportsTargetUser() && $targetUserId !== null) {
+            $sql = "SELECT COUNT(*) AS total FROM users WHERE id = :user_id AND status = 'Active'";
+            try {
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([':user_id' => (int)$targetUserId]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                return (int)($row['total'] ?? 0);
+            } catch (Exception $e) {
+                error_log('Notification::countRecipientsByAudience (target user) ERROR: ' . $e->getMessage());
+                return 0;
+            }
+        }
         
         $audience = strtoupper((string)$audience);
         if ($audience === 'GUEST') {
@@ -91,8 +110,8 @@ class Notification {
         }
     }
 
-    private function countReadsByNotification($notificationId, $audience) {
-        error_log('Notification::countReadsByNotification - notifId: ' . $notificationId . ', audience: ' . $audience);
+    private function countReadsByNotification($notificationId, $audience, $targetUserId = null) {
+        error_log('Notification::countReadsByNotification - notifId: ' . $notificationId . ', audience: ' . $audience . ', targetUserId: ' . (string)$targetUserId);
         
         if (!$this->supportsReadTable()) {
             error_log('Notification::countReadsByNotification - notification_reads table not supported');
@@ -105,26 +124,32 @@ class Notification {
             $audience = 'ALL';
         }
 
-        $whereRole = '';
-        if ($audience === 'USER') {
-            $whereRole = ' AND u.role_id = 2';
-        } elseif ($audience === 'STAFF') {
-            $whereRole = ' AND u.role_id IN (3,4)';
-        } elseif ($audience === 'ADMIN') {
-            $whereRole = ' AND u.role_id = 5';
-        }
-
         $sql = "SELECT COUNT(*) AS total
                 FROM {$this->readTable} nr
                 INNER JOIN users u ON u.id = nr.user_id
                 WHERE nr.notification_id = :notification_id
-                  AND u.status = 'Active'" . $whereRole;
+                  AND u.status = 'Active'";
+
+        $params = [':notification_id' => (int)$notificationId];
+
+        if ($this->supportsTargetUser() && $targetUserId !== null) {
+            $sql .= ' AND nr.user_id = :target_user_id';
+            $params[':target_user_id'] = (int)$targetUserId;
+        } else {
+            if ($audience === 'USER') {
+                $sql .= ' AND u.role_id = 2';
+            } elseif ($audience === 'STAFF') {
+                $sql .= ' AND u.role_id IN (3,4)';
+            } elseif ($audience === 'ADMIN') {
+                $sql .= ' AND u.role_id = 5';
+            }
+        }
 
         error_log('Notification::countReadsByNotification SQL: ' . $sql);
         
         try {
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([':notification_id' => (int)$notificationId]);
+            $stmt->execute($params);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             $count = (int)($row['total'] ?? 0);
             error_log('Notification::countReadsByNotification result: ' . $count);
@@ -140,7 +165,7 @@ class Notification {
 
         $audience = $this->getAudienceForRoleId($roleId);
         $targetUserWhere = $this->supportsTargetUser()
-            ? ' AND (n.target_user_id IS NULL OR n.target_user_id = :user_id)'
+            ? ' AND (n.target_user_id IS NULL OR n.target_user_id = :target_user_id)'
             : '';
 
         if ($this->supportsReadTable()) {
@@ -151,7 +176,7 @@ class Notification {
                     FROM {$this->table} n
                     LEFT JOIN {$this->readTable} nr
                         ON nr.notification_id = n.id
-                       AND nr.user_id = :user_id
+                       AND nr.user_id = :read_user_id
                     WHERE n.is_active = 1
                   AND n.status = 'SENT'
                   AND n.target_audience IN ('ALL', 'GUEST', :audience)
@@ -173,7 +198,12 @@ class Notification {
         }
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':user_id', (int)$userId, PDO::PARAM_INT);
+        if ($this->supportsReadTable()) {
+            $stmt->bindValue(':read_user_id', (int)$userId, PDO::PARAM_INT);
+        }
+        if ($this->supportsTargetUser()) {
+            $stmt->bindValue(':target_user_id', (int)$userId, PDO::PARAM_INT);
+        }
         $stmt->bindValue(':audience', $audience, PDO::PARAM_STR);
         $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
@@ -242,8 +272,8 @@ class Notification {
 
         $whereSql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
 
-        $sql = "SELECT id, title, message, COALESCE(type, 'SYSTEM') AS type,
-               target_audience, status, scheduled_at, sent_at, created_at
+         $sql = "SELECT id, title, message, COALESCE(type, 'SYSTEM') AS type,
+             target_audience, target_user_id, status, scheduled_at, sent_at, created_at
             FROM {$this->table}
             {$whereSql}
             ORDER BY created_at DESC";
@@ -263,8 +293,11 @@ class Notification {
 
             $result = [];
             foreach ($rows as $row) {
-                $recipientCount = $this->countRecipientsByAudience($row['target_audience']);
-                $readCount = $this->countReadsByNotification($row['id'], $row['target_audience']);
+                $targetUserId = $this->supportsTargetUser()
+                    ? (isset($row['target_user_id']) && $row['target_user_id'] !== null ? (int)$row['target_user_id'] : null)
+                    : null;
+                $recipientCount = $this->countRecipientsByAudience($row['target_audience'], $targetUserId);
+                $readCount = $this->countReadsByNotification($row['id'], $row['target_audience'], $targetUserId);
                 $row['recipient_count'] = $recipientCount;
                 $row['read_count'] = $readCount;
                 $result[] = $row;
@@ -277,6 +310,8 @@ class Notification {
             error_log('Notification::listCampaigns TRACE: ' . $e->getTraceAsString());
             return [];
         }
+
+    }
 
     public function createCampaign($title, $message, $type, $targetAudience, $createdBy = null, $scheduledAt = null) {
         $scheduledAt = $scheduledAt ? trim((string)$scheduledAt) : null;
