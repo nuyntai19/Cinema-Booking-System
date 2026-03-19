@@ -14,7 +14,7 @@ import {
   Showtime,
   UserRole,
 } from "@/types/cinema";
-import { API_ENDPOINTS } from "@/lib/api";
+import { API_ENDPOINTS, getImageUrl } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         name: data.data.user.full_name,
         email: data.data.user.email,
         role: mapRoleIdToRole(data.data.user.role_id),
-        avatar: data.data.user.avatar || undefined,
+        avatar: getImageUrl(data.data.user.avatar) || undefined,
         loyaltyPoints: data.data.user.current_points || 0,
         phone: data.data.user.phone,
         dob: data.data.user.dob,
@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           name: data.data.user.full_name,
           email: data.data.user.email,
           role: mapRoleIdToRole(data.data.user.role_id),
-          avatar: data.data.user.avatar || undefined,
+          avatar: getImageUrl(data.data.user.avatar) || undefined,
           loyaltyPoints: data.data.user.current_points || 0,
           phone: data.data.user.phone,
           dob: data.data.user.dob,
@@ -235,10 +235,10 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({
         return prev.map((c) =>
           c.id === id
             ? {
-                ...c,
-                ...itemData,
-                quantity,
-              }
+              ...c,
+              ...itemData,
+              quantity,
+            }
             : c,
         );
       }

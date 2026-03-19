@@ -217,6 +217,7 @@ $router->get('/api/concessions', 'ConcessionController@index');
 $router->get('/api/concessions/available', 'ConcessionController@getAvailable'); // Get available concessions
 $router->get('/api/concessions/:id', 'ConcessionController@show');
 $router->post('/api/concessions', 'ConcessionController@create'); // Admin
+$router->post('/api/concessions/:id/upload-image', 'ConcessionController@uploadImage'); // Admin - Upload concession image
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin
 $router->delete('/api/concessions/:id', 'ConcessionController@delete'); // Admin
 

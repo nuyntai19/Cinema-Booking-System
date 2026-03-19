@@ -143,6 +143,31 @@ Email sẽ chỉ hiển thị trong PHP server log.
 
 ---
 
+## Cloudinary Uploads
+
+Ứng dụng hiện hỗ trợ lưu ảnh mới lên Cloudinary thông qua các endpoint upload hiện có:
+
+- `POST /api/movies/:id/upload-poster`
+- `POST /api/users/:id/upload-avatar`
+
+Thiết lập trong file `.env`:
+
+```env
+CLOUDINARY_ENABLED=true
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+CLOUDINARY_FOLDER=galaxy-cinema
+```
+
+Hành vi runtime:
+
+- Khi `CLOUDINARY_ENABLED=true` và đủ credentials, ảnh mới sẽ được upload lên Cloudinary và database sẽ lưu `secure_url`.
+- Khi `CLOUDINARY_ENABLED=false`, hệ thống giữ nguyên cơ chế lưu local trong thư mục `uploads/`.
+- Nếu bật Cloudinary nhưng thiếu biến môi trường, endpoint upload sẽ trả lỗi cấu hình để tránh lưu lẫn lộn giữa local và cloud.
+
+---
+
 ## Bước tiếp theo:
 
 1. ✅ Tạo database schema (SQL script)

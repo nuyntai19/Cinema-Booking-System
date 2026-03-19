@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
   USER_PROFILE: (id: number) => `${API_BASE_URL}/api/users/${id}/profile`,
   CHANGE_PASSWORD: (id: number) =>
     `${API_BASE_URL}/api/users/${id}/change-password`,
+  USER_UPLOAD_AVATAR: (id: number) =>
+    `${API_BASE_URL}/api/users/${id}/upload-avatar`,
 
   // Movies
   MOVIES: `${API_BASE_URL}/api/movies`,
@@ -75,6 +77,8 @@ export const API_ENDPOINTS = {
 
   // Concessions
   CONCESSIONS: `${API_BASE_URL}/api/concessions`,
+  CONCESSION_UPLOAD_IMAGE: (id: number) =>
+    `${API_BASE_URL}/api/concessions/${id}/upload-image`,
 
   // Reviews
   MOVIE_REVIEWS_LIST: (movieId: number) =>

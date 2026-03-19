@@ -62,6 +62,8 @@ const AdminConcessions: React.FC = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [concessions, setConcessions] = useState<Concession[]>([]);
 
@@ -105,6 +107,84 @@ const AdminConcessions: React.FC = () => {
     is_available: true,
   });
 
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      category: "combo",
+      price: 0,
+      image_url: "",
+      is_available: true,
+    });
+    setImageFile(null);
+  };
+
+  const handleImageFileChange = (file: File | null) => {
+    if (!file) {
+      setImageFile(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Lỗi",
+        description: "Chỉ chấp nhận file ảnh JPG, PNG, GIF hoặc WebP",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Lỗi",
+        description: "Kích thước file không được vượt quá 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImageFile(file);
+  };
+
+  const uploadConcessionImage = async (
+    file: File,
+    concessionId: number,
+  ): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      const uploadData = new FormData();
+      uploadData.append("image", file);
+
+      const response = await fetch(
+        API_ENDPOINTS.CONCESSION_UPLOAD_IMAGE(concessionId),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: uploadData,
+        },
+      );
+
+      const result = await response.json();
+      if (result.success && result.data?.image_url) {
+        return result.data.image_url;
+      }
+
+      throw new Error(result.message || "Upload ảnh thất bại");
+    } catch (error) {
+      toast({
+        title: "Lỗi upload ảnh",
+        description:
+          error instanceof Error ? error.message : "Không thể upload ảnh",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Statistics
   const totalItems = concessions.length;
   const availableItems = concessions.filter((c) => c.is_available).length;
@@ -131,6 +211,7 @@ const AdminConcessions: React.FC = () => {
       image_url: item.image_url || "",
       is_available: item.is_available,
     });
+    setImageFile(null);
     setIsEditDialogOpen(true);
   };
 
@@ -139,9 +220,21 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
+      let imageUrl = formData.image_url || null;
+
+      if (imageFile) {
+        const uploadedImageUrl = await uploadConcessionImage(
+          imageFile,
+          selectedItem.id,
+        );
+        if (uploadedImageUrl) {
+          imageUrl = uploadedImageUrl;
+        }
+      }
+
       await apiCall(API_ENDPOINTS.CONCESSIONS + `/${selectedItem.id}`, {
         method: "PUT",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, image_url: imageUrl }),
       });
 
       toast({
@@ -151,6 +244,7 @@ const AdminConcessions: React.FC = () => {
 
       setIsEditDialogOpen(false);
       setSelectedItem(null);
+      setImageFile(null);
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
@@ -179,10 +273,31 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
-      await apiCall(API_ENDPOINTS.CONCESSIONS, {
+      const createResponse = await apiCall<{
+        success: boolean;
+        data?: { id?: number };
+      }>(API_ENDPOINTS.CONCESSIONS, {
         method: "POST",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          image_url: formData.image_url || null,
+        }),
       });
+
+      const createdConcessionId = Number(createResponse?.data?.id || 0);
+      if (imageFile && createdConcessionId > 0) {
+        const uploadedImageUrl = await uploadConcessionImage(
+          imageFile,
+          createdConcessionId,
+        );
+
+        if (uploadedImageUrl) {
+          await apiCall(API_ENDPOINTS.CONCESSIONS + `/${createdConcessionId}`, {
+            method: "PUT",
+            body: JSON.stringify({ image_url: uploadedImageUrl }),
+          });
+        }
+      }
 
       toast({
         title: "Tạo thành công",
@@ -190,13 +305,7 @@ const AdminConcessions: React.FC = () => {
       });
 
       setIsCreateDialogOpen(false);
-      setFormData({
-        name: "",
-        category: "combo",
-        price: 0,
-        image_url: "",
-        is_available: true,
-      });
+      resetForm();
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
@@ -262,7 +371,13 @@ const AdminConcessions: React.FC = () => {
             Quản lý sản phẩm và tồn kho concessions
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
+        <Button
+          onClick={() => {
+            resetForm();
+            setIsCreateDialogOpen(true);
+          }}
+          disabled={loading}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Thêm Sản Phẩm
         </Button>
@@ -469,6 +584,24 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="edit-image_file">Hoặc tải ảnh lên</Label>
+              <Input
+                id="edit-image_file"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                onChange={(e) =>
+                  handleImageFileChange(e.target.files?.[0] || null)
+                }
+                disabled={loading || uploadingImage}
+              />
+              {imageFile && (
+                <p className="text-xs text-muted-foreground">
+                  Đã chọn: {imageFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="edit-is_available">Trạng thái</Label>
               <Select
                 value={formData.is_available ? "true" : "false"}
@@ -493,11 +626,17 @@ const AdminConcessions: React.FC = () => {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setImageFile(null);
+              }}
             >
               Hủy
             </Button>
-            <Button onClick={handleUpdateItem}>Cập Nhật</Button>
+            <Button onClick={handleUpdateItem} disabled={uploadingImage}>
+              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Cập Nhật
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -571,6 +710,24 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="create-image_file">Hoặc tải ảnh lên</Label>
+              <Input
+                id="create-image_file"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                onChange={(e) =>
+                  handleImageFileChange(e.target.files?.[0] || null)
+                }
+                disabled={loading || uploadingImage}
+              />
+              {imageFile && (
+                <p className="text-xs text-muted-foreground">
+                  Đã chọn: {imageFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="create-is_available">Trạng thái</Label>
               <Select
                 value={formData.is_available ? "true" : "false"}
@@ -595,11 +752,17 @@ const AdminConcessions: React.FC = () => {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsCreateDialogOpen(false)}
+              onClick={() => {
+                setIsCreateDialogOpen(false);
+                resetForm();
+              }}
             >
               Hủy
             </Button>
-            <Button onClick={handleCreateItem}>Tạo Sản Phẩm</Button>
+            <Button onClick={handleCreateItem} disabled={uploadingImage}>
+              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Tạo Sản Phẩm
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
