@@ -14,6 +14,9 @@ interface Cinema {
   id: number;
   name: string;
   address: string;
+  city?: string;
+  district?: string;
+  street?: string;
   lat?: number;
   lng?: number;
   hotline?: string;
@@ -39,13 +42,55 @@ const CinemasPage: React.FC = () => {
     { id: "danang", name: "Đà Nẵng" },
   ];
 
+  const normalizeText = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+  const getCinemaRegion = (
+    cinema: Cinema,
+  ): "hcm" | "hanoi" | "danang" | "other" => {
+    const joined = normalizeText(
+      [cinema.city, cinema.district, cinema.street, cinema.address]
+        .filter(Boolean)
+        .join(" "),
+    );
+
+    if (
+      joined.includes("ho chi minh") ||
+      joined.includes("tp.hcm") ||
+      joined.includes("tphcm") ||
+      joined.includes("sai gon") ||
+      joined.includes("quan")
+    ) {
+      return "hcm";
+    }
+
+    if (joined.includes("ha noi") || joined.includes("hanoi")) {
+      return "hanoi";
+    }
+
+    if (joined.includes("da nang") || joined.includes("danang")) {
+      return "danang";
+    }
+
+    return "other";
+  };
+
+  const filteredCinemas =
+    selectedCity === "all"
+      ? cinemas
+      : cinemas.filter((cinema) => getCinemaRegion(cinema) === selectedCity);
+
   useEffect(() => {
     const fetchCinemas = async () => {
       try {
         setLoading(true);
-        const response = await apiCall<{ success: boolean; data: { cinemas: Cinema[] } }>(
-          API_ENDPOINTS.CINEMAS
-        );
+        const response = await apiCall<{
+          success: boolean;
+          data: { cinemas: Cinema[] };
+        }>(API_ENDPOINTS.CINEMAS);
         setCinemas(response.data?.cinemas || []);
       } catch (error) {
         console.error("Failed to fetch cinemas:", error);
@@ -112,7 +157,7 @@ const CinemasPage: React.FC = () => {
 
         {/* Cinemas List */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cinemas.map((cinema) => (
+          {filteredCinemas.map((cinema) => (
             <Card
               key={cinema.id}
               className="group hover:shadow-lg transition-all"
@@ -148,10 +193,10 @@ const CinemasPage: React.FC = () => {
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Phone className="w-4 h-4 flex-shrink-0" />
                       <a
-                        href={`tel:${cinema.hotline || '1900 2224'}`}
+                        href={`tel:${cinema.hotline || "1900 2224"}`}
                         className="hover:text-primary"
                       >
-                        {cinema.hotline || '1900 2224'}
+                        {cinema.hotline || "1900 2224"}
                       </a>
                     </div>
 
@@ -204,9 +249,11 @@ const CinemasPage: React.FC = () => {
         <div className="mt-12">
           <Card>
             <CardContent className="p-0 overflow-hidden">
-              <h2 className="text-xl font-bold p-6 border-b">Bản đồ hệ thống rạp</h2>
+              <h2 className="text-xl font-bold p-6 border-b">
+                Bản đồ hệ thống rạp
+              </h2>
               <div className="aspect-video w-full">
-                <CinemaMap cinemas={cinemas} />
+                <CinemaMap cinemas={filteredCinemas} />
               </div>
             </CardContent>
           </Card>

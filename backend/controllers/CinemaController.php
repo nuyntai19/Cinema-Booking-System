@@ -237,6 +237,10 @@ class CinemaController
                 return Response::error('Không tìm thấy rạp', 404);
             }
 
+            if ($this->cinemaModel->hasFutureShowtimeBindings((int) $id)) {
+                return Response::error('Không thể xóa rạp vì còn suất chiếu tương lai', 409);
+            }
+
             $result = $this->cinemaModel->delete($id);
 
             if (!$result) {

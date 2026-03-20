@@ -17,7 +17,22 @@ if (PHP_SAPI === 'cli-server') {
         strncmp($staticFile, $backendRoot, strlen($backendRoot)) === 0 &&
         is_file($staticFile)
     ) {
-        return false;
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+        header("Access-Control-Allow-Origin: $origin");
+        header('Access-Control-Allow-Methods: GET, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        header('Access-Control-Allow-Credentials: true');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+            http_response_code(200);
+            exit();
+        }
+
+        $mimeType = mime_content_type($staticFile) ?: 'application/octet-stream';
+        header("Content-Type: $mimeType");
+        header('Content-Length: ' . filesize($staticFile));
+        readfile($staticFile);
+        exit();
     }
 }
 

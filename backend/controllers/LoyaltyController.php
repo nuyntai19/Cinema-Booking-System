@@ -71,10 +71,21 @@ class LoyaltyController {
         $points = LoyaltyHistory::calculatePoints($amount);
 
         if ($points <= 0) {
-            return Response::success(['earned_points' => 0, 'current_points' => $this->historyModel->getTotalPoints($userId)]);
+            $user = $this->userModel->findById($userId);
+            return Response::success(['earned_points' => 0, 'current_points' => (int)($user['current_points'] ?? 0)]);
         }
 
         $desc = "Tích điểm từ đơn hàng #$relatedBookingId";
+
+        $db->beginTransaction();
+
+        $userLockStmt = $db->prepare("SELECT id, current_points FROM users WHERE id = :id FOR UPDATE");
+        $userLockStmt->execute([':id' => $userId]);
+        $user = $userLockStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user) {
+            $db->rollBack();
+            return Response::error('User not found', 404);
+        }
 
         $ok = $this->historyModel->create(
             $userId,
@@ -85,16 +96,29 @@ class LoyaltyController {
         );
 
         if (!$ok) {
+            $db->rollBack();
             return Response::error('Could not record points', 500);
         }
 
-        // Sync users.current_points
-        $newTotal = $this->historyModel->getTotalPoints($userId);
-        $this->userModel->update($userId, ['current_points' => $newTotal]);
+        $newTotal = (int)$user['current_points'] + $points;
+        $updateStmt = $db->prepare("UPDATE users SET current_points = :points WHERE id = :id");
+        $updated = $updateStmt->execute([
+            ':points' => $newTotal,
+            ':id' => $userId,
+        ]);
+        if (!$updated) {
+            $db->rollBack();
+            return Response::error('Could not update point balance', 500);
+        }
+
+        $db->commit();
 
         return Response::success(['earned_points' => $points, 'current_points' => $newTotal]);
 
     } catch (Exception $e) {
+        if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
+            $db->rollBack();
+        }
         return Response::error('Lỗi: ' . $e->getMessage(), 500);
     }
 }
@@ -109,16 +133,42 @@ class LoyaltyController {
             if (!$userId || !$points) return Response::error('Missing user_id or points', 400);
             if ($points <= 0) return Response::error('Invalid points', 400);
 
-            $total = $this->historyModel->getTotalPoints($userId);
-            if ($total < $points) return Response::error('Not enough points', 400);
+            $db = Database::getInstance()->getConnection();
+            $db->beginTransaction();
+
+            $userStmt = $db->prepare("SELECT id, current_points FROM users WHERE id = :id FOR UPDATE");
+            $userStmt->execute([':id' => $userId]);
+            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$user) {
+                $db->rollBack();
+                return Response::error('User not found', 404);
+            }
+
+            $currentPoints = (int)$user['current_points'];
+            if ($currentPoints < $points) {
+                $db->rollBack();
+                return Response::error('Not enough points', 400);
+            }
 
             $neg = -1 * abs((int)$points);
             $ok = $this->historyModel->create($userId, $neg, 'REDEEM', 'Redeemed for voucher ID: '.($voucherId ?: 'N/A'));
-            if (!$ok) return Response::error('Could not redeem points', 500);
+            if (!$ok) {
+                $db->rollBack();
+                return Response::error('Could not redeem points', 500);
+            }
 
-            // Sync users.current_points
-            $newTotal = $this->historyModel->getTotalPoints($userId);
-            $this->userModel->update($userId, ['current_points' => $newTotal]);
+            $newTotal = $currentPoints - abs((int)$points);
+            $updateStmt = $db->prepare("UPDATE users SET current_points = :points WHERE id = :id");
+            $updated = $updateStmt->execute([
+                ':points' => $newTotal,
+                ':id' => $userId,
+            ]);
+            if (!$updated) {
+                $db->rollBack();
+                return Response::error('Could not update point balance', 500);
+            }
+
+            $db->commit();
 
             // Recalculate membership tier after point deduction
             try {
@@ -138,6 +188,9 @@ class LoyaltyController {
 
             return Response::success(['redeemed_points' => $points, 'current_points' => $newTotal]);
         } catch (Exception $e) {
+            if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
+                $db->rollBack();
+            }
             return Response::error('Lỗi: '.$e->getMessage(), 500);
         }
     }

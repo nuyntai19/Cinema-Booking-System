@@ -128,6 +128,37 @@ class Ticket
     }
 
     /**
+     * Lấy danh sách vé theo booking_id phục vụ quét QR theo booking
+     * @param int $bookingId
+     * @return array
+     */
+    public function getScanBundleByBookingId($bookingId)
+    {
+        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.seat_number,\n                s.row_number,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                r.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN rooms r ON sh.room_id = r.id\n            JOIN cinemas c ON r.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
+
+        $stmt->execute([$bookingId]);
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Lấy danh sách vé bằng booking_code
+     * @param string $bookingCode
+     * @return array
+     */
+    public function getScanBundleByBookingCode($bookingCode)
+    {
+        $stmt = $this->db->prepare("SELECT id FROM bookings WHERE booking_code = ? LIMIT 1");
+        $stmt->execute([$bookingCode]);
+        $booking = $stmt->fetch();
+
+        if (!$booking) {
+            return [];
+        }
+
+        return $this->getScanBundleByBookingId((int)$booking['id']);
+    }
+
+    /**
      * Lấy tất cả vé của một booking
      * @param int $bookingId
      * @return array
@@ -237,6 +268,19 @@ class Ticket
     public function markAsUsed($id)
     {
         return $this->updateStatus($id, 'USED');
+    }
+
+    /**
+     * Đánh dấu tất cả vé SOLD trong booking thành USED
+     * @param int $bookingId
+     * @return int
+     */
+    public function markBookingAsUsed($bookingId)
+    {
+        $stmt = $this->db->prepare("\n            UPDATE tickets\n            SET status = 'USED', updated_at = NOW()\n            WHERE booking_id = ?\n            AND status = 'SOLD'\n        ");
+
+        $stmt->execute([$bookingId]);
+        return $stmt->rowCount();
     }
 
     /**

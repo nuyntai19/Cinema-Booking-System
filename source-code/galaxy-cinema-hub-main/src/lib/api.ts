@@ -124,6 +124,19 @@ export const API_ENDPOINTS = {
 
 // Helper function for API calls
 let hasWarnedMissingToken = false;
+let hasHandledUnauthorized = false;
+
+const handleUnauthorized = () => {
+  if (hasHandledUnauthorized) return;
+  hasHandledUnauthorized = true;
+
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("galaxy_cinema_token");
+  localStorage.removeItem("galaxy_cinema_user");
+
+  window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+};
 
 export const apiCall = async <T = unknown>(
   endpoint: string,
@@ -179,11 +192,20 @@ export const apiCall = async <T = unknown>(
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        handleUnauthorized();
+        throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      }
+
       // Better error handling for 403
       if (response.status === 403) {
         throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
       }
       throw new Error(data.message || "API request failed");
+    }
+
+    if (hasHandledUnauthorized) {
+      hasHandledUnauthorized = false;
     }
 
     return data;

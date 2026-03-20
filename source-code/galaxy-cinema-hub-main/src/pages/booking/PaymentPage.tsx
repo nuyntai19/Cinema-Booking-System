@@ -67,6 +67,9 @@ const PaymentPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
+  const [currentBookingCode, setCurrentBookingCode] = useState<string | null>(
+    null,
+  );
   const [appliedVoucherId, setAppliedVoucherId] = useState<number | null>(null);
   const [showCancelPaymentConfirm, setShowCancelPaymentConfirm] =
     useState(false);
@@ -222,6 +225,7 @@ const PaymentPage: React.FC = () => {
     setShowQRModal(false);
     setMomoQrImageUrl(null);
     setCurrentBookingId(null);
+    setCurrentBookingCode(null);
     setQRTimeLeft(300);
     paymentHandledRef.current = false;
     timeoutHandledRef.current = false;
@@ -346,6 +350,7 @@ const PaymentPage: React.FC = () => {
       });
 
       let ticketCodes: string[] = [];
+      let resolvedBookingCode: string | null = currentBookingCode;
       try {
         const ticketRes = await TicketService.getByBooking(
           String(currentBookingId),
@@ -360,11 +365,26 @@ const PaymentPage: React.FC = () => {
         // Non-blocking: success page can still show booking info without ticket list.
       }
 
+      if (!resolvedBookingCode) {
+        try {
+          const bookingRes = await BookingService.getById(
+            String(currentBookingId),
+          );
+          resolvedBookingCode =
+            (bookingRes?.data as any)?.booking_code ||
+            (bookingRes?.data as any)?.bookingCode ||
+            null;
+        } catch {
+          // Ignore booking code fetch errors; we still have fallback ticket code.
+        }
+      }
+
       setShowQRModal(false);
       navigate("/booking/success", {
         state: {
           bookingId: currentBookingId,
-          ticketCode: ticketCodes[0] || null,
+          bookingCode: resolvedBookingCode,
+          ticketCode: resolvedBookingCode || ticketCodes[0] || null,
           ticketCodes,
           movie,
           seats: selectedSeats,
@@ -583,6 +603,17 @@ const PaymentPage: React.FC = () => {
         }
         // Save booking ID for retrying payment without creating duplicate holds.
         setCurrentBookingId(bookingId);
+
+        try {
+          const bookingRes = await BookingService.getById(String(bookingId));
+          const resolvedBookingCode =
+            (bookingRes?.data as any)?.booking_code ||
+            (bookingRes?.data as any)?.bookingCode ||
+            null;
+          setCurrentBookingCode(resolvedBookingCode);
+        } catch {
+          setCurrentBookingCode(null);
+        }
       }
 
       if (method === "momo") {

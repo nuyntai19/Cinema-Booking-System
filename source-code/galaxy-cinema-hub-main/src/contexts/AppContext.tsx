@@ -137,12 +137,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     console.log("👋 Logging out...");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("galaxy_cinema_token");
+    localStorage.removeItem("galaxy_cinema_user");
     setUser(null);
 
     // Redirect to home page
     console.log("🏠 Redirecting to home page...");
     window.location.href = "/";
   };
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+    };
+  }, []);
 
   const refreshUser = async () => {
     try {

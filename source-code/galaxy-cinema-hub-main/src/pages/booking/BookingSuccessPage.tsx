@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { Check, Calendar, MapPin, Clock, Download, Home } from "lucide-react";
+import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 const BookingSuccessPage: React.FC = () => {
   const location = useLocation();
+  const { toast } = useToast();
   const {
+    bookingCode,
     ticketCode,
-    ticketCodes,
     movie,
     seats,
     total,
@@ -16,21 +18,9 @@ const BookingSuccessPage: React.FC = () => {
     promoCode,
     showtime,
   } = location.state || {};
-  const normalizedTicketCodes: string[] = Array.isArray(ticketCodes)
-    ? ticketCodes.filter(Boolean)
-    : ticketCode
-      ? [ticketCode]
-      : [];
-  const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
+  const [isSavingImage, setIsSavingImage] = useState(false);
 
-  const activeTicketCode = useMemo(() => {
-    if (normalizedTicketCodes.length === 0) {
-      return null;
-    }
-    return normalizedTicketCodes[
-      Math.min(selectedTicketIndex, normalizedTicketCodes.length - 1)
-    ];
-  }, [normalizedTicketCodes, selectedTicketIndex]);
+  const activeTicketCode = bookingCode || ticketCode || null;
 
   const qrImageUrl = activeTicketCode
     ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(activeTicketCode)}`
@@ -53,6 +43,152 @@ const BookingSuccessPage: React.FC = () => {
       ? `${showtime.time} - ${showtime.hall}`
       : showtime?.time || "";
   const cinemaText = showtime?.cinema || "Galaxy Nguyễn Du";
+
+  const waitForImages = async (container: HTMLElement) => {
+    const images = Array.from(container.querySelectorAll("img"));
+    if (images.length === 0) return;
+
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) {
+          return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+          const cleanup = () => {
+            img.removeEventListener("load", cleanup);
+            img.removeEventListener("error", cleanup);
+            resolve();
+          };
+          img.addEventListener("load", cleanup);
+          img.addEventListener("error", cleanup);
+          setTimeout(cleanup, 2500);
+        });
+      }),
+    );
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const buildExportTicketNode = (): HTMLDivElement => {
+    const root = document.createElement("div");
+    root.style.width = "760px";
+    root.style.padding = "28px";
+    root.style.borderRadius = "24px";
+    root.style.background = "linear-gradient(150deg, #061438, #0b2a66)";
+    root.style.color = "#ffffff";
+    root.style.fontFamily = "Segoe UI, Arial, sans-serif";
+    root.style.boxSizing = "border-box";
+
+    const posterUrl = movie?.backdrop || movie?.poster || "";
+    const poster = posterUrl
+      ? `<img src="${posterUrl}" crossorigin="anonymous" style="width:100%;height:220px;object-fit:cover;border-radius:16px;opacity:.82;" />`
+      : "";
+    const qr = qrImageUrl
+      ? `<img src="${qrImageUrl}" crossorigin="anonymous" style="width:200px;height:200px;background:#fff;border-radius:14px;padding:12px;" />`
+      : "";
+
+    const discountHtml =
+      Number(discount) > 0
+        ? `<div style="margin-top:12px;font-size:20px;line-height:1.45;color:#54e3a6;">Bạn đã tiết kiệm ${Number(discount).toLocaleString("vi-VN")}đ${promoCode ? ` với mã ${promoCode}` : ""}</div>`
+        : "";
+
+    root.innerHTML = `
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+        <div style="flex:1;min-width:0;">
+          ${poster}
+          <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:40px;font-weight:800;line-height:1.2;">${movie?.title || "Vé xem phim"}</div>
+              <div style="margin-top:6px;font-size:21px;color:#b9c6f5;">Mã booking: <span style="font-family:Consolas, monospace;color:#fff;font-weight:700;">${activeTicketCode || "N/A"}</span></div>
+            </div>
+            <div style="padding:8px 14px;border-radius:999px;background:#19c37d22;border:1px solid #19c37d;font-weight:700;">VÉ HỢP LỆ</div>
+          </div>
+
+          <div style="margin-top:16px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.28);display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:22px;line-height:1.4;">
+            <div><span style="color:#9fb2ee;">Rạp:</span> ${cinemaText}</div>
+            <div><span style="color:#9fb2ee;">Phòng:</span> ${showtime?.hall || "Đang cập nhật"}</div>
+            <div><span style="color:#9fb2ee;">Ngày chiếu:</span> ${showtimeDate ? formatDate(showtimeDate) : formatDate(new Date().toISOString())}</div>
+            <div><span style="color:#9fb2ee;">Suất chiếu:</span> ${showtime?.time || "Đang cập nhật"}</div>
+            <div style="grid-column:1 / -1;"><span style="color:#9fb2ee;">Ghế:</span> ${seatText || "Đang cập nhật"}</div>
+          </div>
+
+          ${discountHtml}
+
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);font-size:28px;font-weight:800;color:#ff7a1a;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:22px;color:#d7dff9;font-weight:600;">Tổng thanh toán</span>
+            <span>${Number(total || 0).toLocaleString("vi-VN")}đ</span>
+          </div>
+        </div>
+        <div style="width:220px;display:flex;justify-content:center;">
+          ${qr}
+        </div>
+      </div>
+    `;
+
+    return root;
+  };
+
+  const handleSaveTicketImage = async () => {
+    if (!activeTicketCode || isSavingImage) {
+      return;
+    }
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.zIndex = "-1";
+
+    const ticketNode = buildExportTicketNode();
+    container.appendChild(ticketNode);
+    document.body.appendChild(container);
+
+    try {
+      setIsSavingImage(true);
+
+      await waitForImages(container);
+
+      const exportScale = Math.min(
+        4,
+        Math.max(2.5, (window.devicePixelRatio || 1) * 2),
+      );
+
+      const canvas = await html2canvas(ticketNode, {
+        scale: exportScale,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      const imageData = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = imageData;
+      link.download = `ve-${activeTicketCode}.png`;
+      link.click();
+
+      toast({
+        title: "Đã lưu ảnh vé",
+        description: "Ảnh vé đã được tải xuống thiết bị của bạn.",
+      });
+    } catch (error) {
+      console.error("Failed to save ticket image:", error);
+      toast({
+        title: "Không thể lưu ảnh vé",
+        description: "Vui lòng thử lại sau ít phút.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingImage(false);
+      container.remove();
+    }
+  };
 
   if (!activeTicketCode) {
     return (
@@ -91,6 +227,7 @@ const BookingSuccessPage: React.FC = () => {
             <img
               src={movie?.backdrop || movie?.poster}
               alt={movie?.title}
+              crossOrigin="anonymous"
               className="w-full h-full object-cover opacity-50"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -106,39 +243,16 @@ const BookingSuccessPage: React.FC = () => {
                 <img
                   src={qrImageUrl}
                   alt="QR vé"
+                  crossOrigin="anonymous"
                   className="w-32 h-32 object-contain"
                 />
               ) : null}
             </div>
           </div>
 
-          {normalizedTicketCodes.length > 1 && (
-            <div className="px-6 pb-2">
-              <p className="text-white/60 text-xs mb-2 text-center">
-                Chọn mã vé để quét
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {normalizedTicketCodes.map((code, index) => (
-                  <button
-                    key={code}
-                    onClick={() => setSelectedTicketIndex(index)}
-                    className={cn(
-                      "px-2 py-1 rounded text-xs border",
-                      index === selectedTicketIndex
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-white/10 text-white border-white/20",
-                    )}
-                  >
-                    Vé {index + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Ticket Code */}
           <div className="text-center pb-4">
-            <p className="text-white/60 text-sm mb-1">Mã vé</p>
+            <p className="text-white/60 text-sm mb-1">Mã booking</p>
             <p className="text-white text-xl font-mono font-bold tracking-wider">
               {activeTicketCode}
             </p>
@@ -230,9 +344,13 @@ const BookingSuccessPage: React.FC = () => {
 
         {/* Actions */}
         <div className="mt-6 space-y-3">
-          <Button className="w-full h-12 bg-white text-secondary hover:bg-white/90 font-semibold">
+          <Button
+            onClick={handleSaveTicketImage}
+            disabled={isSavingImage}
+            className="w-full h-12 bg-white text-secondary hover:bg-white/90 font-semibold"
+          >
             <Download className="w-5 h-5 mr-2" />
-            Lưu Ảnh Vé
+            {isSavingImage ? "Đang lưu ảnh..." : "Lưu Ảnh Vé"}
           </Button>
           <Link to="/" className="block">
             <Button

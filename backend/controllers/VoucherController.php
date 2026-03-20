@@ -85,38 +85,58 @@ class VoucherController {
             if (!$pointsRequired) {
                 return Response::error('Mã phần thưởng không hợp lệ', 400);
             }
-
-            // Check user points
-            $user = $this->userModel->findById($userId);
-            if (!$user) return Response::error('User not found', 404);
-
-            $currentPoints = (int)$user['current_points'];
-            if ($currentPoints < $pointsRequired) {
-                return Response::error("Bạn cần $pointsRequired điểm nhưng chỉ có $currentPoints điểm", 400);
-            }
+            $db = Database::getInstance()->getConnection();
 
             // Find the promotion
-            $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare("SELECT id FROM promotions WHERE code = :code LIMIT 1");
             $stmt->bindParam(':code', $promoCode);
             $stmt->execute();
             $promo = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$promo) return Response::error('Promotion not found', 404);
 
-            // Deduct points via loyalty_history
-            $loyaltyModel = new LoyaltyHistory();
-            $negPoints = -1 * $pointsRequired;
-            $ok = $loyaltyModel->create(
-                $userId,
-                $negPoints,
-                'REDEEM',
-                "Đổi $pointsRequired điểm lấy voucher $promoCode"
-            );
-            if (!$ok) return Response::error('Không thể trừ điểm', 500);
+            $db->beginTransaction();
 
-            // Sync users.current_points
-            $newTotal = $loyaltyModel->getTotalPoints($userId);
-            $this->userModel->update($userId, ['current_points' => $newTotal]);
+            // Lock user row and validate point balance atomically.
+            $userStmt = $db->prepare("SELECT id, current_points FROM users WHERE id = :id FOR UPDATE");
+            $userStmt->execute([':id' => $userId]);
+            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$user) {
+                $db->rollBack();
+                return Response::error('User not found', 404);
+            }
+
+            $currentPoints = (int)$user['current_points'];
+            if ($currentPoints < $pointsRequired) {
+                $db->rollBack();
+                return Response::error("Bạn cần $pointsRequired điểm nhưng chỉ có $currentPoints điểm", 400);
+            }
+
+            $newTotal = $currentPoints - $pointsRequired;
+
+            // Append loyalty log (audit only).
+            $historyStmt = $db->prepare(
+                "INSERT INTO loyalty_history (user_id, points_change, type, description)\n                 VALUES (:user_id, :points_change, 'REDEEM', :description)"
+            );
+            $historyOk = $historyStmt->execute([
+                ':user_id' => $userId,
+                ':points_change' => -1 * $pointsRequired,
+                ':description' => "Đổi $pointsRequired điểm lấy voucher $promoCode",
+            ]);
+            if (!$historyOk) {
+                $db->rollBack();
+                return Response::error('Không thể ghi lịch sử đổi điểm', 500);
+            }
+
+            // Update wallet-like point balance directly from current_points.
+            $updatePointStmt = $db->prepare("UPDATE users SET current_points = :points WHERE id = :id");
+            $pointUpdated = $updatePointStmt->execute([
+                ':points' => $newTotal,
+                ':id' => $userId,
+            ]);
+            if (!$pointUpdated) {
+                $db->rollBack();
+                return Response::error('Không thể cập nhật điểm hiện tại', 500);
+            }
 
             // Recalculate membership tier after point deduction
             try {
@@ -136,7 +156,12 @@ class VoucherController {
 
             // Create user_voucher
             $voucherId = $this->voucherModel->assignToUser($userId, (int)$promo['id']);
-            if (!$voucherId) return Response::error('Không thể tạo voucher', 500);
+            if (!$voucherId) {
+                $db->rollBack();
+                return Response::error('Không thể tạo voucher', 500);
+            }
+
+            $db->commit();
 
             return Response::success([
                 'voucher_id'     => (int)$voucherId,
@@ -145,6 +170,9 @@ class VoucherController {
                 'current_points' => $newTotal,
             ], 201);
         } catch (Exception $e) {
+            if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
+                $db->rollBack();
+            }
             return Response::error('Lỗi: '.$e->getMessage(), 500);
         }
     }
@@ -210,12 +238,23 @@ class VoucherController {
 
             // --- 2) If found user_voucher, apply it ---
             if ($voucherId) {
-                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.code as promo_code, p.usage_limit, p.id as promotion_id FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE' LIMIT 1";
+                $query = "SELECT uv.*, p.discount_amount, p.discount_type, p.min_order_value, p.max_discount, p.code as promo_code, p.usage_limit, p.id as promotion_id FROM user_vouchers uv JOIN promotions p ON uv.promotion_id = p.id WHERE uv.id = :id AND uv.status = 'ACTIVE'";
+                if ($userId) {
+                    $query .= " AND uv.user_id = :user_id";
+                }
+                $query .= " LIMIT 1";
                 $stmt = $db->prepare($query);
                 $stmt->bindParam(':id', $voucherId, PDO::PARAM_INT);
+                if ($userId) {
+                    $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+                }
                 $stmt->execute();
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($row) {
+                    $conditionError = $this->validateConditionalVoucherEligibility($row, $userId, $db);
+                    if ($conditionError) {
+                        return Response::error($conditionError, 400);
+                    }
                     return $this->calculateDiscount($row, $amount, (int)$voucherId, 'voucher', $db);
                 }
             }
@@ -223,7 +262,7 @@ class VoucherController {
             // --- 3) Fallback: look up directly from promotions table (public promo codes) ---
             if ($code) {
                 $today = date('Y-m-d');
-                $query = "SELECT * FROM promotions WHERE code = :code AND start_date <= :today1 AND end_date >= :today2 LIMIT 1";
+                $query = "SELECT * FROM promotions WHERE code = :code AND start_date <= :today1 AND end_date >= :today2 AND is_auto_apply = 0 LIMIT 1";
                 $stmt = $db->prepare($query);
                 $stmt->bindParam(':code', $code);
                 $stmt->bindParam(':today1', $today);
@@ -318,6 +357,56 @@ class VoucherController {
             'final_price' => round($final, 2),
             'type' => $type,
         ]);
+    }
+
+    private function validateConditionalVoucherEligibility($voucherRow, $userId, $db) {
+        $promoCode = strtoupper((string)($voucherRow['promo_code'] ?? $voucherRow['code'] ?? ''));
+        if ($promoCode === '') {
+            return null;
+        }
+
+        $isBirthday = $promoCode === 'BIRTHDAY';
+        $tierCodeMap = [
+            'TIER_SILVER' => 'silver',
+            'TIER_GOLD' => 'gold',
+            'TIER_PLATINUM' => 'platinum',
+        ];
+        $requiredTier = $tierCodeMap[$promoCode] ?? null;
+
+        if (!$isBirthday && $requiredTier === null) {
+            return null;
+        }
+
+        if (!$userId) {
+            return 'Voucher này yêu cầu tài khoản đăng nhập hợp lệ';
+        }
+
+        $stmt = $db->prepare(
+            "SELECT up.dob, m.rank_name\n             FROM user_profiles up\n             LEFT JOIN memberships m ON up.membership_id = m.id\n             WHERE up.user_id = :user_id\n             LIMIT 1"
+        );
+        $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+        $stmt->execute();
+        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$profile) {
+            return 'Không tìm thấy hồ sơ thành viên để kiểm tra điều kiện voucher';
+        }
+
+        if ($isBirthday) {
+            $dob = $profile['dob'] ?? null;
+            if (!$dob || date('m-d', strtotime((string)$dob)) !== date('m-d')) {
+                return 'Voucher sinh nhật chỉ dùng được đúng ngày sinh nhật của bạn';
+            }
+        }
+
+        if ($requiredTier !== null) {
+            $rank = strtolower((string)($profile['rank_name'] ?? ''));
+            if ($rank !== $requiredTier) {
+                return 'Voucher hạng chỉ dùng khi tài khoản đang ở đúng hạng yêu cầu';
+            }
+        }
+
+        return null;
     }
 
     public function markAsUsed($voucherId) {

@@ -341,6 +341,28 @@ class MovieController {
             if ($input['duration'] <= 0) {
                 return Response::error('Thời lượng phim phải lớn hơn 0', 400);
             }
+
+            // Validate age_rating - must match ENUM in database
+            $validAgeRatings = ['P', 'K', 'T13', 'T16', 'T18', 'C'];
+            if (isset($input['age_rating']) && !in_array($input['age_rating'], $validAgeRatings)) {
+                return Response::error('Phân loại độ tuổi không hợp lệ', 400);
+            }
+
+            // Business rule: Không cho đổi sang C nếu còn suất chiếu tương lai hoặc vé chưa dùng.
+            $currentAgeRating = strtoupper(trim((string) ($existingMovie['age_rating'] ?? '')));
+            $newAgeRating = strtoupper(trim((string) ($input['age_rating'] ?? $existingMovie['age_rating'] ?? '')));
+            if ($newAgeRating === 'C' && $currentAgeRating !== 'C') {
+                $blockingStats = $this->movieModel->getRestrictionBlockingStats((int) $id);
+                $futureShowtimesCount = (int) ($blockingStats['future_showtimes_count'] ?? 0);
+                $unconsumedTicketsCount = (int) ($blockingStats['unconsumed_tickets_count'] ?? 0);
+
+                if ($futureShowtimesCount > 0 || $unconsumedTicketsCount > 0) {
+                    return Response::error(
+                        "Không thể đổi phim sang C vì còn {$futureShowtimesCount} suất chiếu tương lai và {$unconsumedTicketsCount} vé chưa dùng. Vui lòng xử lý suất chiếu/vé trước.",
+                        409
+                    );
+                }
+            }
             
             // Validate genre_ids if provided
             if (isset($input['genre_ids']) && is_array($input['genre_ids'])) {

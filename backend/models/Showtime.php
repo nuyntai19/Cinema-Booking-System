@@ -18,6 +18,15 @@ class Showtime
     }
 
     /**
+     * Số phút dọn phòng giữa 2 suất chiếu.
+     */
+    private function getCleanupDurationMinutes()
+    {
+        $minutes = (int) (Config::$showtime_cleanup_minutes ?? 15);
+        return $minutes > 0 ? $minutes : 15;
+    }
+
+    /**
      * Lấy danh sách showtimes với filter
      * @param array $filters - date, cinema_id, movie_id, hall_id
      * @param int $page
@@ -272,21 +281,30 @@ class Showtime
     public function checkConflict($hallId, $startTime, $endTime, $excludeId = null)
     {
         try {
+            $cleanupMinutes = $this->getCleanupDurationMinutes();
+
             $sql = "SELECT COUNT(*) as conflict_count
-                    FROM {$this->table}
-                    WHERE cinema_hall_id = :hall_id
+                    FROM {$this->table} s
+                    INNER JOIN movies m ON s.movie_id = m.id
+                    WHERE s.cinema_hall_id = :hall_id
                     AND (
-                        (start_time < :end_time AND end_time > :start_time)
+                        (
+                            s.start_time < :new_end_time
+                            AND GREATEST(
+                                s.end_time,
+                                DATE_ADD(s.start_time, INTERVAL (m.duration_minutes + {$cleanupMinutes}) MINUTE)
+                            ) > :new_start_time
+                        )
                     )";
 
             $params = [
                 ':hall_id' => $hallId,
-                ':start_time' => $startTime,
-                ':end_time' => $endTime
+                ':new_start_time' => $startTime,
+                ':new_end_time' => $endTime
             ];
 
             if ($excludeId) {
-                $sql .= " AND id != :exclude_id";
+                $sql .= " AND s.id != :exclude_id";
                 $params[':exclude_id'] = $excludeId;
             }
 
@@ -402,7 +420,7 @@ class Showtime
      */
     public function calculateEndTime($startTime, $durationMinutes)
     {
-        $cleanupDuration = 15; // 15 phút dọn dẹp giữa các suất
+        $cleanupDuration = $this->getCleanupDurationMinutes();
         $totalMinutes = $durationMinutes + $cleanupDuration;
 
         $startDateTime = new DateTime($startTime);

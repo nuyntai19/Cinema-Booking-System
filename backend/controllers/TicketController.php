@@ -83,27 +83,48 @@ class TicketController
             }
 
             $code = $input['code'];
-            $ticket = $this->ticketModel->getByCode($code);
+            $bundle = [];
 
-            if (!$ticket) {
+            // Backward-compatible: accept both legacy ticket_code and new booking_code.
+            $ticket = $this->ticketModel->getByCode($code);
+            if ($ticket) {
+                $bundle = $this->ticketModel->getScanBundleByBookingId((int)$ticket['booking_id']);
+            } else {
+                $bundle = $this->ticketModel->getScanBundleByBookingCode($code);
+            }
+
+            if (empty($bundle)) {
                 Response::notFound('Vé không tồn tại');
             }
 
+            $primaryTicket = $bundle[0];
+            $statuses = array_values(array_unique(array_map(function ($item) {
+                return $item['status'] ?? '';
+            }, $bundle)));
+            $hasSoldTicket = in_array('SOLD', $statuses, true);
+            $hasHoldingTicket = in_array('HOLDING', $statuses, true);
+
             // Validate ticket status
-            if ($ticket['status'] !== 'SOLD') {
+            if ($hasHoldingTicket) {
                 Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, [
-                    'current_status' => $ticket['status']
+                    'current_status' => implode(', ', $statuses)
+                ]);
+            }
+
+            if (!$hasSoldTicket) {
+                Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, [
+                    'current_status' => implode(', ', $statuses)
                 ]);
             }
 
             // Check showtime chưa bắt đầu
-            $showtimeStart = strtotime($ticket['showtime_start']);
+            $showtimeStart = strtotime($primaryTicket['showtime_start']);
             $now = time();
 
             // Cho phép quét vé trước giờ chiếu 30 phút
             if ($now < ($showtimeStart - 1800)) {
                 Response::error('Suất chiếu chưa mở cửa', 400, [
-                    'showtime_start' => $ticket['showtime_start'],
+                    'showtime_start' => $primaryTicket['showtime_start'],
                     'can_enter_at' => date('Y-m-d H:i:s', $showtimeStart - 1800)
                 ]);
             }
@@ -111,16 +132,25 @@ class TicketController
             // Không cho vào sau khi phim đã chiếu 15 phút
             if ($now > ($showtimeStart + 900)) {
                 Response::error('Đã quá giờ vào xem phim', 400, [
-                    'showtime_start' => $ticket['showtime_start']
+                    'showtime_start' => $primaryTicket['showtime_start']
                 ]);
             }
 
-            // Update status = USED
-            $result = $this->ticketModel->updateStatus($ticket['id'], 'USED');
+            // Mark all tickets in the booking as USED with one scan.
+            $updatedCount = $this->ticketModel->markBookingAsUsed((int)$primaryTicket['booking_id']);
 
-            if ($result) {
+            if ($updatedCount > 0) {
+                $seatCodes = array_values(array_map(function ($item) {
+                    return trim(($item['row_number'] ?? '') . ($item['seat_number'] ?? ''));
+                }, $bundle));
+
                 Response::success([
-                    'ticket' => $ticket,
+                    'ticket' => $primaryTicket,
+                    'booking' => [
+                        'booking_code' => $primaryTicket['booking_code'] ?? null,
+                        'ticket_count' => count($bundle),
+                        'seats' => $seatCodes,
+                    ],
                     'message' => 'Vé hợp lệ - Cho phép vào'
                 ], 'Quét vé thành công');
             } else {

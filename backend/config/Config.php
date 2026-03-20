@@ -24,6 +24,7 @@ class Config
 
     // Booking Settings
     public static $seat_hold_duration = 300; // 5 minutes in seconds
+    public static $showtime_cleanup_minutes = 15; // phút dọn phòng giữa 2 suất
     public static $min_vietnamese_quota = 15; // 15% minimum Vietnamese movies
 
     // Loyalty Settings

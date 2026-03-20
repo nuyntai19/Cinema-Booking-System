@@ -253,6 +253,27 @@ class Seat
     /**
      * Kiểm tra xem có thể xóa/thay đổi ghế của hall không
      */
+    public function hasFutureShowtimeBindings($hallId)
+    {
+        try {
+            $sql = "SELECT COUNT(*) as total
+                    FROM showtimes
+                    WHERE cinema_hall_id = :hall_id
+                      AND start_time >= NOW()";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':hall_id' => $hallId]);
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return ((int) ($result['total'] ?? 0)) > 0;
+        } catch (PDOException $e) {
+            error_log("Seat hasFutureShowtimeBindings Error: " . $e->getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Kiểm tra xem có thể xóa/thay đổi ghế của hall không
+     */
     public function canDeleteSeats($hallId)
     {
         try {

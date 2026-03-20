@@ -190,6 +190,30 @@ class Cinema
     }
 
     /**
+     * Kiểm tra rạp còn suất chiếu tương lai không.
+     */
+    public function hasFutureShowtimeBindings($cinemaId)
+    {
+        try {
+            $sql = "SELECT COUNT(*) as total
+                    FROM showtimes s
+                    INNER JOIN cinema_halls ch ON s.cinema_hall_id = ch.id
+                    WHERE ch.cinema_id = :cinema_id
+                      AND s.start_time >= NOW()";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':cinema_id', $cinemaId, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return ((int) ($result['total'] ?? 0)) > 0;
+        } catch (PDOException $e) {
+            error_log("Cinema hasFutureShowtimeBindings Error: " . $e->getMessage());
+            return true;
+        }
+    }
+
+    /**
      * Lấy danh sách halls của cinema
      * @param int $cinemaId
      * @return array

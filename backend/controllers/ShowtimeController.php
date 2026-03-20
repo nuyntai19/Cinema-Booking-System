@@ -73,6 +73,39 @@ class ShowtimeController
     }
 
     /**
+     * Validate whether a movie can be scheduled at a specific start time.
+     * Rules:
+     * - movie age_rating must not be "C"
+     * - showtime date must be on/after movie release_date
+     *
+     * @param array $movie
+     * @param string $startTime
+     * @param string|null $errorMessage
+     * @return bool
+     */
+    private function canScheduleMovieAtTime($movie, $startTime, &$errorMessage = null)
+    {
+        $ageRating = strtoupper(trim((string) ($movie['age_rating'] ?? '')));
+        if ($ageRating === 'C') {
+            $errorMessage = 'Phim phân loại C - Cấm không được phép tạo suất chiếu';
+            return false;
+        }
+
+        $releaseRaw = (string) ($movie['release_date'] ?? '');
+        if (!empty($releaseRaw)) {
+            $releaseDate = date('Y-m-d', strtotime($releaseRaw));
+            $showDate = date('Y-m-d', strtotime($startTime));
+
+            if ($showDate < $releaseDate) {
+                $errorMessage = "Chưa đến ngày phát hành ({$releaseDate}), không thể tạo suất chiếu";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * GET /api/showtimes
      * Lấy danh sách suất chiếu
      * Public access
@@ -167,6 +200,10 @@ class ShowtimeController
                 return Response::error('Thời gian bắt đầu không hợp lệ', 400);
             }
 
+            if (strtotime($startTime) < time()) {
+                return Response::error('Không thể tạo suất chiếu trong quá khứ', 400);
+            }
+
             // Validate hall exists
             $hall = $this->hallModel->getById($input['cinema_hall_id']);
             if (!$hall) {
@@ -179,6 +216,11 @@ class ShowtimeController
             $movie = $movieModel->getById($input['movie_id']);
             if (!$movie) {
                 return Response::error('Phim không tồn tại', 404);
+            }
+
+            $eligibilityError = null;
+            if (!$this->canScheduleMovieAtTime($movie, $startTime, $eligibilityError)) {
+                return Response::error($eligibilityError, 400);
             }
 
             // Tính end_time = start_time + duration + cleanup
@@ -260,6 +302,10 @@ class ShowtimeController
             $hallId = $input['cinema_hall_id'] ?? $showtime['cinema_hall_id'];
             $startTime = $input['start_time'] ?? $showtime['start_time'];
 
+            if (isset($input['start_time']) && strtotime($startTime) < time()) {
+                return Response::error('Không thể cập nhật suất chiếu về thời gian trong quá khứ', 400);
+            }
+
             // Tính lại end_time nếu đổi start_time hoặc movie
             if (isset($input['start_time']) || isset($input['movie_id'])) {
                 $movieId = $input['movie_id'] ?? $showtime['movie_id'];
@@ -269,6 +315,11 @@ class ShowtimeController
 
                 if (!$movie) {
                     return Response::error('Phim không tồn tại', 404);
+                }
+
+                $eligibilityError = null;
+                if (!$this->canScheduleMovieAtTime($movie, $startTime, $eligibilityError)) {
+                    return Response::error($eligibilityError, 400);
                 }
 
                 $durationMinutes = (int) ($movie['duration'] ?? 0);
@@ -657,6 +708,15 @@ class ShowtimeController
                 return Response::error('start_date phải nhỏ hơn hoặc bằng end_date', 400);
             }
 
+            $today = date('Y-m-d');
+            if ($endDate < $today) {
+                return Response::error('Không thể tạo suất chiếu trong quá khứ', 400);
+            }
+
+            if ($startDate < $today) {
+                $startDate = $today;
+            }
+
             if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $dayStartTime) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $dayEndTime)) {
                 return Response::error('Định dạng giờ không hợp lệ (HH:mm)', 400);
             }
@@ -678,7 +738,12 @@ class ShowtimeController
             $movieModel = new Movie();
             $allMovies = $movieModel->getAll([], 1, 500);
             $allMovies = array_values(array_filter($allMovies, function ($m) {
-                return isset($m['id']) && (int) ($m['duration'] ?? 0) > 0;
+                if (!isset($m['id']) || (int) ($m['duration'] ?? 0) <= 0) {
+                    return false;
+                }
+
+                $ageRating = strtoupper(trim((string) ($m['age_rating'] ?? '')));
+                return $ageRating !== 'C';
             }));
 
             if (empty($allMovies)) {
@@ -745,6 +810,13 @@ class ShowtimeController
             $start = new DateTime($startDate);
             $end = new DateTime($endDate);
             $end->setTime(0, 0, 0);
+            $minimumStartDateTime = new DateTime();
+            $minimumStartDateTime->modify('+1 minute');
+            $minimumStartDateTime->setTime(
+                (int) $minimumStartDateTime->format('H'),
+                (int) $minimumStartDateTime->format('i'),
+                0
+            );
 
             for ($day = clone $start; $day <= $end; $day->modify('+1 day')) {
                 $dateStr = $day->format('Y-m-d');
@@ -762,6 +834,12 @@ class ShowtimeController
                     $hallId = (int) $hall['id'];
                     $current = new DateTime("{$dateStr} {$dayStartTime}:00");
                     $dayEnd = new DateTime("{$dateStr} {$dayEndTime}:00");
+
+                    // Với ngày hôm nay, không cho xếp suất ở thời điểm đã qua.
+                    if ($dateStr === $minimumStartDateTime->format('Y-m-d') && $current < $minimumStartDateTime) {
+                        $current = clone $minimumStartDateTime;
+                    }
+
                     $lastMovieId = null;
 
                     while ($current < $dayEnd) {
@@ -771,7 +849,15 @@ class ShowtimeController
 
                         // Luon xoay tren pool hon hop: phim uu tien + phim thuong
                         // Trong do phim uu tien co trong so lon hon nen xuat hien nhieu hon.
-                        $candidates = $schedulingMovies;
+                        $candidates = array_values(array_filter($schedulingMovies, function ($m) use ($current) {
+                            $error = null;
+                            return $this->canScheduleMovieAtTime($m, $current->format('Y-m-d H:i:s'), $error);
+                        }));
+
+                        if (empty($candidates)) {
+                            break;
+                        }
+
                         $minQuota = Config::$min_vietnamese_quota ?? 15;
                         $requiredVNAfterAdd = (int) ceil((($dailyTotal + 1) * $minQuota) / 100);
                         $mustPickVietnam = $dailyVN < $requiredVNAfterAdd;

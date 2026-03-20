@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Star,
   Clock,
   Calendar as CalendarIcon,
   Filter,
@@ -31,8 +30,61 @@ interface BackendMovie {
   genres: string | null;
 }
 
+interface ApiShowtime {
+  id: number;
+  movie_id: number;
+  start_time: string;
+  end_time?: string;
+}
+
+type ShowStatus = "now-showing" | "coming-soon" | "no-showtime";
+
+type MovieListItem = Movie & {
+  showStatus: ShowStatus;
+};
+
+const parseApiDate = (dateStr: string) => new Date(dateStr.replace(" ", "T"));
+
+const getShowStatus = (
+  movieId: number,
+  showtimes: ApiShowtime[],
+): ShowStatus => {
+  const now = new Date();
+  const movieShowtimes = showtimes.filter(
+    (s) => Number(s.movie_id) === movieId,
+  );
+
+  if (movieShowtimes.length === 0) {
+    return "no-showtime";
+  }
+
+  const hasNowShowing = movieShowtimes.some((s) => {
+    const start = parseApiDate(s.start_time);
+    if (Number.isNaN(start.getTime())) return false;
+
+    const end = s.end_time
+      ? parseApiDate(s.end_time)
+      : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
+    if (Number.isNaN(end.getTime())) return false;
+    return now >= start && now < end;
+  });
+
+  if (hasNowShowing) {
+    return "now-showing";
+  }
+
+  const hasUpcoming = movieShowtimes.some((s) => {
+    const start = parseApiDate(s.start_time);
+    if (Number.isNaN(start.getTime())) return false;
+    return start > now;
+  });
+
+  return hasUpcoming ? "coming-soon" : "no-showtime";
+};
+
 const MoviesPage: React.FC = () => {
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [movies, setMovies] = useState<MovieListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "now-showing" | "coming-soon">(
     "all",
@@ -42,38 +94,56 @@ const MoviesPage: React.FC = () => {
   useEffect(() => {
     const fetchMovies = async () => {
       try {
-        const response = await apiCall<{
-          success: boolean;
-          data: {
-            movies: BackendMovie[];
-            pagination: unknown;
-          };
-        }>(API_ENDPOINTS.MOVIES);
+        const [moviesResponse, showtimesResponse] = await Promise.all([
+          apiCall<{
+            success: boolean;
+            data: {
+              movies: BackendMovie[];
+              pagination: unknown;
+            };
+          }>(API_ENDPOINTS.MOVIES),
+          apiCall<{
+            success: boolean;
+            data: {
+              showtimes: ApiShowtime[];
+            };
+          }>(`${API_ENDPOINTS.SHOWTIMES}?limit=1000&page=1`),
+        ]);
 
-        if (!response.success || !response.data?.movies) {
-          console.error("Invalid API response");
+        if (!moviesResponse.success || !moviesResponse.data?.movies) {
+          console.error("Invalid movies API response");
           return;
         }
 
-        const mappedMovies: Movie[] = response.data.movies.map((movie) => ({
-          id: movie.id.toString(),
-          title: movie.title,
-          titleVi: movie.title,
-          poster: getImageUrl(movie.poster_url),
-          duration: movie.duration,
-          ageRating: movie.age_rating as AgeRating,
-          origin: movie.origin === "Vietnam" ? "VN" : "INT",
-          genre: movie.genres
-            ? movie.genres.split(",").map((g) => g.trim())
-            : [],
-          director: "",
-          cast: [],
-          releaseDate: movie.release_date,
-          description: movie.description,
-          trailerUrl: movie.trailer_url || undefined,
-          rating: 0,
-          isNowShowing: movie.status === "Now Showing",
-        }));
+        const showtimes = showtimesResponse.success
+          ? showtimesResponse.data?.showtimes || []
+          : [];
+
+        const mappedMovies: MovieListItem[] = moviesResponse.data.movies.map(
+          (movie) => {
+            const showStatus = getShowStatus(movie.id, showtimes);
+            return {
+              id: movie.id.toString(),
+              title: movie.title,
+              titleVi: movie.title,
+              poster: getImageUrl(movie.poster_url),
+              duration: movie.duration,
+              ageRating: movie.age_rating as AgeRating,
+              origin: movie.origin === "Vietnam" ? "VN" : "INT",
+              genre: movie.genres
+                ? movie.genres.split(",").map((g) => g.trim())
+                : [],
+              director: "",
+              cast: [],
+              releaseDate: movie.release_date,
+              description: movie.description,
+              trailerUrl: movie.trailer_url || undefined,
+              rating: undefined,
+              isNowShowing: showStatus === "now-showing",
+              showStatus,
+            };
+          },
+        );
 
         setMovies(mappedMovies);
       } catch (error) {
@@ -84,7 +154,6 @@ const MoviesPage: React.FC = () => {
     };
 
     fetchMovies();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredMovies = movies.filter((movie) => {
@@ -92,8 +161,12 @@ const MoviesPage: React.FC = () => {
       movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       movie.titleVi?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (filter === "now-showing") return movie.isNowShowing && matchesSearch;
-    if (filter === "coming-soon") return !movie.isNowShowing && matchesSearch;
+    if (filter === "now-showing") {
+      return movie.showStatus === "now-showing" && matchesSearch;
+    }
+    if (filter === "coming-soon") {
+      return movie.showStatus === "coming-soon" && matchesSearch;
+    }
     return matchesSearch;
   });
 
@@ -183,16 +256,22 @@ const MoviesPage: React.FC = () => {
                       </div>
 
                       {/* Status Badge */}
-                      {movie.isNowShowing ? (
+                      {movie.showStatus === "now-showing" ? (
                         <div className="absolute top-2 right-2">
                           <Badge className="bg-green-500 text-white">
                             Đang chiếu
                           </Badge>
                         </div>
-                      ) : (
+                      ) : movie.showStatus === "coming-soon" ? (
                         <div className="absolute top-2 right-2">
                           <Badge className="bg-blue-500 text-white">
                             Sắp chiếu
+                          </Badge>
+                        </div>
+                      ) : (
+                        <div className="absolute top-2 right-2">
+                          <Badge className="bg-gray-500 text-white">
+                            Chưa có suất chiếu
                           </Badge>
                         </div>
                       )}
@@ -216,12 +295,6 @@ const MoviesPage: React.FC = () => {
                           <Clock className="w-4 h-4" />
                           {movie.duration}p
                         </span>
-                        {movie.rating && (
-                          <span className="flex items-center gap-1">
-                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                            {movie.rating}
-                          </span>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">

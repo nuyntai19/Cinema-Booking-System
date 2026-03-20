@@ -281,11 +281,9 @@ const AdminMovies: React.FC = () => {
 
       setLoading(true);
 
-      // Upload poster if a file is selected
-      let posterUrl = formData.poster_url;
-      if (posterFile) {
-        posterUrl = await uploadPosterFile(posterFile);
-      }
+      // For create flow, movie must be created first to get a valid ID for poster upload.
+      // If user selects a file, we upload it after creating the movie.
+      const posterUrl = posterFile ? null : formData.poster_url || null;
 
       const payload = {
         title: formData.title,
@@ -302,10 +300,24 @@ const AdminMovies: React.FC = () => {
         genre_ids: formData.genre_ids,
       };
 
-      await apiCall(API_ENDPOINTS.MOVIES, {
+      const createResponse = await apiCall<{
+        success: boolean;
+        data?: { movie?: Movie };
+      }>(API_ENDPOINTS.MOVIES, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
+      const createdMovieId = createResponse.data?.movie?.id;
+
+      if (posterFile) {
+        if (!createdMovieId || Number(createdMovieId) <= 0) {
+          throw new Error(
+            "Không lấy được ID phim sau khi tạo để upload poster",
+          );
+        }
+        await uploadPosterFile(posterFile, Number(createdMovieId));
+      }
 
       toast({
         title: "Thành công",
@@ -429,9 +441,12 @@ const AdminMovies: React.FC = () => {
   // Upload poster file
   const uploadPosterFile = async (
     file: File,
-    movieId: number = 0,
+    movieId: number,
   ): Promise<string | null> => {
     if (!file) return null;
+    if (!movieId || movieId <= 0) {
+      throw new Error("ID phim không hợp lệ để upload poster");
+    }
 
     try {
       setUploadingPoster(true);
@@ -547,7 +562,6 @@ const AdminMovies: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="P">P - Phổ biến</SelectItem>
-                      <SelectItem value="K">K - Trẻ em</SelectItem>
                       <SelectItem value="K">K - Trẻ em</SelectItem>
                       <SelectItem value="T13">T13 - Từ 13 tuổi</SelectItem>
                       <SelectItem value="T16">T16 - Từ 16 tuổi</SelectItem>

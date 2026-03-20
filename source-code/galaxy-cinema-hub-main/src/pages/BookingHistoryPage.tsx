@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import html2canvas from "html2canvas";
 import {
   Calendar,
   Clock,
@@ -26,6 +27,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useAuth } from "@/contexts/AppContext";
 import { API_ENDPOINTS, getImageUrl } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface Concession {
   id: number;
@@ -64,6 +66,7 @@ interface BookingHistory {
 const BookingHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedBooking, setSelectedBooking] = useState<BookingHistory | null>(
@@ -74,6 +77,7 @@ const BookingHistoryPage: React.FC = () => {
   const [bookings, setBookings] = useState<BookingHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
+  const [isDownloadingTicket, setIsDownloadingTicket] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -167,7 +171,9 @@ const BookingHistoryPage: React.FC = () => {
               const ticketCodes = Array.isArray(booking.ticket_codes)
                 ? booking.ticket_codes.filter(Boolean)
                 : [];
-              const qrPayload = ticketCodes[0] || booking.booking_code || "";
+              const qrPayload = booking.booking_code || ticketCodes[0] || "";
+
+              const bookingLevelTicketCodes = qrPayload ? [qrPayload] : [];
 
               return {
                 id: booking.id.toString(),
@@ -192,7 +198,7 @@ const BookingHistoryPage: React.FC = () => {
                 status: status,
                 paymentMethod: paymentMethodText,
                 bookingDate: booking.created_at,
-                ticketCodes,
+                ticketCodes: bookingLevelTicketCodes,
                 qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}`,
               };
             },
@@ -278,12 +284,132 @@ const BookingHistoryPage: React.FC = () => {
     setShowDetailDialog(true);
   };
 
-  const handleDownloadTicket = (booking: BookingHistory) => {
-    // Simulate download
-    const link = document.createElement("a");
-    link.href = booking.qrCode || "";
-    link.download = `ticket-${booking.bookingCode}.png`;
-    link.click();
+  const waitForImages = async (container: HTMLElement) => {
+    const images = Array.from(container.querySelectorAll("img"));
+    if (images.length === 0) return;
+
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) {
+          return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+          const cleanup = () => {
+            img.removeEventListener("load", cleanup);
+            img.removeEventListener("error", cleanup);
+            resolve();
+          };
+          img.addEventListener("load", cleanup);
+          img.addEventListener("error", cleanup);
+          setTimeout(cleanup, 2500);
+        });
+      }),
+    );
+  };
+
+  const buildExportTicketNode = (booking: BookingHistory): HTMLDivElement => {
+    const root = document.createElement("div");
+    root.style.width = "760px";
+    root.style.padding = "28px";
+    root.style.borderRadius = "24px";
+    root.style.background = "linear-gradient(150deg, #061438, #0b2a66)";
+    root.style.color = "#ffffff";
+    root.style.fontFamily = "Segoe UI, Arial, sans-serif";
+    root.style.boxSizing = "border-box";
+
+    const poster = booking.movie.poster
+      ? `<img src="${booking.movie.poster}" crossorigin="anonymous" style="width:100%;height:220px;object-fit:cover;border-radius:16px;opacity:.82;" />`
+      : "";
+    const qr = booking.qrCode
+      ? `<img src="${booking.qrCode}" crossorigin="anonymous" style="width:200px;height:200px;background:#fff;border-radius:14px;padding:12px;" />`
+      : "";
+
+    const concessionsHtml = booking.concessions.length
+      ? `<div style="margin-top:12px;font-size:20px;line-height:1.45;color:#d6ddf7;"><div style="font-weight:700;color:#fff;margin-bottom:4px;">Bắp nước</div>${booking.concessions
+          .map(
+            (item) =>
+              `<div>${item.concession_name} x${item.quantity} - ${parseFloat(item.subtotal).toLocaleString("vi-VN")}đ</div>`,
+          )
+          .join("")}</div>`
+      : "";
+
+    root.innerHTML = `
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+        <div style="flex:1;min-width:0;">
+          ${poster}
+          <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:40px;font-weight:800;line-height:1.2;">${booking.movie.title}</div>
+              <div style="margin-top:6px;font-size:21px;color:#b9c6f5;">Mã booking: <span style="font-family:Consolas, monospace;color:#fff;font-weight:700;">${booking.bookingCode}</span></div>
+            </div>
+            <div style="padding:8px 14px;border-radius:999px;background:#19c37d22;border:1px solid #19c37d;font-weight:700;">VÉ HỢP LỆ</div>
+          </div>
+
+          <div style="margin-top:16px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.28);display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:22px;line-height:1.4;">
+            <div><span style="color:#9fb2ee;">Rạp:</span> ${booking.cinema}</div>
+            <div><span style="color:#9fb2ee;">Phòng:</span> ${booking.room}</div>
+            <div><span style="color:#9fb2ee;">Ngày chiếu:</span> ${formatDate(booking.date)}</div>
+            <div><span style="color:#9fb2ee;">Suất chiếu:</span> ${booking.time}</div>
+            <div style="grid-column:1 / -1;"><span style="color:#9fb2ee;">Ghế:</span> ${booking.seats.join(", ")}</div>
+          </div>
+
+          ${concessionsHtml}
+
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);font-size:28px;font-weight:800;color:#ff7a1a;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:22px;color:#d7dff9;font-weight:600;">Tổng thanh toán</span>
+            <span>${booking.totalPrice.toLocaleString("vi-VN")}đ</span>
+          </div>
+        </div>
+        <div style="width:220px;display:flex;justify-content:center;">
+          ${qr}
+        </div>
+      </div>
+    `;
+
+    return root;
+  };
+
+  const handleDownloadTicket = async (booking: BookingHistory) => {
+    if (isDownloadingTicket) return;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.zIndex = "-1";
+
+    const ticketNode = buildExportTicketNode(booking);
+    container.appendChild(ticketNode);
+    document.body.appendChild(container);
+
+    try {
+      setIsDownloadingTicket(true);
+      await waitForImages(container);
+
+      const canvas = await html2canvas(ticketNode, {
+        scale: Math.min(4, Math.max(2.5, (window.devicePixelRatio || 1) * 2)),
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      const imageData = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = imageData;
+      link.download = `ve-${booking.bookingCode}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Failed to download ticket image:", error);
+      toast({
+        title: "Không thể tải vé",
+        description: "Vui lòng thử lại sau ít phút.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingTicket(false);
+      container.remove();
+    }
   };
 
   const handleRebook = (booking: BookingHistory) => {
@@ -441,9 +567,10 @@ const BookingHistoryPage: React.FC = () => {
                                 variant="outline"
                                 className="gap-2"
                                 onClick={() => handleDownloadTicket(booking)}
+                                disabled={isDownloadingTicket}
                               >
                                 <Download className="w-4 h-4" />
-                                Tải vé
+                                {isDownloadingTicket ? "Đang tải..." : "Tải vé"}
                               </Button>
                             </>
                           )}
@@ -611,9 +738,10 @@ const BookingHistoryPage: React.FC = () => {
               <Button
                 className="w-full"
                 onClick={() => handleDownloadTicket(selectedBooking)}
+                disabled={isDownloadingTicket}
               >
                 <Download className="w-4 h-4 mr-2" />
-                Tải vé
+                {isDownloadingTicket ? "Đang tải..." : "Tải vé"}
               </Button>
             </div>
           )}
@@ -781,9 +909,10 @@ const BookingHistoryPage: React.FC = () => {
                     </Button>
                     <Button
                       onClick={() => handleDownloadTicket(selectedBooking)}
+                      disabled={isDownloadingTicket}
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Tải vé
+                      {isDownloadingTicket ? "Đang tải..." : "Tải vé"}
                     </Button>
                   </>
                 )}

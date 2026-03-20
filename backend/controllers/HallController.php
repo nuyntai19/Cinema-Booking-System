@@ -95,6 +95,14 @@ class HallController
         if (!$this->isAdmin())
             return Response::error('Không có quyền', 403);
 
+        $hall = $this->hallModel->getById($id);
+        if (!$hall)
+            return Response::error('Không tìm thấy phòng', 404);
+
+        if ($this->seatModel->hasFutureShowtimeBindings((int) $id)) {
+            return Response::error('Không thể xóa phòng vì còn suất chiếu tương lai', 409);
+        }
+
         if (!$this->seatModel->canDeleteSeats($id)) {
             return Response::error('Không thể xóa phòng vì đã có suất chiếu', 400);
         }
@@ -113,6 +121,14 @@ class HallController
     {
         if (!$this->isAdmin())
             return Response::error('Không có quyền', 403);
+
+        $hall = $this->hallModel->getById($id);
+        if (!$hall)
+            return Response::error('Không tìm thấy phòng', 404);
+
+        if ($this->seatModel->hasFutureShowtimeBindings((int) $id)) {
+            return Response::error('Không thể thay đổi sơ đồ ghế vì còn suất chiếu tương lai', 409);
+        }
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (!isset($input['seats']) || !is_array($input['seats'])) {

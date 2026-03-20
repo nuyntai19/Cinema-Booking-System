@@ -478,7 +478,7 @@ class Booking {
 
     public function applyVoucherDiscount($userVoucherId, $userId, $total) {
         $stmt = $this->db->prepare(
-            "SELECT uv.id, uv.status, p.discount_amount, p.discount_type, p.min_order_value, p.start_date, p.end_date
+            "SELECT uv.id, uv.status, p.code AS promo_code, p.discount_amount, p.discount_type, p.min_order_value, p.start_date, p.end_date
              FROM user_vouchers uv
              JOIN promotions p ON uv.promotion_id = p.id
              WHERE uv.id = :id AND uv.user_id = :user_id"
@@ -498,6 +498,37 @@ class Booking {
         $today = date('Y-m-d');
         if ($today < $voucher['start_date'] || $today > $voucher['end_date']) {
             throw new Exception('Voucher đã hết hạn');
+        }
+
+        $promoCode = strtoupper((string)($voucher['promo_code'] ?? ''));
+        if ($promoCode === 'BIRTHDAY') {
+            $dobStmt = $this->db->prepare(
+                "SELECT dob FROM user_profiles WHERE user_id = :user_id LIMIT 1"
+            );
+            $dobStmt->execute([':user_id' => $userId]);
+            $profile = $dobStmt->fetch(PDO::FETCH_ASSOC);
+            $dob = $profile['dob'] ?? null;
+            if (!$dob || date('m-d', strtotime((string)$dob)) !== date('m-d')) {
+                throw new Exception('Voucher sinh nhật chỉ dùng được đúng ngày sinh nhật của bạn');
+            }
+        }
+
+        $tierCodeMap = [
+            'TIER_SILVER' => 'silver',
+            'TIER_GOLD' => 'gold',
+            'TIER_PLATINUM' => 'platinum',
+        ];
+        $requiredTier = $tierCodeMap[$promoCode] ?? null;
+        if ($requiredTier !== null) {
+            $tierStmt = $this->db->prepare(
+                "SELECT m.rank_name\n                 FROM user_profiles up\n                 LEFT JOIN memberships m ON up.membership_id = m.id\n                 WHERE up.user_id = :user_id\n                 LIMIT 1"
+            );
+            $tierStmt->execute([':user_id' => $userId]);
+            $tierRow = $tierStmt->fetch(PDO::FETCH_ASSOC);
+            $rank = strtolower((string)($tierRow['rank_name'] ?? ''));
+            if ($rank !== $requiredTier) {
+                throw new Exception('Voucher hạng chỉ dùng khi tài khoản đang ở đúng hạng yêu cầu');
+            }
         }
 
         if ($total < (float)$voucher['min_order_value']) {

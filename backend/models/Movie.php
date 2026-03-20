@@ -469,4 +469,49 @@ class Movie {
             return false;
         }
     }
+
+    /**
+     * Lấy số lượng dữ liệu đang chặn khi muốn đổi phim sang phân loại C.
+     * - future_showtimes_count: số suất chiếu trong tương lai
+     * - unconsumed_tickets_count: số vé chưa sử dụng (HOLDING/SOLD) của các suất tương lai
+     */
+    public function getRestrictionBlockingStats($movieId) {
+        try {
+            $stats = [
+                'future_showtimes_count' => 0,
+                'unconsumed_tickets_count' => 0,
+            ];
+
+            $showtimeQuery = "SELECT COUNT(*) as total
+                             FROM showtimes
+                             WHERE movie_id = :movie_id
+                               AND start_time > NOW()";
+            $showtimeStmt = $this->db->prepare($showtimeQuery);
+            $showtimeStmt->bindParam(':movie_id', $movieId, PDO::PARAM_INT);
+            $showtimeStmt->execute();
+            $showtimeResult = $showtimeStmt->fetch(PDO::FETCH_ASSOC);
+            $stats['future_showtimes_count'] = (int) ($showtimeResult['total'] ?? 0);
+
+            $ticketQuery = "SELECT COUNT(*) as total
+                           FROM tickets t
+                           INNER JOIN bookings b ON t.booking_id = b.id
+                           INNER JOIN showtimes s ON b.showtime_id = s.id
+                           WHERE s.movie_id = :movie_id
+                             AND s.start_time > NOW()
+                             AND t.status IN ('HOLDING', 'SOLD')";
+            $ticketStmt = $this->db->prepare($ticketQuery);
+            $ticketStmt->bindParam(':movie_id', $movieId, PDO::PARAM_INT);
+            $ticketStmt->execute();
+            $ticketResult = $ticketStmt->fetch(PDO::FETCH_ASSOC);
+            $stats['unconsumed_tickets_count'] = (int) ($ticketResult['total'] ?? 0);
+
+            return $stats;
+        } catch (PDOException $e) {
+            error_log("Movie getRestrictionBlockingStats Error: " . $e->getMessage());
+            return [
+                'future_showtimes_count' => 0,
+                'unconsumed_tickets_count' => 0,
+            ];
+        }
+    }
 }
