@@ -259,11 +259,23 @@ const AdminMovies: React.FC = () => {
 
   const handleCreate = async () => {
     try {
+      const director = formData.director.trim();
+      const cast = formData.cast.trim();
+
       // Validate required fields
       if (!formData.title || !formData.duration || !formData.release_date) {
         toast({
           title: "Lỗi",
           description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!director || !cast) {
+        toast({
+          title: "Thiếu thông tin bắt buộc",
+          description: "Vui lòng nhập đầy đủ Đạo diễn và Diễn viên trước khi thêm phim",
           variant: "destructive",
         });
         return;
@@ -295,8 +307,8 @@ const AdminMovies: React.FC = () => {
         description: formData.description || null,
         release_date: formData.release_date,
         status: formData.status,
-        director: formData.director || null,
-        cast: formData.cast || null,
+        director,
+        cast,
         genre_ids: formData.genre_ids,
       };
 
@@ -620,7 +632,7 @@ const AdminMovies: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="director">Đạo diễn</Label>
+                <Label htmlFor="director">Đạo diễn *</Label>
                 <Input
                   id="director"
                   placeholder="Trần Anh Hùng, Christopher Nolan..."
@@ -631,7 +643,7 @@ const AdminMovies: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="cast">Diễn viên (cách nhau bởi dấu phẩy)</Label>
+                <Label htmlFor="cast">Diễn viên (cách nhau bởi dấu phẩy) *</Label>
                 <Textarea
                   id="cast"
                   placeholder="Trấn Thành, Lý Hải, Tom Cruise..."

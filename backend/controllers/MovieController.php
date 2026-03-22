@@ -261,6 +261,13 @@ class MovieController {
             if (!strtotime($input['release_date'])) {
                 return Response::error('Ngày phát hành không hợp lệ', 400);
             }
+
+            // Enforce required director and cast for creating a movie
+            $director = trim((string)($input['director'] ?? ''));
+            $cast = trim((string)($input['cast'] ?? ''));
+            if ($director === '' || $cast === '') {
+                return Response::error('Vui lòng nhập đầy đủ đạo diễn và diễn viên', 400);
+            }
             
             // Validate origin - must match ENUM in database
             $validOrigins = ['Vietnam', 'International'];
@@ -284,6 +291,8 @@ class MovieController {
             }
             
             // Create movie
+            $input['director'] = $director;
+            $input['cast'] = $cast;
             $movieId = $this->movieModel->create($input);
             
             if (!$movieId) {

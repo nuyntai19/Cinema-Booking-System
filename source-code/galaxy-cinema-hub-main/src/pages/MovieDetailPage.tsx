@@ -52,6 +52,8 @@ interface BackendMovie {
   genres: string | null;
   avg_rating: string | null;
   review_count: number;
+  director: string | null;
+  cast: string | null;
 }
 
 interface BackendReview {
@@ -145,6 +147,13 @@ const MovieDetailPage: React.FC = () => {
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
 
+  const normalizeTrailerUrl = (url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return "";
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  };
+
   useEffect(() => {
     const fetchMovie = async () => {
       if (!id) return;
@@ -158,6 +167,11 @@ const MovieDetailPage: React.FC = () => {
 
         if (response.success && response.data?.movie) {
           const m = response.data.movie;
+          const castList = (m.cast || "")
+            .split(",")
+            .map((name) => name.trim())
+            .filter(Boolean);
+
           const mappedMovie: Movie = {
             id: m.id.toString(),
             title: m.title,
@@ -167,8 +181,8 @@ const MovieDetailPage: React.FC = () => {
             ageRating: m.age_rating as AgeRating,
             origin: m.origin === "Vietnam" ? "VN" : "INT",
             genre: m.genres ? m.genres.split(",").map((g) => g.trim()) : [],
-            director: "",
-            cast: [],
+            director: (m.director || "").trim(),
+            cast: castList,
             releaseDate: m.release_date,
             description: m.description || "",
             trailerUrl: m.trailer_url || undefined,
@@ -549,6 +563,25 @@ const MovieDetailPage: React.FC = () => {
     return Number.isNaN(fallbackTs) ? 0 : fallbackTs;
   };
 
+  const handleWatchTrailer = () => {
+    if (!movie?.trailerUrl) return;
+
+    const trailerUrl = normalizeTrailerUrl(movie.trailerUrl);
+    try {
+      const parsed = new URL(trailerUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Invalid protocol");
+      }
+      window.open(parsed.toString(), "_blank", "noopener,noreferrer");
+    } catch {
+      toast({
+        title: "URL trailer không hợp lệ",
+        description: "Vui lòng kiểm tra lại link trailer của phim này.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -660,19 +693,27 @@ const MovieDetailPage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Đạo diễn</p>
-                  <p className="font-medium">{movie.director}</p>
+                  <p className="font-medium">{movie.director || "Đang cập nhật"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">
                     Diễn viên
                   </p>
-                  <p className="font-medium">{movie.cast.join(", ")}</p>
+                  <p className="font-medium">
+                    {movie.cast.length > 0
+                      ? movie.cast.join(", ")
+                      : "Đang cập nhật"}
+                  </p>
                 </div>
               </div>
 
               {/* Trailer Button */}
               {movie.trailerUrl && (
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleWatchTrailer}
+                >
                   <Play className="w-4 h-4" />
                   Xem Trailer
                 </Button>
