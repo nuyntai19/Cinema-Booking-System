@@ -2,7 +2,7 @@
  * Ticket Checker Component - For Staff to Scan Tickets
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   QrCode,
   CheckCircle,
@@ -24,11 +24,18 @@ import { ApiError } from "@/lib/api-client";
 
 interface TicketCheckerProps {
   onSuccess?: (ticket: TicketDetail) => void;
+  scannedCode?: string;
+  autoCheckSignal?: number;
 }
 
-const TicketChecker: React.FC<TicketCheckerProps> = ({ onSuccess }) => {
+const TicketChecker: React.FC<TicketCheckerProps> = ({
+  onSuccess,
+  scannedCode,
+  autoCheckSignal,
+}) => {
   const [ticketCode, setTicketCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const lastAutoCheckedSignalRef = useRef<number>(0);
   const [result, setResult] = useState<{
     success: boolean;
     ticket?: TicketDetail;
@@ -40,8 +47,10 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({ onSuccess }) => {
     message: string;
   } | null>(null);
 
-  const handleCheck = async () => {
-    if (!ticketCode.trim()) {
+  const checkTicketByCode = async (code: string) => {
+    const normalizedCode = code.trim();
+
+    if (!normalizedCode) {
       setResult({
         success: false,
         message: "Vui lòng nhập mã vé",
@@ -53,7 +62,7 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({ onSuccess }) => {
       setLoading(true);
       setResult(null);
 
-      const response = await TicketService.checkTicket({ code: ticketCode });
+      const response = await TicketService.checkTicket({ code: normalizedCode });
 
       if (response.success && response.data) {
         setResult({
@@ -83,6 +92,24 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({ onSuccess }) => {
       setLoading(false);
     }
   };
+
+  const handleCheck = async () => {
+    await checkTicketByCode(ticketCode);
+  };
+
+  useEffect(() => {
+    if (!scannedCode) return;
+    setTicketCode(scannedCode);
+  }, [scannedCode]);
+
+  useEffect(() => {
+    if (!scannedCode || !autoCheckSignal) return;
+    if (loading) return;
+    if (autoCheckSignal <= lastAutoCheckedSignalRef.current) return;
+
+    lastAutoCheckedSignalRef.current = autoCheckSignal;
+    void checkTicketByCode(scannedCode);
+  }, [autoCheckSignal, scannedCode, loading]);
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {

@@ -61,15 +61,15 @@ class Ticket
         $stmt = $this->db->prepare("
             SELECT 
                 t.*,
-                s.seat_number,
-                s.row_number,
-                st.price AS seat_type_price,
+                s.`number` AS `seat_number`,
+                s.row_code AS `row_number`,
+                st.price_multiplier AS seat_type_price,
                 st.name AS seat_type_name,
                 sh.start_time AS showtime_start,
                 sh.end_time AS showtime_end,
                 m.title AS movie_title,
                 m.duration_minutes,
-                r.name AS room_name,
+                h.name AS room_name,
                 c.name AS cinema_name,
                 b.user_id,
                 u.email AS user_email
@@ -79,8 +79,8 @@ class Ticket
             JOIN bookings b ON t.booking_id = b.id
             JOIN showtimes sh ON b.showtime_id = sh.id
             JOIN movies m ON sh.movie_id = m.id
-            JOIN rooms r ON sh.room_id = r.id
-            JOIN cinemas c ON r.cinema_id = c.id
+            JOIN cinema_halls h ON sh.cinema_hall_id = h.id
+            JOIN cinemas c ON h.cinema_id = c.id
             LEFT JOIN users u ON b.user_id = u.id
             WHERE t.id = ?
         ");
@@ -99,14 +99,14 @@ class Ticket
         $stmt = $this->db->prepare("
             SELECT 
                 t.*,
-                s.seat_number,
-                s.row_number,
+                s.`number` AS `seat_number`,
+                s.row_code AS `row_number`,
                 st.name AS seat_type_name,
                 sh.start_time AS showtime_start,
                 sh.end_time AS showtime_end,
                 m.title AS movie_title,
                 m.age_rating,
-                r.name AS room_name,
+                h.name AS room_name,
                 c.name AS cinema_name,
                 c.address AS cinema_address,
                 b.user_id,
@@ -117,8 +117,8 @@ class Ticket
             JOIN bookings b ON t.booking_id = b.id
             JOIN showtimes sh ON b.showtime_id = sh.id
             JOIN movies m ON sh.movie_id = m.id
-            JOIN rooms r ON sh.room_id = r.id
-            JOIN cinemas c ON r.cinema_id = c.id
+            JOIN cinema_halls h ON sh.cinema_hall_id = h.id
+            JOIN cinemas c ON h.cinema_id = c.id
             LEFT JOIN users u ON b.user_id = u.id
             WHERE t.ticket_code = ?
         ");
@@ -134,7 +134,7 @@ class Ticket
      */
     public function getScanBundleByBookingId($bookingId)
     {
-        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.seat_number,\n                s.row_number,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                r.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN rooms r ON sh.room_id = r.id\n            JOIN cinemas c ON r.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
+        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.`number` AS `seat_number`,\n                s.row_code AS `row_number`,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                h.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN cinema_halls h ON sh.cinema_hall_id = h.id\n            JOIN cinemas c ON h.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
 
         $stmt->execute([$bookingId]);
         return $stmt->fetchAll();
@@ -194,28 +194,29 @@ class Ticket
         $stmt = $this->db->prepare("
             SELECT 
                 t.*,
-                s.seat_number,
-                s.row_number,
+                s.`number` AS `seat_number`,
+                s.row_code AS `row_number`,
                 st.name AS seat_type_name,
                 sh.start_time AS showtime_start,
                 sh.end_time AS showtime_end,
                 m.title AS movie_title,
                 m.age_rating,
-                r.name AS room_name,
+                h.name AS room_name,
                 c.name AS cinema_name,
-                b.total_amount AS booking_amount,
+                b.total_price AS booking_amount,
                 b.booking_code,
                 u.email AS user_email,
-                u.full_name AS user_name
+                up.full_name AS user_name
             FROM tickets t
             JOIN seats s ON t.seat_id = s.id
             JOIN seat_types st ON s.seat_type_id = st.id
             JOIN bookings b ON t.booking_id = b.id
             JOIN showtimes sh ON b.showtime_id = sh.id
             JOIN movies m ON sh.movie_id = m.id
-            JOIN rooms r ON sh.room_id = r.id
-            JOIN cinemas c ON r.cinema_id = c.id
+            JOIN cinema_halls h ON sh.cinema_hall_id = h.id
+            JOIN cinemas c ON h.cinema_id = c.id
             LEFT JOIN users u ON b.user_id = u.id
+            LEFT JOIN user_profiles up ON up.user_id = u.id
             ORDER BY t.created_at DESC
             LIMIT ? OFFSET ?
         ");

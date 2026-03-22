@@ -1,337 +1,319 @@
-import React from "react";
-import {
-  Camera,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  QrCode,
-  Shield,
-  User,
-  Film,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Camera, CameraOff, AlertTriangle, QrCode, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import {
-  formatAgeRating,
-  getAgeRatingColor,
-  calculateAge,
-} from "@/lib/validation";
-import { AgeRating } from "@/types/cinema";
+import { Button } from "@/components/ui/button";
+import TicketChecker from "@/components/staff/TicketChecker";
+import jsQR from "jsqr";
+
+type BarcodeDetectorInstance = {
+  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+};
+
+type WindowWithBarcodeDetector = Window & {
+  BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorInstance;
+};
 
 const StaffScanner: React.FC = () => {
-  const [scanResult, setScanResult] = React.useState<
-    "idle" | "valid" | "warning" | "invalid"
-  >("idle");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+  const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
+  const checkingFrameRef = useRef(false);
+  const lastScannedAtRef = useRef<number>(0);
+  const lastScannedCodeRef = useRef<string>("");
 
-  // Mock scan data - in real app, this would come from QR code scan
-  const [scannedTicket, setScannedTicket] = React.useState<{
-    movieTitle: string;
-    ageRating: AgeRating;
-    customerDOB?: string;
-    customerName?: string;
-    seatNumbers: string[];
-    roomNumber: number;
-  } | null>(null);
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [cameraError, setCameraError] = useState<string>("");
+  const [scannedCode, setScannedCode] = useState("");
+  const [autoCheckSignal, setAutoCheckSignal] = useState(0);
+  const [scannedHistory, setScannedHistory] = useState<string[]>([]);
 
-  const simulateScan = (result: "valid" | "warning" | "invalid") => {
-    setScanResult(result);
+  const hasBarcodeDetector = useMemo(() => {
+    const win = window as WindowWithBarcodeDetector;
+    return typeof win.BarcodeDetector === "function";
+  }, []);
 
-    // Set mock ticket data based on scan type
-    if (result === "warning") {
-      setScannedTicket({
-        movieTitle: "John Wick 4",
-        ageRating: "T18",
-        customerDOB: "2010-05-15", // 14 years old - requires ID check
-        customerName: "Nguyễn Văn A",
-        seatNumbers: ["F5", "F6"],
-        roomNumber: 3,
-      });
-    } else if (result === "valid") {
-      setScannedTicket({
-        movieTitle: "Doraemon: Nobita và Vùng Đất Lý Tưởng",
-        ageRating: "P",
-        customerName: "Trần Thị B",
-        seatNumbers: ["C3"],
-        roomNumber: 2,
-      });
+  const stopScannerLoop = useCallback(() => {
+    if (scanIntervalRef.current !== null) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    stopScannerLoop();
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
-    if (result !== "warning") {
-      setTimeout(() => {
-        setScanResult("idle");
-        setScannedTicket(null);
-      }, 3000);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
-  };
 
-  const handleApprove = () => {
-    setScanResult("valid");
-    setTimeout(() => {
-      setScanResult("idle");
-      setScannedTicket(null);
-    }, 2000);
-  };
+    setCameraStarted(false);
+  }, [stopScannerLoop]);
 
-  const handleReject = () => {
-    setScanResult("invalid");
-    setTimeout(() => {
-      setScanResult("idle");
-      setScannedTicket(null);
-    }, 2000);
-  };
+  const onQrDetected = useCallback((code: string) => {
+    const now = Date.now();
 
-  // Calculate customer age if DOB is provided
-  const customerAge = scannedTicket?.customerDOB
-    ? calculateAge(scannedTicket.customerDOB)
-    : null;
+    if (now - lastScannedAtRef.current < 1200 && code === lastScannedCodeRef.current) {
+      return;
+    }
+
+    lastScannedAtRef.current = now;
+    lastScannedCodeRef.current = code;
+
+    setScannedCode(code);
+    setAutoCheckSignal((prev) => prev + 1);
+    setScannedHistory((prev) => {
+      const next = [code, ...prev.filter((item) => item !== code)];
+      return next.slice(0, 5);
+    });
+  }, []);
+
+  const startScannerLoop = useCallback(() => {
+    stopScannerLoop();
+
+    scanIntervalRef.current = window.setInterval(async () => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+      if (checkingFrameRef.current) return;
+
+      checkingFrameRef.current = true;
+      try {
+        if (detectorRef.current) {
+          const results = await detectorRef.current.detect(video);
+          if (results.length > 0) {
+            const raw = results[0].rawValue?.trim();
+            if (raw) {
+              onQrDetected(raw);
+            }
+          }
+        } else {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) return;
+
+          const targetWidth = 640;
+          const ratio = video.videoHeight > 0 ? video.videoHeight / video.videoWidth : 0.75;
+          const targetHeight = Math.max(360, Math.floor(targetWidth * ratio));
+
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+          const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+          const qr = jsQR(imageData.data, targetWidth, targetHeight, {
+            inversionAttempts: "attemptBoth",
+          });
+
+          if (qr?.data?.trim()) {
+            onQrDetected(qr.data.trim());
+          }
+        }
+      } catch {
+        // Ignore per-frame detect errors and keep scanning.
+      } finally {
+        checkingFrameRef.current = false;
+      }
+    }, 350);
+  }, [onQrDetected, stopScannerLoop]);
+
+  const startCamera = useCallback(async () => {
+    setCameraError("");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "true");
+      await video.play();
+
+      setCameraStarted(true);
+
+      if (hasBarcodeDetector) {
+        const win = window as WindowWithBarcodeDetector;
+        detectorRef.current = new win.BarcodeDetector!({ formats: ["qr_code"] });
+        startScannerLoop();
+        return;
+      }
+
+      detectorRef.current = null;
+      startScannerLoop();
+
+      setCameraError(
+        "Đang dùng chế độ quét tương thích đa trình duyệt (jsQR). Nếu camera khó bắt mã, hãy tăng sáng hoặc dùng nút quét từ ảnh.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Không thể truy cập camera. Hãy cấp quyền camera và thử lại.";
+      setCameraError(message);
+      stopCamera();
+    }
+  }, [hasBarcodeDetector, startScannerLoop, stopCamera]);
+
+  const decodeQrFromFile = useCallback(async (file: File) => {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      const targetWidth = 1200;
+      const ratio = bitmap.height / bitmap.width;
+      const targetHeight = Math.max(700, Math.floor(targetWidth * ratio));
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+
+      const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+      const qr = jsQR(imageData.data, targetWidth, targetHeight, {
+        inversionAttempts: "attemptBoth",
+      });
+
+      if (qr?.data?.trim()) {
+        onQrDetected(qr.data.trim());
+        return;
+      }
+
+      setCameraError("Không đọc được QR từ ảnh. Hãy dùng ảnh nét hơn hoặc chụp sát QR.");
+    } catch (error) {
+      console.error("decodeQrFromFile error:", error);
+      setCameraError("Không thể xử lý ảnh QR đã tải lên.");
+    }
+  }, [onQrDetected]);
+
+  useEffect(() => {
+    void startCamera();
+
+    return () => {
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 md:space-y-6 p-4 md:p-6">
-      {/* Scanner View */}
+    <div className="max-w-3xl mx-auto space-y-6 px-2 sm:px-0">
       <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="relative aspect-square bg-gray-900 flex items-center justify-center">
-            {/* Camera Frame */}
-            <div className="absolute inset-8 border-2 border-white/50 rounded-xl">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
-            </div>
-
-            {/* Scan Line Animation */}
-            <div className="absolute inset-8 overflow-hidden rounded-xl">
-              <div
-                className="absolute left-0 right-0 h-0.5 bg-primary animate-bounce"
-                style={{ animationDuration: "2s" }}
-              />
-            </div>
-
-            {/* Result Overlays */}
-            {scanResult === "valid" && scannedTicket && (
-              <div className="absolute inset-0 bg-green-500/90 flex flex-col items-center justify-center animate-scale-in p-4 md:p-6">
-                <CheckCircle className="w-16 h-16 md:w-24 md:h-24 text-white mb-3 md:mb-4" />
-                <p className="text-white text-lg md:text-2xl font-bold mb-2">
-                  VÉ HỢP LỆ
-                </p>
-
-                <div className="bg-white/20 rounded-lg p-4 mt-3 space-y-2 text-white">
-                  <div className="flex items-center gap-2 justify-center">
-                    <Film className="w-4 h-4" />
-                    <p className="font-semibold">{scannedTicket.movieTitle}</p>
-                  </div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <Badge
-                      className={cn(
-                        "text-xs",
-                        getAgeRatingColor(scannedTicket.ageRating),
-                      )}
-                    >
-                      <Shield className="w-3 h-3 mr-1" />
-                      {formatAgeRating(scannedTicket.ageRating)}
-                    </Badge>
-                  </div>
-                  <p className="text-sm">
-                    Ghế: {scannedTicket.seatNumbers.join(", ")} - Phòng{" "}
-                    {scannedTicket.roomNumber}
-                  </p>
-                  {scannedTicket.customerName && (
-                    <div className="flex items-center gap-2 justify-center pt-2 border-t border-white/30">
-                      <User className="w-4 h-4" />
-                      <p className="text-sm">{scannedTicket.customerName}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {scanResult === "warning" && scannedTicket && (
-              <div className="absolute inset-0 bg-yellow-500/90 flex flex-col items-center justify-center animate-scale-in p-4 md:p-6">
-                <AlertTriangle className="w-16 h-16 md:w-24 md:h-24 text-white mb-3 md:mb-4" />
-                <p className="text-white text-lg md:text-2xl font-bold mb-2">
-                  KIỂM TRA CMND/CCCD
-                </p>
-
-                <div className="bg-white/20 rounded-lg p-4 mt-3 space-y-3 text-white max-w-md">
-                  <div className="flex items-center gap-2 justify-center">
-                    <Film className="w-4 h-4" />
-                    <p className="font-semibold">{scannedTicket.movieTitle}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 justify-center">
-                    <Badge className="bg-red-600 text-white hover:bg-red-700">
-                      <Shield className="w-3 h-3 mr-1" />
-                      {formatAgeRating(scannedTicket.ageRating)}
-                    </Badge>
-                    <span className="text-sm font-medium">
-                      Yêu cầu kiểm tra độ tuổi
-                    </span>
-                  </div>
-
-                  {customerAge !== null && (
-                    <div className="pt-2 border-t border-white/30 space-y-1">
-                      <div className="flex items-center gap-2 justify-center">
-                        <User className="w-4 h-4" />
-                        <p className="text-sm">{scannedTicket.customerName}</p>
-                      </div>
-                      <p className="text-sm text-center">
-                        Tuổi hiện tại:{" "}
-                        <span className="font-bold">{customerAge} tuổi</span>
-                      </p>
-                      <p className="text-xs text-center text-white/80">
-                        Vui lòng kiểm tra CMND/CCCD để xác nhận độ tuổi
-                      </p>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-center pt-2 border-t border-white/30">
-                    Ghế: {scannedTicket.seatNumbers.join(", ")} - Phòng{" "}
-                    {scannedTicket.roomNumber}
-                  </p>
-                </div>
-
-                <div className="flex gap-2 md:gap-4 mt-4 md:mt-6">
-                  <Button
-                    onClick={handleReject}
-                    variant="destructive"
-                    size="lg"
-                    className="min-w-[100px] md:min-w-[120px] text-sm md:text-base"
-                  >
-                    <XCircle className="w-4 h-4 mr-1 md:mr-2" />
-                    Từ Chối
-                  </Button>
-                  <Button
-                    onClick={handleApprove}
-                    className="bg-green-600 hover:bg-green-700 min-w-[100px] md:min-w-[120px] text-sm md:text-base"
-                    size="lg"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-1 md:mr-2" />
-                    Xác Nhận OK
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {scanResult === "invalid" && (
-              <div className="absolute inset-0 bg-red-500/90 flex flex-col items-center justify-center animate-scale-in">
-                <XCircle className="w-24 h-24 text-white mb-4" />
-                <p className="text-white text-2xl font-bold">VÉ KHÔNG HỢP LỆ</p>
-                <p className="text-white/80 mt-2">
-                  Vé đã được sử dụng hoặc hết hạn
-                </p>
-              </div>
-            )}
-
-            {scanResult === "idle" && (
-              <div className="text-center text-white/60">
-                <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Đang chờ quét mã...</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Simulation Buttons */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
-            Demo: Mô phỏng kết quả quét
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <QrCode className="w-5 h-5" />
+            Quét Vé Bằng Camera
           </CardTitle>
+          {cameraStarted ? (
+            <Button variant="outline" onClick={stopCamera}>
+              <CameraOff className="w-4 h-4 mr-2" />
+              Tắt camera
+            </Button>
+          ) : (
+            <Button onClick={() => void startCamera()}>
+              <Camera className="w-4 h-4 mr-2" />
+              Mở camera
+            </Button>
+          )}
         </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-2 md:gap-3">
-          <Button
-            onClick={() => simulateScan("valid")}
-            variant="outline"
-            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-green-500 text-green-600 hover:bg-green-50"
-          >
-            <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-[10px] md:text-xs">Hợp lệ</span>
-          </Button>
-          <Button
-            onClick={() => simulateScan("warning")}
-            variant="outline"
-            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
-          >
-            <AlertTriangle className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-[10px] md:text-xs">Kiểm tra tuổi</span>
-          </Button>
-          <Button
-            onClick={() => simulateScan("invalid")}
-            variant="outline"
-            className="flex flex-col gap-1 h-auto py-2 md:py-3 border-red-500 text-red-600 hover:bg-red-50"
-          >
-            <XCircle className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-[10px] md:text-xs">Không hợp lệ</span>
-          </Button>
+
+        <CardContent className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                void decodeQrFromFile(file);
+              }
+              e.currentTarget.value = "";
+            }}
+          />
+          <canvas ref={canvasRef} className="hidden" />
+
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Quét từ ảnh QR
+            </Button>
+          </div>
+
+          <div className="relative rounded-xl overflow-hidden border border-border bg-slate-950 aspect-[4/3] flex items-center justify-center">
+            <video
+              ref={videoRef}
+              className={`w-full h-full object-cover ${cameraStarted ? "opacity-100" : "opacity-0"}`}
+              muted
+              autoPlay
+            />
+
+            {!cameraStarted && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                <Camera className="w-12 h-12 mb-2 opacity-70" />
+                <p>Camera chưa hoạt động</p>
+              </div>
+            )}
+
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="w-[72%] h-[72%] rounded-xl border-2 border-primary/80" />
+            </div>
+          </div>
+
+          {cameraError && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-sm flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5" />
+              <span>{cameraError}</span>
+            </div>
+          )}
+
+          {scannedCode && (
+            <div className="rounded-md border border-green-600/40 bg-green-500/10 text-green-700 dark:text-green-300 px-3 py-2 text-sm flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              <span>Mã vừa quét: {scannedCode}</span>
+            </div>
+          )}
+
+          {scannedHistory.length > 0 && (
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-sm font-semibold mb-2">Lịch sử quét gần đây</p>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {scannedHistory.map((code) => (
+                  <p key={code} className="font-mono">
+                    {code}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Recent Scans */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quét Gần Đây</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[
-            {
-              code: "GXY-2024-A1B2C3",
-              status: "valid",
-              time: "10:32",
-              movie: "Doraemon",
-              ageRating: "P" as AgeRating,
-            },
-            {
-              code: "GXY-2024-D4E5F6",
-              status: "valid",
-              time: "10:28",
-              movie: "Avatar 3",
-              ageRating: "T13" as AgeRating,
-            },
-            {
-              code: "GXY-2024-G7H8I9",
-              status: "invalid",
-              time: "10:15",
-              movie: "John Wick 4",
-              ageRating: "T18" as AgeRating,
-            },
-          ].map((scan, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-            >
-              <div className="flex items-center gap-3 flex-1">
-                <QrCode className="w-5 h-5 text-muted-foreground" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-mono text-sm">{scan.code}</p>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-xs",
-                        getAgeRatingColor(scan.ageRating),
-                      )}
-                    >
-                      {formatAgeRating(scan.ageRating)}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {scan.time} • {scan.movie}
-                  </p>
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "w-3 h-3 rounded-full flex-shrink-0",
-                  scan.status === "valid" ? "bg-green-500" : "bg-red-500",
-                )}
-              />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <TicketChecker
+        scannedCode={scannedCode}
+        autoCheckSignal={autoCheckSignal}
+      />
     </div>
   );
 };

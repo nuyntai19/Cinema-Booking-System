@@ -129,10 +129,15 @@ class TicketController
                 ]);
             }
 
-            // Không cho vào sau khi phim đã chiếu 15 phút
-            if ($now > ($showtimeStart + 900)) {
-                Response::error('Đã quá giờ vào xem phim', 400, [
-                    'showtime_start' => $primaryTicket['showtime_start']
+            // Không cho quét sau khi suất chiếu đã kết thúc
+            $showtimeEnd = !empty($primaryTicket['showtime_end'])
+                ? strtotime($primaryTicket['showtime_end'])
+                : null;
+
+            if ($showtimeEnd !== null && $now > $showtimeEnd) {
+                Response::error('Suất chiếu đã kết thúc - vé đã hết hạn quét', 400, [
+                    'showtime_start' => $primaryTicket['showtime_start'],
+                    'showtime_end' => $primaryTicket['showtime_end']
                 ]);
             }
 
