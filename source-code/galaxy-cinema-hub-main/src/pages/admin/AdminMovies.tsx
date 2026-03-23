@@ -292,10 +292,16 @@ const AdminMovies: React.FC = () => {
       }
 
       setLoading(true);
+      const shouldUploadPosterUrl =
+        !posterFile && isHttpUrl(formData.poster_url || "");
 
       // For create flow, movie must be created first to get a valid ID for poster upload.
       // If user selects a file, we upload it after creating the movie.
-      const posterUrl = posterFile ? null : formData.poster_url || null;
+      const posterUrl = shouldUploadPosterUrl
+        ? null
+        : posterFile
+          ? null
+          : formData.poster_url || null;
 
       const payload = {
         title: formData.title,
@@ -329,6 +335,13 @@ const AdminMovies: React.FC = () => {
           );
         }
         await uploadPosterFile(posterFile, Number(createdMovieId));
+      } else if (shouldUploadPosterUrl) {
+        if (!createdMovieId || Number(createdMovieId) <= 0) {
+          throw new Error(
+            "Không lấy được ID phim sau khi tạo để upload poster từ URL",
+          );
+        }
+        await uploadPosterFromUrl(formData.poster_url, Number(createdMovieId));
       }
 
       toast({
@@ -385,6 +398,14 @@ const AdminMovies: React.FC = () => {
         console.log("File:", posterFile.name, posterFile.size, "bytes");
         posterUrl = await uploadPosterFile(posterFile, selectedMovie.id);
         console.log("Upload result URL:", posterUrl);
+      } else if (posterUrl && isHttpUrl(posterUrl)) {
+        const uploadedPosterUrl = await uploadPosterFromUrl(
+          posterUrl,
+          selectedMovie.id,
+        );
+        if (uploadedPosterUrl) {
+          posterUrl = uploadedPosterUrl;
+        }
       }
 
       console.log("=== UPDATE PAYLOAD ===");
@@ -450,6 +471,8 @@ const AdminMovies: React.FC = () => {
     setPosterFile(null);
   };
 
+  const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value.trim());
+
   // Upload poster file
   const uploadPosterFile = async (
     file: File,
@@ -496,6 +519,52 @@ const AdminMovies: React.FC = () => {
         title: "Lỗi upload poster",
         description:
           error instanceof Error ? error.message : "Không thể upload ảnh",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setUploadingPoster(false);
+    }
+  };
+
+  const uploadPosterFromUrl = async (
+    imageUrl: string,
+    movieId: number,
+  ): Promise<string | null> => {
+    if (!movieId || movieId <= 0) {
+      throw new Error("ID phim không hợp lệ để upload poster từ URL");
+    }
+
+    try {
+      setUploadingPoster(true);
+
+      const response = await fetch(
+        API_ENDPOINTS.MOVIE_UPLOAD_POSTER_FROM_URL(movieId),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ image_url: imageUrl }),
+        },
+      );
+
+      const result = await response.json();
+      if (result.success && result.data?.poster_url) {
+        let posterUrl = result.data.poster_url;
+        if (posterUrl.startsWith("/")) {
+          posterUrl = posterUrl.substring(1);
+        }
+        return posterUrl;
+      }
+
+      throw new Error(result.message || "Upload poster từ URL thất bại");
+    } catch (error) {
+      toast({
+        title: "Lỗi upload poster URL",
+        description:
+          error instanceof Error ? error.message : "Không thể upload ảnh từ URL",
         variant: "destructive",
       });
       return null;
@@ -864,8 +933,8 @@ const AdminMovies: React.FC = () => {
                             ? movie.genres || "Chưa có thể loại"
                             : Array.isArray(movie.genres)
                               ? movie.genres
-                                  .map((g: Genre) => g.name)
-                                  .join(", ")
+                                .map((g: Genre) => g.name)
+                                .join(", ")
                               : "Chưa có thể loại"}
                         </p>
                       </div>

@@ -146,6 +146,7 @@ $router->post('/api/movies', 'MovieController@create'); // Admin
 $router->put('/api/movies/:id', 'MovieController@update'); // Admin
 $router->delete('/api/movies/:id', 'MovieController@delete'); // Admin
 $router->post('/api/movies/:id/upload-poster', 'MovieController@uploadPoster'); // Admin - Upload poster
+$router->post('/api/movies/:id/upload-poster-from-url', 'MovieController@uploadPosterFromUrl'); // Admin - Upload poster from URL
 $router->get('/api/movies/:id/showtimes', 'MovieController@getShowtimes');
 $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
 
@@ -251,6 +252,8 @@ $router->get('/api/concessions/:id', 'ConcessionController@show');
 $router->post('/api/concessions', 'ConcessionController@create'); // Admin
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin
 $router->delete('/api/concessions/:id', 'ConcessionController@delete'); // Admin
+$router->post('/api/concessions/:id/upload-image', 'ConcessionController@uploadImage'); // Admin - Upload concession image
+$router->post('/api/concessions/:id/upload-image-from-url', 'ConcessionController@uploadImageFromUrl'); // Admin - Upload concession image from URL
 
 // ============================================
 // REVIEW ROUTES

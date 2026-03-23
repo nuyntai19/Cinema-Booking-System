@@ -11,6 +11,8 @@ import {
   Package,
   DollarSign,
   Loader2,
+  Upload,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,9 @@ interface Concession {
   created_at?: string;
 }
 
+const IMAGE_FALLBACK_TEMPLATE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='150' viewBox='0 0 100 150'%3E%3Crect fill='%23ddd' width='100' height='150'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+
 const AdminConcessions: React.FC = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,6 +67,8 @@ const AdminConcessions: React.FC = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [concessions, setConcessions] = useState<Concession[]>([]);
 
@@ -105,6 +112,124 @@ const AdminConcessions: React.FC = () => {
     is_available: true,
   });
 
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      category: "combo",
+      price: 0,
+      image_url: "",
+      is_available: true,
+    });
+    setImageFile(null);
+  };
+
+  const handleImageFileChange = (file: File | null) => {
+    if (!file) {
+      setImageFile(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Lỗi",
+        description: "Chỉ chấp nhận file ảnh JPG, PNG, GIF hoặc WebP",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Lỗi",
+        description: "Kích thước file không được vượt quá 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImageFile(file);
+  };
+
+  const uploadConcessionImage = async (
+    file: File,
+    concessionId: number,
+  ): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      const uploadData = new FormData();
+      uploadData.append("image", file);
+
+      const response = await fetch(
+        API_ENDPOINTS.CONCESSION_UPLOAD_IMAGE(concessionId),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: uploadData,
+        },
+      );
+
+      const result = await response.json();
+      if (result.success && result.data?.image_url) {
+        return result.data.image_url;
+      }
+
+      throw new Error(result.message || "Upload ảnh thất bại");
+    } catch (error) {
+      toast({
+        title: "Lỗi upload ảnh",
+        description:
+          error instanceof Error ? error.message : "Không thể upload ảnh",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const uploadConcessionImageFromUrl = async (
+    imageUrl: string,
+    concessionId: number,
+  ): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+
+      const response = await fetch(
+        API_ENDPOINTS.CONCESSION_UPLOAD_IMAGE_FROM_URL(concessionId),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ image_url: imageUrl }),
+        },
+      );
+
+      const result = await response.json();
+      if (result.success && result.data?.image_url) {
+        return result.data.image_url;
+      }
+
+      throw new Error(result.message || "Upload ảnh từ URL thất bại");
+    } catch (error) {
+      toast({
+        title: "Lỗi upload URL",
+        description:
+          error instanceof Error ? error.message : "Không thể upload ảnh từ URL",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value.trim());
+
   // Statistics
   const totalItems = concessions.length;
   const availableItems = concessions.filter((c) => c.is_available).length;
@@ -131,6 +256,7 @@ const AdminConcessions: React.FC = () => {
       image_url: item.image_url || "",
       is_available: item.is_available,
     });
+    setImageFile(null);
     setIsEditDialogOpen(true);
   };
 
@@ -139,9 +265,29 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
+      let imageUrl = formData.image_url || null;
+
+      if (imageFile) {
+        const uploadedImageUrl = await uploadConcessionImage(
+          imageFile,
+          selectedItem.id,
+        );
+        if (uploadedImageUrl) {
+          imageUrl = uploadedImageUrl;
+        }
+      } else if (imageUrl && isHttpUrl(imageUrl)) {
+        const uploadedImageUrl = await uploadConcessionImageFromUrl(
+          imageUrl,
+          selectedItem.id,
+        );
+        if (uploadedImageUrl) {
+          imageUrl = uploadedImageUrl;
+        }
+      }
+
       await apiCall(API_ENDPOINTS.CONCESSIONS + `/${selectedItem.id}`, {
         method: "PUT",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, image_url: imageUrl }),
       });
 
       toast({
@@ -151,6 +297,7 @@ const AdminConcessions: React.FC = () => {
 
       setIsEditDialogOpen(false);
       setSelectedItem(null);
+      setImageFile(null);
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
@@ -179,10 +326,34 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
-      await apiCall(API_ENDPOINTS.CONCESSIONS, {
+      const shouldUploadUrl = !imageFile && isHttpUrl(formData.image_url || "");
+      const createResponse = await apiCall<{
+        success: boolean;
+        data?: { id?: number };
+      }>(API_ENDPOINTS.CONCESSIONS, {
         method: "POST",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          image_url: shouldUploadUrl ? null : formData.image_url || null,
+        }),
       });
+
+      const createdConcessionId = Number(createResponse?.data?.id || 0);
+      if (imageFile && createdConcessionId > 0) {
+        const uploadedImageUrl = await uploadConcessionImage(
+          imageFile,
+          createdConcessionId,
+        );
+
+        if (uploadedImageUrl) {
+          await apiCall(API_ENDPOINTS.CONCESSIONS + `/${createdConcessionId}`, {
+            method: "PUT",
+            body: JSON.stringify({ image_url: uploadedImageUrl }),
+          });
+        }
+      } else if (shouldUploadUrl && createdConcessionId > 0) {
+        await uploadConcessionImageFromUrl(formData.image_url, createdConcessionId);
+      }
 
       toast({
         title: "Tạo thành công",
@@ -190,13 +361,7 @@ const AdminConcessions: React.FC = () => {
       });
 
       setIsCreateDialogOpen(false);
-      setFormData({
-        name: "",
-        category: "combo",
-        price: 0,
-        image_url: "",
-        is_available: true,
-      });
+      resetForm();
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
@@ -262,7 +427,13 @@ const AdminConcessions: React.FC = () => {
             Quản lý sản phẩm và tồn kho concessions
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
+        <Button
+          onClick={() => {
+            resetForm();
+            setIsCreateDialogOpen(true);
+          }}
+          disabled={loading}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Thêm Sản Phẩm
         </Button>
@@ -329,9 +500,13 @@ const AdminConcessions: React.FC = () => {
           <Card key={item.id} className="overflow-hidden">
             <div className="relative h-48 bg-muted">
               <img
-                src={getImageUrl(item.image_url) || "https://via.placeholder.com/400x300?text=No+Image"}
+                src={getImageUrl(item.image_url) || IMAGE_FALLBACK_TEMPLATE}
                 alt={item.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = IMAGE_FALLBACK_TEMPLATE;
+                  e.currentTarget.onerror = null;
+                }}
               />
               <div className="absolute top-2 right-2">
                 {getCategoryBadge(item.category)}
@@ -403,7 +578,7 @@ const AdminConcessions: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
             <DialogDescription>Cập nhật thông tin sản phẩm</DialogDescription>
@@ -469,6 +644,59 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label>Preview ảnh hiện tại</Label>
+              {formData.image_url && !imageFile && (
+                <div className="relative w-fit">
+                  <img
+                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
+                    alt="Preview"
+                    className="w-24 h-36 object-cover rounded border"
+                    onError={(e) => {
+                      e.currentTarget.src = IMAGE_FALLBACK_TEMPLATE;
+                      e.currentTarget.onerror = null;
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, image_url: "" })}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {imageFile && (
+                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm">{imageFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setImageFile(null)}
+                    className="ml-auto text-red-500 hover:text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-image_file">Hoặc tải ảnh lên</Label>
+              <Input
+                id="edit-image_file"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                onChange={(e) =>
+                  handleImageFileChange(e.target.files?.[0] || null)
+                }
+                disabled={loading || uploadingImage}
+              />
+              <p className="text-xs text-muted-foreground">
+                Định dạng: JPG, PNG, GIF, WebP. Tối đa 5MB
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="edit-is_available">Trạng thái</Label>
               <Select
                 value={formData.is_available ? "true" : "false"}
@@ -493,18 +721,24 @@ const AdminConcessions: React.FC = () => {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setImageFile(null);
+              }}
             >
               Hủy
             </Button>
-            <Button onClick={handleUpdateItem}>Cập Nhật</Button>
+            <Button onClick={handleUpdateItem} disabled={uploadingImage}>
+              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Cập Nhật
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Thêm Sản Phẩm Mới</DialogTitle>
             <DialogDescription>Tạo sản phẩm concession mới</DialogDescription>
@@ -571,6 +805,59 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label>Preview ảnh</Label>
+              {formData.image_url && !imageFile && (
+                <div className="relative w-fit">
+                  <img
+                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
+                    alt="Preview"
+                    className="w-24 h-36 object-cover rounded border"
+                    onError={(e) => {
+                      e.currentTarget.src = IMAGE_FALLBACK_TEMPLATE;
+                      e.currentTarget.onerror = null;
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, image_url: "" })}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {imageFile && (
+                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm">{imageFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setImageFile(null)}
+                    className="ml-auto text-red-500 hover:text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-image_file">Hoặc tải ảnh lên</Label>
+              <Input
+                id="create-image_file"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                onChange={(e) =>
+                  handleImageFileChange(e.target.files?.[0] || null)
+                }
+                disabled={loading || uploadingImage}
+              />
+              <p className="text-xs text-muted-foreground">
+                Định dạng: JPG, PNG, GIF, WebP. Tối đa 5MB
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="create-is_available">Trạng thái</Label>
               <Select
                 value={formData.is_available ? "true" : "false"}
@@ -595,11 +882,17 @@ const AdminConcessions: React.FC = () => {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsCreateDialogOpen(false)}
+              onClick={() => {
+                setIsCreateDialogOpen(false);
+                resetForm();
+              }}
             >
               Hủy
             </Button>
-            <Button onClick={handleCreateItem}>Tạo Sản Phẩm</Button>
+            <Button onClick={handleCreateItem} disabled={uploadingImage}>
+              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Tạo Sản Phẩm
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
