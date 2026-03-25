@@ -18,7 +18,6 @@ Thông số DB mặc định trong Docker:
 - `DB_PASSWORD`: 12345678
 
 Lưu ý: `schema.sql` và `seed_data.sql` chỉ tự động import khi volume DB mới được tạo lần đầu.
-
 ## 2) Điều kiện trước khi chạy
 
 - Đã cài Docker Desktop

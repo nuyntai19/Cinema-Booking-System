@@ -171,6 +171,12 @@ const AdminScheduler: React.FC = () => {
   const [rerollToken, setRerollToken] = useState<number>(0);
   const previewPerPage = 25;
 
+  const getTodayLocalDate = () => {
+    const now = new Date();
+    const tzOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+    return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
+  };
+
   const getErrorMessage = (error: unknown, fallback: string) => {
     if (error instanceof Error && error.message) return error.message;
     return fallback;
@@ -243,7 +249,7 @@ const AdminScheduler: React.FC = () => {
 
   const [autoForm, setAutoForm] = useState({
     cinemaId: "",
-    startDate: "",
+    startDate: getTodayLocalDate(),
     endDate: "",
     dayStartTime: "09:00",
     dayEndTime: "23:00",
@@ -258,6 +264,16 @@ const AdminScheduler: React.FC = () => {
     setHasPreview(false);
     setAutoPreview([]);
   }, [autoForm]);
+
+  const handleAutoDialogOpenChange = (open: boolean) => {
+    setIsAutoDialogOpen(open);
+    if (!open) return;
+
+    setAutoForm((prev) => ({
+      ...prev,
+      startDate: getTodayLocalDate(),
+    }));
+  };
 
   useEffect(() => {
     setPreviewPage(1);
@@ -745,7 +761,10 @@ const AdminScheduler: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={isAutoDialogOpen} onOpenChange={setIsAutoDialogOpen}>
+          <Dialog
+            open={isAutoDialogOpen}
+            onOpenChange={handleAutoDialogOpenChange}
+          >
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Sparkles className="w-4 h-4" />

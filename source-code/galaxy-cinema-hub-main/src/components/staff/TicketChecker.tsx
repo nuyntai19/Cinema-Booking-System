@@ -157,6 +157,59 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
     }
   };
 
+  const getTicketValue = (ticket: TicketDetail, camelKey: string, snakeKey: string) => {
+    const source = ticket as unknown as Record<string, unknown>;
+    const camelValue = source[camelKey];
+    if (camelValue !== undefined && camelValue !== null && String(camelValue).trim() !== "") {
+      return String(camelValue);
+    }
+    const snakeValue = source[snakeKey];
+    if (snakeValue !== undefined && snakeValue !== null && String(snakeValue).trim() !== "") {
+      return String(snakeValue);
+    }
+    return "";
+  };
+
+  const getShowtimeLabel = (ticket: TicketDetail) => {
+    const raw = getTicketValue(ticket, "showtimeStart", "showtime_start");
+    if (!raw) return "Đang cập nhật";
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return raw;
+
+    return parsed.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getSeatLabel = (ticket: TicketDetail, booking?: CheckTicketResponse["booking"]) => {
+    if (Array.isArray(booking?.seats) && booking.seats.length > 0) {
+      return booking.seats.join(", ");
+    }
+
+    const row = getTicketValue(ticket, "rowNumber", "row_number");
+    const number = getTicketValue(ticket, "seatNumber", "seat_number");
+    const seatCode = `${row}${number}`.trim();
+    return seatCode || "Đang cập nhật";
+  };
+
+  const getRoomLabel = (ticket: TicketDetail) => {
+    return getTicketValue(ticket, "roomName", "room_name") || "Đang cập nhật";
+  };
+
+  const getSeatTypeLabel = (ticket: TicketDetail) => {
+    return getTicketValue(ticket, "seatTypeName", "seat_type_name") || "Đang cập nhật";
+  };
+
+  const getMovieTitleLabel = (ticket: TicketDetail) => {
+    return getTicketValue(ticket, "movieTitle", "movie_title") || "Không xác định";
+  };
+
+  const getCinemaNameLabel = (ticket: TicketDetail) => {
+    return getTicketValue(ticket, "cinemaName", "cinema_name") || "Đang cập nhật";
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4">
       <Card>
@@ -301,10 +354,10 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-bold text-xl text-green-900 dark:text-green-100">
-                      {result.ticket.movieTitle}
+                      {getMovieTitleLabel(result.ticket)}
                     </h3>
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      {result.ticket.cinemaName}
+                      {getCinemaNameLabel(result.ticket)}
                     </p>
                   </div>
                   <Badge
@@ -352,14 +405,7 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                       <p className="text-xs text-green-600 dark:text-green-400">
                         Giờ chiếu
                       </p>
-                      <p className="font-semibold">
-                        {new Date(
-                          result.ticket.showtimeStart,
-                        ).toLocaleTimeString("vi-VN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                      <p className="font-semibold">{getShowtimeLabel(result.ticket)}</p>
                     </div>
                   </div>
 
@@ -369,10 +415,7 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                       <p className="text-xs text-green-600 dark:text-green-400">
                         Ghế
                       </p>
-                      <p className="font-semibold">
-                        {result.ticket.rowNumber}
-                        {result.ticket.seatNumber}
-                      </p>
+                      <p className="font-semibold">{getSeatLabel(result.ticket, result.booking)}</p>
                     </div>
                   </div>
 
@@ -382,7 +425,7 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                       <p className="text-xs text-green-600 dark:text-green-400">
                         Phòng
                       </p>
-                      <p className="font-semibold">{result.ticket.roomName}</p>
+                      <p className="font-semibold">{getRoomLabel(result.ticket)}</p>
                     </div>
                   </div>
 
@@ -392,9 +435,7 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                       <p className="text-xs text-green-600 dark:text-green-400">
                         Loại ghế
                       </p>
-                      <p className="font-semibold">
-                        {result.ticket.seatTypeName}
-                      </p>
+                      <p className="font-semibold">{getSeatTypeLabel(result.ticket)}</p>
                     </div>
                   </div>
                 </div>
