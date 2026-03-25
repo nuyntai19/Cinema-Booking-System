@@ -280,4 +280,181 @@ class AdminController extends BaseController {
 
         Response::success(['items' => $items]);
     }
+
+    public function getTransactions() {
+        AuthMiddleware::requireManager();
+
+        try {
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 10;
+            $offset = ($page - 1) * $limit;
+
+            $q = trim((string)($_GET['q'] ?? ''));
+            $status = strtolower(trim((string)($_GET['status'] ?? '')));
+            $paymentMethod = trim((string)($_GET['payment_method'] ?? ''));
+            $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+            $dateTo = trim((string)($_GET['date_to'] ?? ''));
+
+            $joins = " FROM bookings b
+                INNER JOIN showtimes s ON s.id = b.showtime_id
+                INNER JOIN movies m ON m.id = s.movie_id
+                INNER JOIN cinema_halls h ON h.id = s.cinema_hall_id
+                INNER JOIN cinemas c ON c.id = h.cinema_id
+                LEFT JOIN transactions t ON t.id = (
+                    SELECT t2.id
+                    FROM transactions t2
+                    WHERE t2.booking_id = b.id
+                    ORDER BY t2.created_at DESC, t2.id DESC
+                    LIMIT 1
+                )
+                LEFT JOIN users u ON u.id = b.user_id
+                LEFT JOIN user_profiles up ON up.user_id = u.id
+                LEFT JOIN pos_customers pc ON pc.id = b.guest_customer_id
+                LEFT JOIN (
+                    SELECT tk.booking_id, COUNT(*) AS seat_count
+                    FROM tickets tk
+                    GROUP BY tk.booking_id
+                ) tkc ON tkc.booking_id = b.id";
+
+            $statusExpr = "CASE
+                WHEN t.status = 'Success' THEN 'success'
+                WHEN t.status = 'Pending' THEN 'pending'
+                WHEN t.status = 'Failed' THEN 'failed'
+                WHEN b.status = 'Cancelled' THEN 'refunded'
+                ELSE 'pending'
+            END";
+
+            $where = [];
+            $params = [];
+
+            if ($q !== '') {
+                $where[] = "(
+                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q
+                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q
+                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q
+                    OR LOWER(COALESCE(u.email, '')) LIKE :q
+                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q
+                    OR LOWER(COALESCE(m.title, '')) LIKE :q
+                )";
+                $params[':q'] = '%' . mb_strtolower($q, 'UTF-8') . '%';
+            }
+
+            if (in_array($status, ['success', 'pending', 'failed', 'refunded'], true)) {
+                $where[] = "$statusExpr = :status";
+                $params[':status'] = $status;
+            }
+
+            if ($paymentMethod !== '') {
+                $where[] = "LOWER(COALESCE(t.payment_method, '')) = :payment_method";
+                $params[':payment_method'] = mb_strtolower($paymentMethod, 'UTF-8');
+            }
+
+            if ($dateFrom !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) >= :date_from";
+                $params[':date_from'] = $dateFrom;
+            }
+
+            if ($dateTo !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) <= :date_to";
+                $params[':date_to'] = $dateTo;
+            }
+
+            $whereSql = empty($where) ? '' : (' WHERE ' . implode(' AND ', $where));
+
+            $countSql = "SELECT COUNT(*) AS total" . $joins . $whereSql;
+            $countStmt = $this->db->prepare($countSql);
+            foreach ($params as $key => $value) {
+                $countStmt->bindValue($key, $value);
+            }
+            $countStmt->execute();
+            $total = (int)($countStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
+
+            $dataSql = "SELECT
+                    b.id,
+                    b.booking_code,
+                    b.status AS booking_status,
+                    COALESCE(t.transaction_code, CONCAT('BK-', LPAD(b.id, 6, '0'))) AS booking_display_code,
+                    COALESCE(up.full_name, pc.name, CONCAT('User #', COALESCE(b.user_id, 'null'))) AS customer_name,
+                    COALESCE(u.email, CASE WHEN pc.phone IS NOT NULL THEN CONCAT(pc.phone, '@guest.local') ELSE '-' END) AS customer_email,
+                    COALESCE(pc.phone, up.phone, '-') AS customer_phone,
+                    m.title AS movie_title,
+                    c.name AS cinema_name,
+                    s.start_time,
+                    COALESCE(tkc.seat_count, 0) AS seat_count,
+                    COALESCE(t.amount, b.final_price, b.total_price, 0) AS amount,
+                    COALESCE(t.payment_method, 'Cash') AS payment_method,
+                    $statusExpr AS display_status,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . $whereSql . "
+                ORDER BY COALESCE(t.created_at, b.created_at) DESC, b.id DESC
+                LIMIT :limit OFFSET :offset";
+
+            $stmt = $this->db->prepare($dataSql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $items = array_map(function ($row) {
+                $startTime = !empty($row['start_time']) ? new DateTime($row['start_time']) : null;
+                return [
+                    'id' => (string)$row['id'],
+                    'bookingCode' => $row['booking_display_code'],
+                    'customerName' => $row['customer_name'],
+                    'customerEmail' => $row['customer_email'],
+                    'movieTitle' => $row['movie_title'],
+                    'cinemaName' => $row['cinema_name'],
+                    'showDate' => $startTime ? $startTime->format('Y-m-d') : '',
+                    'showTime' => $startTime ? $startTime->format('H:i') : '-',
+                    'seatCount' => (int)$row['seat_count'],
+                    'amount' => (float)$row['amount'],
+                    'paymentMethod' => $row['payment_method'],
+                    'status' => $row['display_status'],
+                    'transactionDate' => $row['transaction_date'],
+                ];
+            }, $rows);
+
+            $summarySql = "SELECT
+                    COALESCE(SUM(CASE WHEN $statusExpr = 'success' THEN COALESCE(t.amount, b.final_price, b.total_price, 0) ELSE 0 END), 0) AS total_revenue,
+                    SUM(CASE WHEN $statusExpr = 'success' THEN 1 ELSE 0 END) AS success_count,
+                    SUM(CASE WHEN $statusExpr = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+                    SUM(CASE WHEN $statusExpr IN ('failed', 'refunded') THEN 1 ELSE 0 END) AS failed_or_refunded_count
+                " . $joins . $whereSql;
+            $summaryStmt = $this->db->prepare($summarySql);
+            foreach ($params as $key => $value) {
+                $summaryStmt->bindValue($key, $value);
+            }
+            $summaryStmt->execute();
+            $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            Response::success([
+                'items' => $items,
+                'pagination' => [
+                    'total' => $total,
+                    'page' => $page,
+                    'limit' => $limit,
+                    'totalPages' => max(1, (int)ceil($total / max(1, $limit))),
+                    'hasMore' => ($offset + count($items)) < $total,
+                ],
+                'summary' => [
+                    'totalRevenue' => (float)($summary['total_revenue'] ?? 0),
+                    'successCount' => (int)($summary['success_count'] ?? 0),
+                    'pendingCount' => (int)($summary['pending_count'] ?? 0),
+                    'failedOrRefundedCount' => (int)($summary['failed_or_refunded_count'] ?? 0),
+                ],
+                'filters' => [
+                    'q' => $q,
+                    'status' => $status,
+                    'payment_method' => $paymentMethod,
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo,
+                ],
+            ]);
+        } catch (Exception $e) {
+            Response::serverError('Không thể tải danh sách giao dịch: ' . $e->getMessage());
+        }
+    }
 }

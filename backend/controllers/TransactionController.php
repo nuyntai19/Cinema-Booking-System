@@ -105,6 +105,7 @@ class TransactionController extends BaseController {
 
         $data = self::getRequestData();
         $bookingId = $data['booking_id'] ?? null;
+        $isPos = !empty($data['is_pos']);
         $gatewayResponse = null;
 
         if (!$bookingId) {
@@ -122,7 +123,9 @@ class TransactionController extends BaseController {
 
         try {
             // Amount is resolved server-side from booking final price.
-            $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking);
+            $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking, [
+                'is_pos' => $isPos,
+            ]);
             Response::success($gatewayResponse, $gateway . ' payment created');
         } catch (Exception $e) {
             Response::error($e->getMessage(), $e->getCode() ?: 400);
@@ -134,7 +137,7 @@ class TransactionController extends BaseController {
         $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
-        if ($authRole === 'Admin' || $authRole === 'Manager') {
+        if ($authRole === 'Admin' || $authRole === 'Manager' || $authRole === 'Staff') {
             return;
         }
 

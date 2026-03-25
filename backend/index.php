@@ -138,6 +138,15 @@ $router->post('/api/users/:id/upload-avatar', 'UserController@uploadAvatar'); //
 $router->get('/api/roles', 'RoleController@index'); // Get all roles
 
 // ============================================
+// CUSTOMER ROUTES (POS - Khách Vãng Lai)
+// ============================================
+$router->post('/api/customers/lookup-or-create', 'CustomerController@lookupOrCreate'); // Staff - POS
+$router->get('/api/customers/by-phone', 'CustomerController@getByPhone'); // Staff - Get by phone
+$router->get('/api/customers/:id/bookings', 'CustomerController@getBookingHistory'); // Staff - Guest booking history
+$router->get('/api/customers/:id', 'CustomerController@getById'); // Staff - Get by ID
+$router->get('/api/customers/stats', 'CustomerController@getStats'); // Staff/Admin - Statistics
+
+// ============================================
 // MOVIE ROUTES
 // ============================================
 $router->get('/api/movies', 'MovieController@index');
@@ -184,6 +193,7 @@ $router->get('/api/showtimes/:id/seat-map', 'ShowtimeController@getSeatMap');
 // BOOKING ROUTES
 // ============================================
 $router->get('/api/bookings', 'BookingController@index');
+$router->get('/api/bookings/pos-history', 'BookingController@getPosPaymentHistory'); // Staff - POS payment history
 $router->get('/api/bookings/:id', 'BookingController@show');
 $router->post('/api/bookings', 'BookingController@create'); // Create booking & hold seats
 $router->put('/api/bookings/:id/confirm', 'BookingController@confirm'); // Confirm payment
@@ -199,7 +209,9 @@ $router->get('/api/bookings/user/showtime/:userId/:showtimeId', 'BookingControll
 $router->post('/api/transactions', 'TransactionController@create');
 $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getByBooking');
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
+$router->get('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
+$router->get('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
 $router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
 $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
@@ -209,7 +221,9 @@ $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayme
 $router->get('/api/tickets', 'TicketController@index'); // Admin - Get all tickets
 $router->get('/api/tickets/code/:code', 'TicketController@getByCode'); // QR scan
 $router->get('/api/tickets/booking/:bookingId', 'TicketController@getByBooking'); // Get tickets by booking
+$router->get('/api/tickets/scan-history', 'TicketController@scanHistory'); // Staff scan history
 $router->post('/api/tickets/check', 'TicketController@check'); // Staff scan at gate
+$router->post('/api/tickets/approve-entry', 'TicketController@approveEntry'); // Staff approve entry + save scan history
 $router->put('/api/tickets/:id/use', 'TicketController@markAsUsed'); // Mark as used
 $router->post('/api/tickets/:id/refund', 'TicketController@refund'); // Refund ticket
 $router->post('/api/tickets/:id/send-email', 'TicketController@sendEmail'); // Send email
@@ -284,6 +298,7 @@ $router->get('/api/admin/stats', 'AdminController@getDashboardStats'); // Admin
 $router->get('/api/admin/revenue', 'AdminController@getRevenueReport'); // Admin
 $router->get('/api/admin/seat-heatmap', 'AdminController@getSeatHeatmap'); // Admin
 $router->get('/api/admin/recent-transactions', 'AdminController@getRecentTransactions'); // Admin
+$router->get('/api/admin/transactions', 'AdminController@getTransactions'); // Admin with pagination/filter
 
 // ============================================
 // SYSTEM CONFIG ROUTES

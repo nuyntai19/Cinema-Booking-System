@@ -134,7 +134,7 @@ class Ticket
      */
     public function getScanBundleByBookingId($bookingId)
     {
-        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.`number` AS `seat_number`,\n                s.row_code AS `row_number`,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                h.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN cinema_halls h ON sh.cinema_hall_id = h.id\n            JOIN cinemas c ON h.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
+        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.`number` AS `seat_number`,\n                s.row_code AS `row_number`,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                h.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email,\n                up.full_name AS user_full_name,\n                up.phone AS user_phone,\n                up.avatar AS user_avatar\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN cinema_halls h ON sh.cinema_hall_id = h.id\n            JOIN cinemas c ON h.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            LEFT JOIN user_profiles up ON u.id = up.user_id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
 
         $stmt->execute([$bookingId]);
         return $stmt->fetchAll();
@@ -282,6 +282,101 @@ class Ticket
 
         $stmt->execute([$bookingId]);
         return $stmt->rowCount();
+    }
+
+    /**
+     * Đảm bảo bảng lịch sử quét tồn tại cho môi trường cũ chưa migrate schema
+     */
+    public function ensureScanHistoryTable()
+    {
+        $this->db->exec("\n            CREATE TABLE IF NOT EXISTS ticket_scan_history (\n                id INT AUTO_INCREMENT PRIMARY KEY,\n                booking_id INT NOT NULL,\n                ticket_code_input VARCHAR(50) NOT NULL,\n                scanned_by_user_id INT NULL,\n                scan_result ENUM('APPROVED') NOT NULL DEFAULT 'APPROVED',\n                note VARCHAR(255) NULL,\n                scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n                FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,\n                FOREIGN KEY (scanned_by_user_id) REFERENCES users(id) ON DELETE SET NULL,\n                INDEX idx_booking_scan_time (booking_id, scanned_at),\n                INDEX idx_scanned_by (scanned_by_user_id),\n                INDEX idx_ticket_code_input (ticket_code_input)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci\n        ");
+    }
+
+    /**
+     * Lưu lịch sử duyệt vé vào cổng
+     */
+    public function logScanApproval($bookingId, $ticketCodeInput, $staffUserId = null, $note = null)
+    {
+        $this->ensureScanHistoryTable();
+
+        $stmt = $this->db->prepare("\n            INSERT INTO ticket_scan_history (booking_id, ticket_code_input, scanned_by_user_id, scan_result, note)\n            VALUES (?, ?, ?, 'APPROVED', ?)\n        ");
+
+        return $stmt->execute([
+            (int)$bookingId,
+            (string)$ticketCodeInput,
+            $staffUserId ? (int)$staffUserId : null,
+            $note,
+        ]);
+    }
+
+    /**
+     * Lấy lịch sử duyệt vé tại cổng
+     */
+    public function getScanHistory($limit = 50, $offset = 0, $filters = [])
+    {
+        $this->ensureScanHistoryTable();
+
+        $where = [];
+        $params = [];
+
+        $bookingCode = trim((string)($filters['booking_code'] ?? ''));
+        if ($bookingCode !== '') {
+            $where[] = 'b.booking_code LIKE ?';
+            $params[] = '%' . $bookingCode . '%';
+        }
+
+        $ticketCode = trim((string)($filters['ticket_code_input'] ?? ''));
+        if ($ticketCode !== '') {
+            $where[] = 'tsh.ticket_code_input LIKE ?';
+            $params[] = '%' . $ticketCode . '%';
+        }
+
+        $staffEmail = trim((string)($filters['scanned_by_email'] ?? ''));
+        if ($staffEmail !== '') {
+            $where[] = 'su.email LIKE ?';
+            $params[] = '%' . $staffEmail . '%';
+        }
+
+        $scanResult = trim((string)($filters['scan_result'] ?? ''));
+        if ($scanResult !== '') {
+            $where[] = 'tsh.scan_result = ?';
+            $params[] = $scanResult;
+        }
+
+        $dateFrom = trim((string)($filters['date_from'] ?? ''));
+        if ($dateFrom !== '') {
+            $where[] = 'DATE(tsh.scanned_at) >= ?';
+            $params[] = $dateFrom;
+        }
+
+        $dateTo = trim((string)($filters['date_to'] ?? ''));
+        if ($dateTo !== '') {
+            $where[] = 'DATE(tsh.scanned_at) <= ?';
+            $params[] = $dateTo;
+        }
+
+        $sql = "\n            SELECT\n                tsh.id,\n                tsh.booking_id,\n                tsh.ticket_code_input,\n                tsh.scanned_by_user_id,\n                tsh.scan_result,\n                tsh.note,\n                tsh.scanned_at,\n                b.booking_code,\n                m.title AS movie_title,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                su.email AS scanned_by_email\n            FROM ticket_scan_history tsh\n            JOIN bookings b ON tsh.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            LEFT JOIN users su ON tsh.scanned_by_user_id = su.id\n        ";
+
+        if (!empty($where)) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql .= ' ORDER BY tsh.scanned_at DESC LIMIT ? OFFSET ?';
+
+        $stmt = $this->db->prepare($sql);
+
+        $bindIndex = 1;
+        foreach ($params as $value) {
+            $stmt->bindValue($bindIndex, $value, PDO::PARAM_STR);
+            $bindIndex++;
+        }
+
+        $stmt->bindValue($bindIndex, (int)$limit, PDO::PARAM_INT);
+        $bindIndex++;
+        $stmt->bindValue($bindIndex, (int)$offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll();
     }
 
     /**

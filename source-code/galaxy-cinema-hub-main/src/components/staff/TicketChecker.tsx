@@ -12,6 +12,9 @@ import {
   MapPin,
   Armchair,
   AlertTriangle,
+  User,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { TicketService } from "@/services/ticket.service";
-import { TicketDetail } from "@/types/api";
+import { CheckTicketResponse, TicketDetail, TicketScanUser } from "@/types/api";
 import { ApiError } from "@/lib/api-client";
 
 interface TicketCheckerProps {
@@ -35,17 +38,11 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
 }) => {
   const [ticketCode, setTicketCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
   const lastAutoCheckedSignalRef = useRef<number>(0);
-  const [result, setResult] = useState<{
-    success: boolean;
-    ticket?: TicketDetail;
-    booking?: {
-      booking_code?: string;
-      ticket_count: number;
-      seats: string[];
-    };
-    message: string;
-  } | null>(null);
+  const [result, setResult] = useState<
+    (CheckTicketResponse & { success: boolean }) | null
+  >(null);
 
   const checkTicketByCode = async (code: string) => {
     const normalizedCode = code.trim();
@@ -62,34 +59,77 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
       setLoading(true);
       setResult(null);
 
-      const response = await TicketService.checkTicket({ code: normalizedCode });
+      const response = await TicketService.checkTicket({
+        code: normalizedCode,
+      });
 
       if (response.success && response.data) {
         setResult({
+          code: normalizedCode,
           success: true,
           ticket: response.data.ticket,
           booking: response.data.booking,
+          user: response.data.user,
+          gate: response.data.gate,
           message: response.data.message || "Vé hợp lệ - Cho phép vào",
         });
 
         if (onSuccess) {
           onSuccess(response.data.ticket);
         }
-
-        // Auto clear after 3 seconds
-        setTimeout(() => {
-          setTicketCode("");
-          setResult(null);
-        }, 3000);
       }
     } catch (err) {
       const error = err as ApiError;
+      const payload = (error.data?.errors || error.errors || {}) as Record<
+        string,
+        any
+      >;
+      const payloadUser = (payload.user || payload) as TicketScanUser;
+
       setResult({
+        code: normalizedCode,
         success: false,
+        user: payloadUser,
+        gate: payload.gate,
+        booking: payload.booking,
+        ticket: payload.ticket,
         message: error.message || "Có lỗi xảy ra khi kiểm tra vé",
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveEntry = async () => {
+    if (!result?.code || !result?.gate?.can_approve || approving) {
+      return;
+    }
+
+    try {
+      setApproving(true);
+      const response = await TicketService.approveEntry({ code: result.code });
+
+      if (response.success && response.data) {
+        setResult({
+          ...response.data,
+          code: result.code,
+          success: true,
+          message: response.data.message || "Đã duyệt vào cổng",
+        });
+
+        if (response.data.ticket && onSuccess) {
+          onSuccess(response.data.ticket);
+        }
+      }
+    } catch (err) {
+      const error = err as ApiError;
+      setResult((prev) => ({
+        ...(prev || { success: false }),
+        success: false,
+        message: error.message || "Không thể duyệt vào cổng",
+      }));
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -161,10 +201,18 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
           {/* Result Section */}
           {result && (
             <Alert
-              variant={result.success ? "default" : "destructive"}
+              variant={
+                result.gate && result.gate.can_approve === false
+                  ? "destructive"
+                  : result.success
+                    ? "default"
+                    : "destructive"
+              }
               className="animate-fade-in"
             >
-              {result.success ? (
+              {result.gate && result.gate.can_approve === false ? (
+                <XCircle className="h-5 w-5" />
+              ) : result.success ? (
                 <CheckCircle className="h-5 w-5 text-green-600" />
               ) : (
                 <XCircle className="h-5 w-5" />
@@ -175,8 +223,79 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
             </Alert>
           )}
 
-          {/* Ticket Details */}
-          {result?.success && result.ticket && (
+          {/* Approve Section */}
+          {result?.ticket && (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleApproveEntry}
+                disabled={
+                  approving ||
+                  loading ||
+                  !result.code ||
+                  result.gate?.can_approve !== true ||
+                  result.gate?.approved === true
+                }
+                className="h-11 px-6"
+              >
+                {approving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Đang duyệt...
+                  </>
+                ) : result.gate?.approved ? (
+                  "Đã duyệt vào cổng"
+                ) : (
+                  "Duyệt vào cổng"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* User Information Section - Display for both success and error */}
+          {result?.user &&
+            (result.user.user_full_name ||
+              result.user.user_email ||
+              result.user.user_phone) && (
+              <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 animate-fade-in">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-4">
+                    {result.user.user_avatar && (
+                      <img
+                        src={result.user.user_avatar}
+                        alt="Customer Avatar"
+                        className="w-16 h-16 rounded-full object-cover border-2 border-blue-300 dark:border-blue-600"
+                      />
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                        <User className="w-4 h-4" />
+                        <div>
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            Khách hàng
+                          </p>
+                          <p className="font-semibold">
+                            {result.user.user_full_name || "Không xác định"}
+                          </p>
+                        </div>
+                      </div>
+                      {result.user.user_email && (
+                        <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+                          <Mail className="w-4 h-4" />
+                          <p className="text-sm">{result.user.user_email}</p>
+                        </div>
+                      )}
+                      {result.user.user_phone && (
+                        <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+                          <Phone className="w-4 h-4" />
+                          <p className="text-sm">{result.user.user_phone}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          {result?.ticket && (
             <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 animate-fade-in">
               <CardContent className="pt-6 space-y-3">
                 <div className="flex items-start justify-between">
@@ -190,9 +309,19 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
                   </div>
                   <Badge
                     variant="outline"
-                    className="bg-green-600 text-white border-green-700"
+                    className={
+                      result.gate?.approved
+                        ? "bg-blue-600 text-white border-blue-700"
+                        : result.gate?.can_approve
+                          ? "bg-green-600 text-white border-green-700"
+                          : "bg-orange-600 text-white border-orange-700"
+                    }
                   >
-                    VÀO ĐƯỢC
+                    {result.gate?.approved
+                      ? "ĐÃ DUYỆT"
+                      : result.gate?.can_approve
+                        ? "CÓ THỂ DUYỆT"
+                        : "CHƯA ĐẾN GIỜ"}
                   </Badge>
                 </div>
 
@@ -274,28 +403,28 @@ const TicketChecker: React.FC<TicketCheckerProps> = ({
           )}
 
           {/* Error Details for Invalid Tickets */}
-          {result &&
-            !result.success &&
-            result.message.includes("chưa mở cửa") && (
-              <Alert
-                variant="default"
-                className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
-              >
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-                  Khách hàng đến quá sớm. Vui lòng yêu cầu quay lại sau 30 phút
-                  trước giờ chiếu.
-                </AlertDescription>
-              </Alert>
-            )}
+          {result && result.message.includes("chưa mở cửa") && (
+            <Alert
+              variant="default"
+              className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
+            >
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                Khách hàng đến quá sớm. Vui lòng yêu cầu quay lại sau 30 phút
+                trước giờ chiếu.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Instructions */}
           <div className="mt-6 p-4 bg-muted rounded-lg">
             <h4 className="font-semibold mb-2 text-sm">Hướng dẫn:</h4>
             <ul className="text-xs text-muted-foreground space-y-1">
               <li>• Nhập mã vé hoặc quét QR code từ vé điện tử</li>
+              <li>• Bước 1: Bấm "Kiểm tra" để xác minh mã vé và khung giờ</li>
               <li>
-                • Vé hợp lệ sẽ tự động chuyển sang trạng thái "Đã sử dụng"
+                • Bước 2: Chỉ khi trong khung cho phép, bấm "Duyệt vào cổng" để
+                lưu lịch sử và cập nhật trạng thái vé
               </li>
               <li>
                 • Khách được vào trước 30 phút và chậm nhất 15 phút sau giờ

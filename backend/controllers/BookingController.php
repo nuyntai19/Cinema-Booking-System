@@ -49,26 +49,40 @@ class BookingController extends BaseController {
         $concessions = $data['concessions'] ?? [];
         $userVoucherId = $data['user_voucher_id'] ?? null;
 
-        $userId = $data['user_id'] ?? ($_REQUEST['auth_user_id'] ?? null);
+        // Support both user_id (authenticated user) and guest_customer_id (POS walk-in)
+        $guestCustomerId = $data['guest_customer_id'] ?? null;
+        $userId = $guestCustomerId
+            ? null
+            : ($data['user_id'] ?? ($_REQUEST['auth_user_id'] ?? null));
         $showtimeId = $data['showtime_id'] ?? null;
 
-        if (!$userId || !$showtimeId || empty($seatIds)) {
+        if (!$showtimeId || empty($seatIds)) {
             Response::validationError([
-                'user_id' => 'User id is required',
                 'showtime_id' => 'Showtime id is required',
                 'seat_ids' => 'Seat list is required',
             ]);
         }
 
-        self::authorizeUserId((int)$userId);
+        // Must have either user_id OR guest_customer_id
+        if (!$userId && !$guestCustomerId) {
+            Response::validationError([
+                'user_id' => 'Either user_id or guest_customer_id is required',
+            ]);
+        }
+
+        // If using user_id, authorize it (must be self or staff/admin for POS)
+        if ($userId && !self::authorizeUserId((int)$userId, true)) {
+            Response::forbidden('You do not have permission to create booking for this user');
+        }
 
         try {
             $result = $this->bookingService->createBooking(
-                (int)$userId,
+                $userId ? (int)$userId : null,
                 (int)$showtimeId,
                 $seatIds,
                 $concessions,
-                $userVoucherId ? (int)$userVoucherId : null
+                $userVoucherId ? (int)$userVoucherId : null,
+                $guestCustomerId ? (int)$guestCustomerId : null  // Add guest_customer_id param
             );
             Response::created($result, 'Booking created successfully');
         } catch (Exception $e) {
@@ -131,6 +145,32 @@ class BookingController extends BaseController {
         list($bookings, $total) = $this->bookingService->getUserBookings((int)$userId, $page, $limit);
 
         Response::paginated($bookings, $total, $page, $limit);
+    }
+
+    public function getPosPaymentHistory() {
+        AuthMiddleware::authenticate();
+
+        $authRole = $_REQUEST['auth_user_role'] ?? null;
+        if (!in_array($authRole, ['Admin', 'Manager', 'Staff'], true)) {
+            Response::forbidden('Insufficient permissions');
+        }
+
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+
+        $filters = [
+            'phone' => $_GET['phone'] ?? null,
+            'booking_code' => $_GET['booking_code'] ?? null,
+            'movie_title' => $_GET['movie_title'] ?? null,
+            'booking_status' => $_GET['booking_status'] ?? null,
+            'payment_status' => $_GET['payment_status'] ?? null,
+            'date_from' => $_GET['date_from'] ?? null,
+            'date_to' => $_GET['date_to'] ?? null,
+        ];
+
+        list($items, $total) = $this->bookingService->getPosPaymentHistory($filters, $page, $limit);
+
+        Response::paginated($items, $total, $page, $limit);
     }
 
     public function getBookingsByShowtime($showtimeId) {
@@ -201,7 +241,7 @@ class BookingController extends BaseController {
         $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
-        if ($authRole === 'Admin' || $authRole === 'Manager') {
+        if ($authRole === 'Admin' || $authRole === 'Manager' || $authRole === 'Staff') {
             return;
         }
 

@@ -5,6 +5,7 @@
  */
 require_once __DIR__ . '/../models/Ticket.php';
 require_once __DIR__ . '/../core/Response.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 
 class TicketController
 {
@@ -13,6 +14,68 @@ class TicketController
     public function __construct()
     {
         $this->ticketModel = new Ticket();
+    }
+
+    /**
+     * Helper: Extract user info from ticket data
+     */
+    private function extractUserInfo($ticketData)
+    {
+        return [
+            'user_id' => $ticketData['user_id'] ?? null,
+            'user_email' => $ticketData['user_email'] ?? null,
+            'user_full_name' => $ticketData['user_full_name'] ?? null,
+            'user_phone' => $ticketData['user_phone'] ?? null,
+            'user_avatar' => $ticketData['user_avatar'] ?? null,
+        ];
+    }
+
+    /**
+     * Resolve scan bundle from ticket code or booking code
+     */
+    private function resolveScanBundleByCode($code)
+    {
+        $ticket = $this->ticketModel->getByCode($code);
+        if ($ticket) {
+            return $this->ticketModel->getScanBundleByBookingId((int)$ticket['booking_id']);
+        }
+
+        return $this->ticketModel->getScanBundleByBookingCode($code);
+    }
+
+    /**
+     * Validate if gate approval is allowed at current time
+     */
+    private function getGateValidationData($primaryTicket)
+    {
+        $showtimeStart = strtotime($primaryTicket['showtime_start']);
+        $showtimeEnd = !empty($primaryTicket['showtime_end']) ? strtotime($primaryTicket['showtime_end']) : null;
+        $now = time();
+
+        $canEnterAt = $showtimeStart - 1800;
+        $canApprove = true;
+        $scanState = 'ALLOW_ENTRY';
+        $message = 'Vé hợp lệ - Sẵn sàng duyệt vào cổng';
+
+        if ($now < $canEnterAt) {
+            $canApprove = false;
+            $scanState = 'TOO_EARLY';
+            $message = 'Suất chiếu chưa mở cửa';
+        } elseif ($showtimeEnd !== null && $now > $showtimeEnd) {
+            $canApprove = false;
+            $scanState = 'EXPIRED';
+            $message = 'Suất chiếu đã kết thúc - vé đã hết hạn quét';
+        }
+
+        return [
+            'can_approve' => $canApprove,
+            'scan_state' => $scanState,
+            'message' => $message,
+            'showtime_start' => $primaryTicket['showtime_start'],
+            'showtime_end' => $primaryTicket['showtime_end'] ?? null,
+            'can_enter_at' => date('Y-m-d H:i:s', $canEnterAt),
+            'server_time' => date('Y-m-d H:i:s', $now),
+        ];
     }
 
     /**
@@ -82,16 +145,8 @@ class TicketController
                 Response::validationError(['code' => 'Mã vé là bắt buộc']);
             }
 
-            $code = $input['code'];
-            $bundle = [];
-
-            // Backward-compatible: accept both legacy ticket_code and new booking_code.
-            $ticket = $this->ticketModel->getByCode($code);
-            if ($ticket) {
-                $bundle = $this->ticketModel->getScanBundleByBookingId((int)$ticket['booking_id']);
-            } else {
-                $bundle = $this->ticketModel->getScanBundleByBookingCode($code);
-            }
+            $code = trim((string)$input['code']);
+            $bundle = $this->resolveScanBundleByCode($code);
 
             if (empty($bundle)) {
                 Response::notFound('Vé không tồn tại');
@@ -103,66 +158,161 @@ class TicketController
             }, $bundle)));
             $hasSoldTicket = in_array('SOLD', $statuses, true);
             $hasHoldingTicket = in_array('HOLDING', $statuses, true);
+            $hasUsedTicket = in_array('USED', $statuses, true);
 
             // Validate ticket status
             if ($hasHoldingTicket) {
-                Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, [
+                Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, array_merge([
                     'current_status' => implode(', ', $statuses)
-                ]);
+                ], $this->extractUserInfo($primaryTicket)));
+            }
+
+            if ($hasUsedTicket && !$hasSoldTicket) {
+                Response::error('Vé đã được sử dụng trước đó', 400, array_merge([
+                    'current_status' => implode(', ', $statuses)
+                ], $this->extractUserInfo($primaryTicket)));
             }
 
             if (!$hasSoldTicket) {
-                Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, [
+                Response::error('Vé chưa được thanh toán hoặc đã được sử dụng', 400, array_merge([
                     'current_status' => implode(', ', $statuses)
-                ]);
+                ], $this->extractUserInfo($primaryTicket)));
             }
 
-            // Check showtime chưa bắt đầu
-            $showtimeStart = strtotime($primaryTicket['showtime_start']);
-            $now = time();
+            $seatCodes = array_values(array_map(function ($item) {
+                return trim(($item['row_number'] ?? '') . ($item['seat_number'] ?? ''));
+            }, $bundle));
 
-            // Cho phép quét vé trước giờ chiếu 30 phút
-            if ($now < ($showtimeStart - 1800)) {
-                Response::error('Suất chiếu chưa mở cửa', 400, [
-                    'showtime_start' => $primaryTicket['showtime_start'],
-                    'can_enter_at' => date('Y-m-d H:i:s', $showtimeStart - 1800)
-                ]);
-            }
+            $gateValidation = $this->getGateValidationData($primaryTicket);
 
-            // Không cho quét sau khi suất chiếu đã kết thúc
-            $showtimeEnd = !empty($primaryTicket['showtime_end'])
-                ? strtotime($primaryTicket['showtime_end'])
-                : null;
-
-            if ($showtimeEnd !== null && $now > $showtimeEnd) {
-                Response::error('Suất chiếu đã kết thúc - vé đã hết hạn quét', 400, [
-                    'showtime_start' => $primaryTicket['showtime_start'],
-                    'showtime_end' => $primaryTicket['showtime_end']
-                ]);
-            }
-
-            // Mark all tickets in the booking as USED with one scan.
-            $updatedCount = $this->ticketModel->markBookingAsUsed((int)$primaryTicket['booking_id']);
-
-            if ($updatedCount > 0) {
-                $seatCodes = array_values(array_map(function ($item) {
-                    return trim(($item['row_number'] ?? '') . ($item['seat_number'] ?? ''));
-                }, $bundle));
-
-                Response::success([
-                    'ticket' => $primaryTicket,
-                    'booking' => [
-                        'booking_code' => $primaryTicket['booking_code'] ?? null,
-                        'ticket_count' => count($bundle),
-                        'seats' => $seatCodes,
-                    ],
-                    'message' => 'Vé hợp lệ - Cho phép vào'
-                ], 'Quét vé thành công');
-            } else {
-                Response::serverError('Không thể cập nhật trạng thái vé');
-            }
+            Response::success([
+                'ticket' => $primaryTicket,
+                'booking' => [
+                    'booking_code' => $primaryTicket['booking_code'] ?? null,
+                    'ticket_count' => count($bundle),
+                    'seats' => $seatCodes,
+                ],
+                'user' => $this->extractUserInfo($primaryTicket),
+                'gate' => $gateValidation,
+                'message' => $gateValidation['message']
+            ], 'Kiểm tra vé thành công');
         } catch (Exception $e) {
             Response::serverError('Lỗi khi quét vé: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Duyệt khách vào cổng và ghi lịch sử quét
+     * POST /api/tickets/approve-entry
+     * Body: { "code": "TICKET123" }
+     */
+    public function approveEntry()
+    {
+        try {
+            AuthMiddleware::requireStaff();
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!isset($input['code'])) {
+                Response::validationError(['code' => 'Mã vé là bắt buộc']);
+            }
+
+            $code = trim((string)$input['code']);
+            $bundle = $this->resolveScanBundleByCode($code);
+
+            if (empty($bundle)) {
+                Response::notFound('Vé không tồn tại');
+            }
+
+            $primaryTicket = $bundle[0];
+            $statuses = array_values(array_unique(array_map(function ($item) {
+                return $item['status'] ?? '';
+            }, $bundle)));
+
+            if (in_array('HOLDING', $statuses, true)) {
+                Response::error('Vé chưa được thanh toán', 400, [
+                    'current_status' => implode(', ', $statuses),
+                    'user' => $this->extractUserInfo($primaryTicket),
+                ]);
+            }
+
+            if (!in_array('SOLD', $statuses, true)) {
+                Response::error('Vé không còn hợp lệ để duyệt', 400, [
+                    'current_status' => implode(', ', $statuses),
+                    'user' => $this->extractUserInfo($primaryTicket),
+                ]);
+            }
+
+            $gateValidation = $this->getGateValidationData($primaryTicket);
+            if (!$gateValidation['can_approve']) {
+                Response::error($gateValidation['message'], 400, [
+                    'gate' => $gateValidation,
+                    'user' => $this->extractUserInfo($primaryTicket),
+                ]);
+            }
+
+            $updatedCount = $this->ticketModel->markBookingAsUsed((int)$primaryTicket['booking_id']);
+            if ($updatedCount <= 0) {
+                Response::error('Không có vé SOLD để duyệt vào cổng', 400, [
+                    'current_status' => implode(', ', $statuses),
+                ]);
+            }
+
+            $staffUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
+            $this->ticketModel->logScanApproval(
+                (int)$primaryTicket['booking_id'],
+                $code,
+                $staffUserId > 0 ? $staffUserId : null,
+                'Duyệt vào cổng từ màn hình StaffScanner'
+            );
+
+            Response::success([
+                'ticket' => $primaryTicket,
+                'booking' => [
+                    'booking_code' => $primaryTicket['booking_code'] ?? null,
+                    'ticket_count' => count($bundle),
+                ],
+                'user' => $this->extractUserInfo($primaryTicket),
+                'gate' => [
+                    'approved' => true,
+                    'approved_at' => date('Y-m-d H:i:s'),
+                ],
+                'message' => 'Đã duyệt khách vào cổng và lưu lịch sử quét'
+            ], 'Duyệt vào cổng thành công');
+        } catch (Exception $e) {
+            Response::serverError('Lỗi khi duyệt vào cổng: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Lấy lịch sử duyệt vào cổng (Staff)
+     * GET /api/tickets/scan-history
+     */
+    public function scanHistory()
+    {
+        try {
+            AuthMiddleware::requireStaff();
+
+            $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 50;
+            $offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
+            $filters = [
+                'booking_code' => $_GET['booking_code'] ?? '',
+                'ticket_code_input' => $_GET['ticket_code_input'] ?? '',
+                'scanned_by_email' => $_GET['scanned_by_email'] ?? '',
+                'scan_result' => $_GET['scan_result'] ?? '',
+                'date_from' => $_GET['date_from'] ?? '',
+                'date_to' => $_GET['date_to'] ?? '',
+            ];
+
+            $rows = $this->ticketModel->getScanHistory($limit, $offset, $filters);
+
+            Response::success([
+                'items' => $rows,
+                'limit' => $limit,
+                'offset' => $offset,
+                'filters' => $filters,
+            ], 'Lấy lịch sử quét thành công');
+        } catch (Exception $e) {
+            Response::serverError('Lỗi khi lấy lịch sử quét: ' . $e->getMessage());
         }
     }
 

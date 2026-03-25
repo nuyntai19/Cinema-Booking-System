@@ -1,6 +1,13 @@
 import React, { useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { QrCode, ShoppingCart, LogOut, User } from "lucide-react";
+import {
+  QrCode,
+  ShoppingCart,
+  LogOut,
+  User,
+  History,
+  ReceiptText,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AppContext";
@@ -37,6 +44,12 @@ const StaffLayout: React.FC = () => {
   const navItems = [
     { path: "/staff/scanner", label: "Quét Vé", icon: QrCode },
     { path: "/staff/pos", label: "Bán Vé", icon: ShoppingCart },
+    { path: "/staff/scan-history", label: "Lịch Sử Quét", icon: History },
+    {
+      path: "/staff/payment-history",
+      label: "Lịch Sử Thanh Toán",
+      icon: ReceiptText,
+    },
   ];
 
   const handleLogout = () => {

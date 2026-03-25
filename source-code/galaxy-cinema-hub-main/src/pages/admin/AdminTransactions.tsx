@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
-interface Transaction {
+interface TransactionItem {
   id: string;
   bookingCode: string;
   customerName: string;
@@ -50,166 +50,109 @@ interface ApiResponse<T> {
   data: T;
 }
 
-interface BookingListItem {
-  id: number;
-  user_id: number;
+interface PaginationData {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasMore: boolean;
 }
 
-interface BookingListResponseData {
-  items: BookingListItem[];
+interface SummaryData {
+  totalRevenue: number;
+  successCount: number;
+  pendingCount: number;
+  failedOrRefundedCount: number;
 }
 
-interface BookingDetail {
-  id: number;
-  user_id: number;
-  movie_title?: string;
-  cinema_name?: string;
-  start_time?: string;
-  status?: "Pending" | "Paid" | "Cancelled" | "Expired";
-  final_price?: number | string;
-  total_price?: number | string;
-  created_at?: string;
-  tickets?: Array<{ id: number }>;
-  transaction?: {
-    transaction_code?: string;
-    payment_method?: string;
-    amount?: number | string;
-    status?: "Pending" | "Success" | "Failed";
-    created_at?: string;
-  } | null;
-}
-
-interface UserDetailResponse {
-  user?: {
-    id?: number;
-    email?: string;
-    profile?: {
-      full_name?: string;
-    } | null;
-  };
+interface AdminTransactionsData {
+  items: TransactionItem[];
+  pagination: PaginationData;
+  summary: SummaryData;
 }
 
 const AdminTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    hasMore: false,
+  });
+  const [summary, setSummary] = useState<SummaryData>({
+    totalRevenue: 0,
+    successCount: 0,
+    pendingCount: 0,
+    failedOrRefundedCount: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const normalizeStatus = (
-      transactionStatus?: "Pending" | "Success" | "Failed",
-      bookingStatus?: "Pending" | "Paid" | "Cancelled" | "Expired",
-    ): Transaction["status"] => {
-      if (transactionStatus === "Success") return "success";
-      if (transactionStatus === "Pending") return "pending";
-      if (transactionStatus === "Failed") return "failed";
-      if (bookingStatus === "Cancelled") return "refunded";
-      return "pending";
-    };
-
     const loadTransactions = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const bookingsRes = await apiCall<ApiResponse<BookingListResponseData>>(
-          `${API_ENDPOINTS.BOOKINGS}?page=1&limit=100`,
-        );
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(limit));
 
-        const bookingItems = bookingsRes.data?.items ?? [];
-        if (bookingItems.length === 0) {
-          setTransactions([]);
-          return;
+        if (searchQuery.trim()) {
+          params.set("q", searchQuery.trim());
         }
 
-        const bookingDetailResults = await Promise.allSettled(
-          bookingItems.map((booking) =>
-            apiCall<ApiResponse<BookingDetail>>(
-              API_ENDPOINTS.BOOKING_DETAIL(booking.id),
-            ),
-          ),
+        if (filterStatus !== "all") {
+          params.set("status", filterStatus);
+        }
+
+        if (paymentMethod !== "all") {
+          params.set("payment_method", paymentMethod);
+        }
+
+        if (dateFrom) {
+          params.set("date_from", dateFrom);
+        }
+
+        if (dateTo) {
+          params.set("date_to", dateTo);
+        }
+
+        const res = await apiCall<ApiResponse<AdminTransactionsData>>(
+          `${API_ENDPOINTS.ADMIN_TRANSACTIONS}?${params.toString()}`,
         );
 
-        const detailData = bookingDetailResults
-          .filter(
-            (result): result is PromiseFulfilledResult<ApiResponse<BookingDetail>> =>
-              result.status === "fulfilled" && !!result.value?.data,
-          )
-          .map((result) => result.value.data);
-
-        const uniqueUserIds = Array.from(
-          new Set(
-            detailData
-              .map((detail) => detail.user_id)
-              .filter((userId): userId is number => typeof userId === "number"),
-          ),
+        setTransactions(res.data.items || []);
+        setPagination(
+          res.data.pagination || {
+            total: 0,
+            page,
+            limit,
+            totalPages: 1,
+            hasMore: false,
+          },
         );
-
-        const userResults = await Promise.allSettled(
-          uniqueUserIds.map((userId) =>
-            apiCall<ApiResponse<UserDetailResponse>>(`${API_ENDPOINTS.USERS}/${userId}`),
-          ),
+        setSummary(
+          res.data.summary || {
+            totalRevenue: 0,
+            successCount: 0,
+            pendingCount: 0,
+            failedOrRefundedCount: 0,
+          },
         );
-
-        const userMap = new Map<number, { name: string; email: string }>();
-        userResults.forEach((result) => {
-          if (result.status !== "fulfilled") return;
-
-          const user = result.value.data?.user;
-          const userId = user?.id;
-          if (!userId) return;
-
-          userMap.set(userId, {
-            name: user.profile?.full_name || `User #${userId}`,
-            email: user.email || "-",
-          });
-        });
-
-        const mapped = detailData
-          .map((detail) => {
-            const startTime = detail.start_time ? new Date(detail.start_time) : null;
-            const transactionAmount =
-              detail.transaction?.amount ?? detail.final_price ?? detail.total_price ?? 0;
-            const amount =
-              typeof transactionAmount === "string"
-                ? parseFloat(transactionAmount)
-                : transactionAmount;
-
-            return {
-              id: String(detail.id),
-              bookingCode:
-                detail.transaction?.transaction_code ||
-                `BK-${String(detail.id).padStart(6, "0")}`,
-              customerName: userMap.get(detail.user_id)?.name || `User #${detail.user_id}`,
-              customerEmail: userMap.get(detail.user_id)?.email || "-",
-              movieTitle: detail.movie_title || "-",
-              cinemaName: detail.cinema_name || "-",
-              showDate: startTime ? startTime.toISOString().split("T")[0] : "",
-              showTime: startTime
-                ? startTime.toLocaleTimeString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                  })
-                : "-",
-              seatCount: detail.tickets?.length ?? 0,
-              amount: Number.isFinite(amount) ? amount : 0,
-              paymentMethod: detail.transaction?.payment_method || "-",
-              status: normalizeStatus(detail.transaction?.status, detail.status),
-              transactionDate: detail.transaction?.created_at || detail.created_at || "",
-            } as Transaction;
-          })
-          .sort(
-            (a, b) =>
-              new Date(b.transactionDate).getTime() -
-              new Date(a.transactionDate).getTime(),
-          );
-
-        setTransactions(mapped);
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Không thể tải dữ liệu giao dịch";
+          err instanceof Error
+            ? err.message
+            : "Không thể tải dữ liệu giao dịch";
         setError(message);
         setTransactions([]);
       } finally {
@@ -218,25 +161,23 @@ const AdminTransactions: React.FC = () => {
     };
 
     void loadTransactions();
-  }, []);
+  }, [page, limit, searchQuery, filterStatus, paymentMethod, dateFrom, dateTo]);
 
-  const filteredTransactions = useMemo(() => transactions.filter((transaction) => {
-    const matchesSearch =
-      transaction.bookingCode
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      transaction.customerName
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      transaction.movieTitle.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      filterStatus === "all" || transaction.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  }), [transactions, searchQuery, filterStatus]);
+  const totalRevenue = useMemo(
+    () => summary.totalRevenue || 0,
+    [summary.totalRevenue],
+  );
 
-  const totalRevenue = useMemo(() => transactions
-    .filter((t) => t.status === "success")
-    .reduce((sum, t) => sum + t.amount, 0), [transactions]);
+  const pageNumbers = useMemo(() => {
+    const totalPages = pagination.totalPages || 1;
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    const numbers: number[] = [];
+    for (let i = start; i <= end; i += 1) {
+      numbers.push(i);
+    }
+    return numbers;
+  }, [pagination.totalPages, page]);
 
   const getStatusBadge = (status: string) => {
     const configs = {
@@ -310,9 +251,7 @@ const AdminTransactions: React.FC = () => {
                 <p className="text-sm text-muted-foreground">
                   Giao dịch thành công
                 </p>
-                <p className="text-2xl font-bold">
-                  {transactions.filter((t) => t.status === "success").length}
-                </p>
+                <p className="text-2xl font-bold">{summary.successCount}</p>
               </div>
               <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-500" />
@@ -325,9 +264,7 @@ const AdminTransactions: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Đang xử lý</p>
-                <p className="text-2xl font-bold">
-                  {transactions.filter((t) => t.status === "pending").length}
-                </p>
+                <p className="text-2xl font-bold">{summary.pendingCount}</p>
               </div>
               <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center">
                 <Clock className="w-6 h-6 text-yellow-500" />
@@ -341,11 +278,7 @@ const AdminTransactions: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Thất bại/Hoàn</p>
                 <p className="text-2xl font-bold">
-                  {
-                    transactions.filter(
-                      (t) => t.status === "failed" || t.status === "refunded",
-                    ).length
-                  }
+                  {summary.failedOrRefundedCount}
                 </p>
               </div>
               <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center">
@@ -365,13 +298,22 @@ const AdminTransactions: React.FC = () => {
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Tìm kiếm..."
+                  placeholder="Mã GD/Mã booking/khách/phim..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-10"
                 />
               </div>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <Select
+                value={filterStatus}
+                onValueChange={(value) => {
+                  setFilterStatus(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Trạng thái" />
                 </SelectTrigger>
@@ -383,6 +325,55 @@ const AdminTransactions: React.FC = () => {
                   <SelectItem value="refunded">Đã hoàn</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                value={paymentMethod}
+                onValueChange={(value) => {
+                  setPaymentMethod(value);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-36">
+                  <SelectValue placeholder="Thanh toán" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="momo">Momo</SelectItem>
+                  <SelectItem value="vnpay">VNPay</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full sm:w-40"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full sm:w-40"
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterStatus("all");
+                  setPaymentMethod("all");
+                  setDateFrom("");
+                  setDateTo("");
+                  setPage(1);
+                }}
+              >
+                Xóa lọc
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -404,28 +395,37 @@ const AdminTransactions: React.FC = () => {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell
+                    colSpan={9}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     Đang tải dữ liệu giao dịch...
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && error && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-red-500">
+                  <TableCell
+                    colSpan={9}
+                    className="text-center py-8 text-red-500"
+                  >
                     {error}
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && !error && filteredTransactions.length === 0 && (
+              {!isLoading && !error && transactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell
+                    colSpan={9}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     Không có giao dịch phù hợp
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading &&
                 !error &&
-                filteredTransactions.map((transaction) => (
+                transactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell className="font-mono font-medium">
                       {transaction.bookingCode}
@@ -470,6 +470,68 @@ const AdminTransactions: React.FC = () => {
                 ))}
             </TableBody>
           </Table>
+
+          {!isLoading && !error && (
+            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                Hiển thị {(pagination.page - 1) * pagination.limit + 1} -{" "}
+                {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
+                / {pagination.total} giao dịch
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Select
+                  value={String(limit)}
+                  onValueChange={(value) => {
+                    setLimit(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 / trang</SelectItem>
+                    <SelectItem value="20">20 / trang</SelectItem>
+                    <SelectItem value="50">50 / trang</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Trước
+                </Button>
+
+                {pageNumbers.map((num) => (
+                  <Button
+                    key={num}
+                    size="sm"
+                    variant={num === page ? "default" : "outline"}
+                    onClick={() => setPage(num)}
+                  >
+                    {num}
+                  </Button>
+                ))}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= (pagination.totalPages || 1)}
+                  onClick={() =>
+                    setPage((prev) =>
+                      Math.min(pagination.totalPages || 1, prev + 1),
+                    )
+                  }
+                >
+                  Sau
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
