@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, History, RefreshCcw } from "lucide-react";
+import { Loader2, History, RefreshCcw, Download } from "lucide-react";
 import { TicketService } from "@/services/ticket.service";
 import { TicketScanHistoryItem } from "@/types/api";
+import * as XLSX from "xlsx";
 
 const StaffScanHistory: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -60,6 +61,41 @@ const StaffScanHistory: React.FC = () => {
     void fetchHistory(empty);
   };
 
+  const exportExcel = () => {
+    if (items.length === 0) {
+      return;
+    }
+
+    const exportRows = items.map((item) => ({
+      ID: item.id ?? "",
+      "Mã booking": item.booking_code || "N/A",
+      "Mã quét": item.ticket_code_input || "",
+      Phim: item.movie_title || "N/A",
+      "Nhân viên": item.scanned_by_email || "N/A",
+      "Kết quả": item.scan_result || "",
+      "Thời gian quét": item.scanned_at
+        ? new Date(item.scanned_at).toLocaleString("vi-VN")
+        : "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 28 },
+      { wch: 28 },
+      { wch: 14 },
+      { wch: 22 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "LichSuQuetVe");
+
+    const exportDate = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `lich-su-quet-ve-${exportDate}.xlsx`);
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -69,18 +105,29 @@ const StaffScanHistory: React.FC = () => {
               <History className="w-5 h-5" />
               Lịch Sử Quét Vé
             </CardTitle>
-            <Button
-              variant="outline"
-              onClick={() => void fetchHistory(filters)}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCcw className="w-4 h-4 mr-2" />
-              )}
-              Tải lại
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={exportExcel}
+                disabled={loading || items.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Xuất Excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void fetchHistory(filters)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                )}
+                Tải lại
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

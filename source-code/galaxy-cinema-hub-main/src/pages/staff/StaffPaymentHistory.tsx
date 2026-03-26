@@ -3,9 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCcw, ReceiptText, Printer } from "lucide-react";
+import {
+  Loader2,
+  RefreshCcw,
+  ReceiptText,
+  Printer,
+  Download,
+} from "lucide-react";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
 
 interface PosPaymentHistoryItem {
   id: number;
@@ -126,6 +133,55 @@ const StaffPaymentHistory: React.FC = () => {
     };
     setFilters(empty);
     void fetchHistory(empty);
+  };
+
+  const exportExcel = () => {
+    if (items.length === 0) {
+      return;
+    }
+
+    const exportRows = items.map((item) => ({
+      "Mã booking": item.booking_code || "",
+      Khách: item.customer_name || "Khách vãng lai",
+      "SĐT khách": item.customer_phone || "",
+      Phim: item.movie_title || "",
+      Rạp: item.cinema_name || "",
+      Phòng: item.hall_name || "",
+      "Suất chiếu": item.start_time
+        ? new Date(item.start_time.replace(" ", "T")).toLocaleString("vi-VN")
+        : "",
+      Ghế: item.seats || "-",
+      "Tổng tiền": `${Number(item.final_price || 0).toLocaleString("vi-VN")}đ`,
+      "PT thanh toán": item.payment_method || "",
+      "TT đơn": item.booking_status || "",
+      "TT thanh toán": item.payment_status || "",
+      "Thời gian tạo": item.created_at
+        ? new Date(item.created_at.replace(" ", "T")).toLocaleString("vi-VN")
+        : "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet["!cols"] = [
+      { wch: 18 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 22 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "LichSuThanhToan");
+
+    const exportDate = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `lich-su-thanh-toan-${exportDate}.xlsx`);
   };
 
   const printReceipt = (booking: BookingDetailResponse["data"]) => {
@@ -265,18 +321,29 @@ const StaffPaymentHistory: React.FC = () => {
               <ReceiptText className="w-5 h-5" />
               Lịch Sử Thanh Toán (Khách Vãng Lai)
             </CardTitle>
-            <Button
-              variant="outline"
-              onClick={() => void fetchHistory(filters)}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCcw className="w-4 h-4 mr-2" />
-              )}
-              Tải lại
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={exportExcel}
+                disabled={loading || items.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Xuất Excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void fetchHistory(filters)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                )}
+                Tải lại
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

@@ -128,6 +128,17 @@ const isPastShowtime = (startTime: string): boolean => {
   return !Number.isNaN(start.getTime()) && start.getTime() <= Date.now();
 };
 
+const formatVND = (amount: number): string =>
+  `${Math.round(Number(amount) || 0).toLocaleString("vi-VN")}đ`;
+
+const getConcessionLabel = (name?: string, id?: number): string => {
+  const normalized = (name || "").trim();
+  if (normalized) {
+    return normalized;
+  }
+  return id ? `Combo #${id}` : "Combo";
+};
+
 const StaffPOS: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -505,6 +516,9 @@ const StaffPOS: React.FC = () => {
   }
 
   const handleAddConcession = (concession: ConcessionItem) => {
+    const normalizedPrice = Number(concession.price) || 0;
+    const normalizedName = getConcessionLabel(concession.name, concession.id);
+
     setSelectedConcessions((prev) => {
       const existing = prev.find((c) => c.id === concession.id);
       if (existing) {
@@ -516,8 +530,8 @@ const StaffPOS: React.FC = () => {
         ...prev,
         {
           id: concession.id,
-          name: concession.name,
-          price: concession.price,
+          name: normalizedName,
+          price: normalizedPrice,
           quantity: 1,
         },
       ];
@@ -619,9 +633,9 @@ const StaffPOS: React.FC = () => {
                   (con) => `
                 <tr style="border-bottom:1px dashed #ddd;">
                   <td style="padding:6px 0;">${con.name || "Combo"}</td>
-                  <td style="padding:6px 0; text-align:right;">${Number(con.price || 0).toLocaleString("vi-VN")}đ</td>
+                  <td style="padding:6px 0; text-align:right;">${formatVND(Number(con.price || 0))}</td>
                   <td style="padding:6px 0; text-align:right;">${Number(con.quantity || 0)}</td>
-                  <td style="padding:6px 0; text-align:right; font-weight:bold;">${(Number(con.price || 0) * Number(con.quantity || 0)).toLocaleString("vi-VN")}đ</td>
+                  <td style="padding:6px 0; text-align:right; font-weight:bold;">${formatVND(Number(con.price || 0) * Number(con.quantity || 0))}</td>
                 </tr>
               `,
                 )
@@ -633,7 +647,7 @@ const StaffPOS: React.FC = () => {
           }
 
           <div style="font-size:16px; font-weight:bold; margin:10px 0 16px; text-align:right;">
-            Tổng thanh toán: ${(booking.final_price || booking.total_price || 0).toLocaleString("vi-VN")}đ (Tiền mặt)
+            Tổng thanh toán: ${formatVND(Number(booking.final_price || booking.total_price || 0))} (Tiền mặt)
           </div>
 
           <div style="border-top:1px dashed #999; padding-top:10px;">
@@ -1077,7 +1091,7 @@ const StaffPOS: React.FC = () => {
                               onClick={() => toggleSeat(seat)}
                               className={getSeatClass(seat)}
                               disabled={seat.status !== "Available"}
-                              title={`${row}${seat.number} - ${seat.seat_type} - ${Number(seat.calculated_price).toLocaleString("vi-VN")}đ`}
+                              title={`${row}${seat.number} - ${seat.seat_type} - ${formatVND(Number(seat.calculated_price))}`}
                             >
                               {seat.number}
                             </button>
@@ -1250,10 +1264,7 @@ const StaffPOS: React.FC = () => {
                             <p className="line-clamp-1">{item.movie_title}</p>
                             <p className="text-muted-foreground line-clamp-1">
                               {item.seats || "-"} •{" "}
-                              {Number(item.final_price || 0).toLocaleString(
-                                "vi-VN",
-                              )}
-                              đ
+                              {formatVND(Number(item.final_price || 0))}
                             </p>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-muted-foreground">
@@ -1412,9 +1423,11 @@ const StaffPOS: React.FC = () => {
                         )}
                         onClick={() => handleAddConcession(concession)}
                       >
-                        <p className="font-medium">{concession.name}</p>
+                        <p className="font-medium text-gray-900 line-clamp-1">
+                          {getConcessionLabel(concession.name, concession.id)}
+                        </p>
                         <p className="text-purple-700">
-                          {concession.price.toLocaleString("vi-VN")}đ
+                          {formatVND(Number(concession.price))}
                         </p>
                         {selected && (
                           <div className="flex items-center gap-1 mt-1">
@@ -1465,10 +1478,7 @@ const StaffPOS: React.FC = () => {
                           {concession.name} x{concession.quantity}
                         </span>
                         <span className="font-medium">
-                          {(
-                            concession.price * concession.quantity
-                          ).toLocaleString("vi-VN")}
-                          đ
+                          {formatVND(concession.price * concession.quantity)}
                         </span>
                       </div>
                     ))}
@@ -1502,9 +1512,7 @@ const StaffPOS: React.FC = () => {
               )}
               <div className="flex justify-between font-bold text-lg pt-2 border-t">
                 <span>Tổng cộng</span>
-                <span className="text-primary">
-                  {totalAmount.toLocaleString("vi-VN")}đ
-                </span>
+                <span className="text-primary">{formatVND(totalAmount)}</span>
               </div>
             </div>
 
