@@ -79,22 +79,25 @@ class TransactionController extends BaseController
             $result = $this->transactionService->processGatewayVerification('VNPay', $data);
 
             if ($isGet) {
-                $appUrl = getenv('APP_URL');
-                if (empty($appUrl)) {
-                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
-                    $appUrl = $scheme . '://' . $host;
-                } else {
-                    $appUrl = rtrim($appUrl, '/');
-                }
-
-                // Redirect user to the frontend booking success page
                 $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:5173';
-                $returnUrl = $frontendUrl . '/booking/success';
                 $transactionCode = $result['transaction_code'] ?? ($data['vnp_TxnRef'] ?? null);
                 $status = $result['status'] ?? 'Failed';
                 $bookingId = $result['booking_id'] ?? null;
 
+                // Nếu giao dịch thất bại (user hủy, quay lại, lỗi), redirect sang trang thất bại
+                if ($status !== 'Success') {
+                    $returnUrl = $frontendUrl . '/booking/failed';
+                    $params = ['status' => 'Failed', 'gateway' => 'VNPay'];
+                    if ($transactionCode) {
+                        $params['transaction_code'] = $transactionCode;
+                    }
+                    $location = $returnUrl . '?' . http_build_query($params);
+                    header('Location: ' . $location);
+                    exit;
+                }
+
+                // Giao dịch thành công — redirect sang trang thành công
+                $returnUrl = $frontendUrl . '/booking/success';
                 $params = [
                     'transaction_code' => $transactionCode,
                     'status' => $status,
@@ -103,12 +106,11 @@ class TransactionController extends BaseController
                 if ($bookingId) {
                     $params['booking_id'] = $bookingId;
                 }
-
                 if (!empty($data['vnp_ResponseCode'])) {
                     $params['vnp_ResponseCode'] = $data['vnp_ResponseCode'];
                 }
 
-                $location = $returnUrl . (strpos($returnUrl, '?') === false ? '?' : '&') . http_build_query($params);
+                $location = $returnUrl . '?' . http_build_query($params);
                 header('Location: ' . $location);
                 exit;
             }

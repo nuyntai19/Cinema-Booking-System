@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, Link, useSearchParams } from "react-router-dom";
+import { useLocation, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Check, Calendar, MapPin, Clock, Download, Home, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,24 @@ import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api-config";
 
 const BookingSuccessPage: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Guard: nếu đến từ URL callback (không có state) mà status != Success,
+  // redirect ngay về trang thất bại để tránh hiển thị trang thành công khi user bấm quay lại
+  const urlStatus = searchParams.get("status");
+  const hasUrlParams = !location.state && (searchParams.has("booking_id") || searchParams.has("status") || searchParams.has("transaction_code"));
+  const isFailedCallback = hasUrlParams && urlStatus !== null && urlStatus !== "Success";
+
+  useEffect(() => {
+    if (isFailedCallback) {
+      navigate("/booking/failed", { replace: true });
+    }
+  }, [isFailedCallback, navigate]);
+
   const [bookingData, setBookingData] = useState<any>(location.state || null);
-  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id"));
+  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id") && !isFailedCallback);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {

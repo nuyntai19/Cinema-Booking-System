@@ -799,7 +799,7 @@ const PaymentPage: React.FC = () => {
     { value: "atm", label: "VNPay", icon: Building2, color: "bg-blue-500" },
     {
       value: "visa",
-      label: "Visa / Mastercard",
+      label: "Visa nội địa",
       icon: CreditCard,
       color: "bg-purple-500",
     },

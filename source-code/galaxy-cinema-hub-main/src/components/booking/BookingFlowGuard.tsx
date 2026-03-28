@@ -4,8 +4,10 @@ import { useAuth, useBooking } from "@/contexts/AppContext";
 import { BookingService } from "@/services/booking.service";
 
 const isBookingPath = (path: string) => path.startsWith("/booking");
-// Do NOT cancel pending booking when leaving from the success page
-const isBookingSuccessPath = (path: string) => path === "/booking/success";
+// Do NOT cancel pending booking when leaving from the success or failed page
+// (backend has already handled the booking status at that point)
+const isBookingTerminalPath = (path: string) =>
+  path === "/booking/success" || path === "/booking/failed";
 
 const BookingFlowGuard: React.FC = () => {
   const location = useLocation();
@@ -22,7 +24,7 @@ const BookingFlowGuard: React.FC = () => {
     const hasLeftBookingFlow =
       isBookingPath(previousPath) &&
       !isBookingPath(currentPath) &&
-      !isBookingSuccessPath(previousPath);
+      !isBookingTerminalPath(previousPath);
 
     if (!hasLeftBookingFlow || isCancellingRef.current) {
       return;

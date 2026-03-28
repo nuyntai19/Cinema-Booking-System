@@ -157,7 +157,7 @@ class TransactionService
         }
 
         if ($gateway === 'VNPay' || $gateway === 'Visa') {
-            $bankCode = ($gateway === 'Visa') ? 'INTCARD' : '';
+            $bankCode = ($gateway === 'Visa') ? 'VNBANK' : '';
 
             $payUrl = PaymentService::createVNPayPayment(
                 $payload['amount'],
