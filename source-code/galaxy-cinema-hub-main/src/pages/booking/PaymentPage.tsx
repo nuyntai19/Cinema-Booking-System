@@ -1196,7 +1196,7 @@ const PaymentPage: React.FC = () => {
         open={showQRModal}
         onOpenChange={(open) => {
           if (!open) {
-            setShowQRModal(false);
+            setShowCancelPaymentConfirm(true);
           }
         }}
       >
@@ -1276,28 +1276,27 @@ const PaymentPage: React.FC = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Bạn muốn hủy thanh toán?</AlertDialogTitle>
+            <AlertDialogTitle>Bạn xác nhận huỷ giao dịch chứ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Nếu hủy, đơn giữ ghế hiện tại sẽ bị xóa và bạn cần thực hiện lại
-              từ bước chọn ghế.
+              Nếu đồng ý, giao dịch sẽ bị hủy, ghế của bạn sẽ được giải phóng và bạn sẽ quay lại trang chọn ghế.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isCancellingPayment}>
-              Tiếp tục thanh toán
+              Không
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={isCancellingPayment}
               onClick={async () => {
                 setShowCancelPaymentConfirm(false);
                 await cancelPaymentSession(
-                  "Thanh toán thất bại",
-                  "Bạn đã hủy thanh toán. Ghế đã được giải phóng.",
+                  "Đã huỷ giao dịch",
+                  "Bạn đã hủy giao dịch. Ghế đã được giải phóng.",
                   true,
                 );
               }}
             >
-              {isCancellingPayment ? "Đang hủy..." : "Hủy thanh toán"}
+              {isCancellingPayment ? "Đang xử lý..." : "Đồng ý"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
