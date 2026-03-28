@@ -45,8 +45,9 @@ const CinemaMap: React.FC<CinemaMapProps> = ({ cinemas, className }) => {
 
         const geocodeAddress = async (address: string): Promise<[number, number] | null> => {
             try {
+                const searchAddress = `${address}, Việt Nam`;
                 const response = await fetch(
-                    `https://api.maptiler.com/geocoding/${encodeURIComponent(address)}.json?key=${maptilerKey}&limit=1`
+                    `https://api.maptiler.com/geocoding/${encodeURIComponent(searchAddress)}.json?key=${maptilerKey}&limit=1&country=vn`
                 );
                 const data = await response.json();
                 if (data.features && data.features.length > 0) {

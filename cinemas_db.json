@@ -1,0 +1,30 @@
+[
+    {
+        "id": 1,
+        "name": "Galaxy Nguyễn Du",
+        "address": "116 Nguyễn Du, Quận 1, TP.HCM",
+        "lat": null,
+        "lng": null
+    },
+    {
+        "id": 2,
+        "name": "Galaxy Tân Bình",
+        "address": "246 Nguyễn Hồng Đào, Quận Tân Bình, TP.HCM",
+        "lat": null,
+        "lng": null
+    },
+    {
+        "id": 3,
+        "name": "Galaxy Đà Nẵng",
+        "address": "Lô A4, Đường 2\/9, Hải Châu, Đà Nẵng",
+        "lat": null,
+        "lng": null
+    },
+    {
+        "id": 4,
+        "name": "Galaxy siêu soái",
+        "address": "965a Huỳnh Tấn Phát, Quận 7, Thành phố Hồ Chí Minh",
+        "lat": null,
+        "lng": null
+    }
+]
