@@ -69,4 +69,8 @@ export class TransactionService {
     static async vnpayPayment(data: PaymentRequest): Promise<ApiResponse<{ pay_url: string }>> {
         return apiClient.post<{ pay_url: string }>(API_ENDPOINTS.TRANSACTIONS.VNPAY, data);
     }
+
+    static async visaPayment(data: PaymentRequest): Promise<ApiResponse<{ pay_url: string }>> {
+        return apiClient.post<{ pay_url: string }>(API_ENDPOINTS.TRANSACTIONS.VISA, data);
+    }
 }

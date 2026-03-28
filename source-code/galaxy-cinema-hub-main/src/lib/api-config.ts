@@ -72,6 +72,7 @@ export const API_ENDPOINTS = {
         CREATE: '/transactions',
         MOMO: '/transactions/momo',
         VNPAY: '/transactions/vnpay',
+        VISA: '/transactions/visa',
         MOMO_VERIFY: '/transactions/momo/verify',
         VNPAY_VERIFY: '/transactions/vnpay/verify',
         BY_BOOKING: (bookingId: string) => `/transactions/booking/${bookingId}`,

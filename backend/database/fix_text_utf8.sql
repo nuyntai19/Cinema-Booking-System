@@ -1,13 +1,19 @@
+-- Fix Vietnamese UTF-8 text in database
+-- Safe to re-run (uses INSERT ON DUPLICATE KEY UPDATE or ignores errors)
 SET NAMES utf8mb4;
+USE galaxy_cinema;
 
-UPDATE genres SET name='Hành Động' WHERE id=1;
-UPDATE genres SET name='Tình Cảm' WHERE id=2;
-UPDATE genres SET name='Kinh Dị' WHERE id=3;
-UPDATE genres SET name='Hài' WHERE id=4;
-UPDATE genres SET name='Hoạt Hình' WHERE id=5;
-UPDATE genres SET name='Khoa Học Viễn Tưởng' WHERE id=6;
-UPDATE genres SET name='Phiêu Lưu' WHERE id=7;
-UPDATE genres SET name='Tâm Lý' WHERE id=8;
+-- Genres: use correct ID mapping (matching seed_data.sql order)
+-- id=1: Hành Động, id=2: Hài, id=3: Tình Cảm, id=4: Kinh Dị
+-- id=5: Hoạt Hình, id=6: Khoa Học Viễn Tưởng, id=7: Tâm Lý, id=8: Tài Liệu
+UPDATE IGNORE genres SET name='Hành Động' WHERE id=1;
+UPDATE IGNORE genres SET name='Hài' WHERE id=2;
+UPDATE IGNORE genres SET name='Tình Cảm' WHERE id=3;
+UPDATE IGNORE genres SET name='Kinh Dị' WHERE id=4;
+UPDATE IGNORE genres SET name='Hoạt Hình' WHERE id=5;
+UPDATE IGNORE genres SET name='Khoa Học Viễn Tưởng' WHERE id=6;
+UPDATE IGNORE genres SET name='Tâm Lý' WHERE id=7;
+UPDATE IGNORE genres SET name='Tài Liệu' WHERE id=8;
 
 UPDATE movies SET title='MAI', description='Câu chuyện về cuộc đời của Mai' WHERE id=1;
 UPDATE movies SET title='Đào, Phở và Piano', description='Bối cảnh Hà Nội 1954' WHERE id=2;
@@ -57,6 +63,6 @@ UPDATE notifications SET title='Thông báo nhân sự', message='Nhân viên vu
 UPDATE notifications SET title='Bảng điều hành', message='Báo cáo doanh thu tháng đã sẵn sàng trong mục quản trị.' WHERE id=4;
 UPDATE notifications SET title='Khách vãng lai', message='Đăng nhập ngay để nhận ưu đãi thành viên và tích điểm.' WHERE id=5;
 
-UPDATE user_profiles SET full_name='Nguyễn Văn A', address='123 Lê Lợi, Quận 1, TP.HCM' WHERE user_id=4;
-UPDATE user_profiles SET full_name='Trần Thị B', address='456 Trần Hưng Đạo, Quận 5, TP.HCM' WHERE user_id=5;
-UPDATE user_profiles SET full_name='Lê Văn C', address='789 Nguyễn Huệ, Quận 1, TP.HCM' WHERE user_id=6;
+UPDATE user_profiles SET full_name='Nguyễn Văn A' WHERE user_id=4;
+UPDATE user_profiles SET full_name='Trần Thị B' WHERE user_id=5;
+UPDATE user_profiles SET full_name='Lê Văn C' WHERE user_id=6;

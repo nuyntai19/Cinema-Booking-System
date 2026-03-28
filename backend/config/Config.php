@@ -59,9 +59,12 @@ class Config
     public static $momo_secret_key = 'at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa';
     
     // VNPay Test Credentials
-    public static $vnpay_tmncode = 'DEMOSHOP01';
-    public static $vnpay_hash_secret = 'RAOEXHYVSDDIIENYWSLDIIZTANXUXZFJ';
+    public static $vnpay_tmncode = 'RBHKX032';
+    public static $vnpay_hash_secret = 'UTXEFH8WUE9NPQDQC3WIKK8JOX19O3CK';
     public static $vnpay_url = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+    // Optional: default return and IPN URLs (can be overridden by .env)
+    public static $vnpay_return_url = '';
+    public static $vnpay_notify_url = '';
 
 
     public static function init()
@@ -81,6 +84,8 @@ class Config
             define('VNP_TMNCODE', self::$vnpay_tmncode);
             define('VNP_HASH_SECRET', self::$vnpay_hash_secret);
             define('VNP_URL', self::$vnpay_url);
+            define('VNPAY_RETURN_URL', self::$vnpay_return_url);
+            define('VNPAY_NOTIFY_URL', self::$vnpay_notify_url);
         }
     }
 }

@@ -2,44 +2,51 @@
 /**
  * Transaction Service
  */
-class TransactionService {
+class TransactionService
+{
     private $transactionModel;
     private $bookingModel;
 
-    public function __construct($db) {
+    public function __construct($db)
+    {
         $this->transactionModel = new Transaction($db);
         $this->bookingModel = new Booking($db);
     }
 
-    public function getBookingById($bookingId) {
-        return $this->bookingModel->getById((int)$bookingId);
+    public function getBookingById($bookingId)
+    {
+        return $this->bookingModel->getById((int) $bookingId);
     }
 
-    public function getTransactionByBooking($bookingId) {
-        return $this->transactionModel->getByBooking((int)$bookingId);
+    public function getTransactionByBooking($bookingId)
+    {
+        return $this->transactionModel->getByBooking((int) $bookingId);
     }
 
-    public function createTransactionForBooking($booking, $method, $amount) {
+    public function createTransactionForBooking($booking, $method, $amount)
+    {
         if ($booking['status'] !== 'Pending') {
             throw new Exception('Booking is not in pending status', 400);
         }
 
-        $existing = $this->transactionModel->getByBooking((int)$booking['id']);
+        $existing = $this->transactionModel->getByBooking((int) $booking['id']);
         if ($existing && $existing['status'] === 'Success') {
             throw new Exception('Booking already paid', 400);
         }
 
-        return $this->transactionModel->create((int)$booking['id'], $method, (float)$amount);
+        return $this->transactionModel->create((int) $booking['id'], $method, (float) $amount);
     }
 
-    public function getHistory($userId, $page, $limit) {
-        $transactions = $this->transactionModel->getByUser((int)$userId, $page, $limit);
-        $total = $this->transactionModel->countByUser((int)$userId);
+    public function getHistory($userId, $page, $limit)
+    {
+        $transactions = $this->transactionModel->getByUser((int) $userId, $page, $limit);
+        $total = $this->transactionModel->countByUser((int) $userId);
 
         return [$transactions, $total];
     }
 
-    public function processGatewayVerification($gateway, $data) {
+    public function processGatewayVerification($gateway, $data)
+    {
         if ($gateway !== 'Momo' && $gateway !== 'VNPay') {
             throw new Exception('Unsupported gateway for verification', 400);
         }
@@ -73,12 +80,12 @@ class TransactionService {
         $this->transactionModel->updateStatus($transaction['transaction_code'], $newStatus);
 
         if ($isSuccess) {
-            $this->bookingModel->confirm((int)$transaction['booking_id']);
+            $this->bookingModel->confirm((int) $transaction['booking_id']);
         }
 
         // Notify frontend in realtime. Any push failure must not break payment verification.
         PusherService::triggerPaymentStatus(
-            (int)$transaction['booking_id'],
+            (int) $transaction['booking_id'],
             $transaction['transaction_code'],
             $newStatus,
             $gateway
@@ -86,13 +93,14 @@ class TransactionService {
 
         return [
             'transaction_code' => $transaction['transaction_code'],
-            'booking_id' => (int)$transaction['booking_id'],
+            'booking_id' => (int) $transaction['booking_id'],
             'status' => $newStatus,
             'gateway' => $gateway,
         ];
     }
 
-    public function createPaymentForBooking($gateway, $booking) {
+    public function createPaymentForBooking($gateway, $booking)
+    {
         if ($booking['status'] !== 'Pending') {
             throw new Exception('Booking is not in pending status', 400);
         }
@@ -102,18 +110,25 @@ class TransactionService {
             throw new Exception('Invalid booking amount', 400);
         }
 
-        $transaction = $this->transactionModel->getByBooking((int)$booking['id']);
+        $transaction = $this->transactionModel->getByBooking((int) $booking['id']);
         if ($transaction && $transaction['status'] === 'Success') {
             throw new Exception('Booking already paid', 400);
         }
 
         if (!$transaction || $transaction['status'] === 'Failed') {
-            $transaction = $this->transactionModel->create((int)$booking['id'], $gateway, $amount);
+            $transaction = $this->transactionModel->create((int) $booking['id'], $gateway, $amount);
+        } else {
+            // Transaction already Pending — generate a fresh transaction_code so VNPAY
+            // receives a new vnp_TxnRef and doesn't reject it as a duplicate.
+            $prefix = strtoupper(preg_replace('/\s+/', '', $gateway));
+            $newCode = $prefix . '-' . date('ymdHis') . '-' . substr(uniqid(), -6);
+            $this->transactionModel->updateTransactionCode($transaction['transaction_code'], $newCode);
+            $transaction['transaction_code'] = $newCode;
         }
 
         $payload = $this->buildPaymentPayload(
             $gateway,
-            (int)$booking['id'],
+            (int) $booking['id'],
             $transaction['transaction_code'],
             $amount
         );
@@ -126,23 +141,47 @@ class TransactionService {
                 $payload['returnUrl'],
                 $payload['notifyUrl']
             );
-            return $momoPayment;
+
+            // Refresh transaction details (include updated fields)
+            $transaction = $this->transactionModel->getByBooking((int) $booking['id']);
+
+            $response = ['transaction' => $transaction];
+            if (!empty($momoPayment['pay_url'])) {
+                $response['pay_url'] = $momoPayment['pay_url'];
+            }
+            if (!empty($momoPayment['qr_code_url'])) {
+                $response['qr_code_url'] = $momoPayment['qr_code_url'];
+            }
+
+            return $response;
         }
 
-        if ($gateway === 'VNPay') {
+        if ($gateway === 'VNPay' || $gateway === 'Visa') {
+            $bankCode = ($gateway === 'Visa') ? 'INTCARD' : '';
+
             $payUrl = PaymentService::createVNPayPayment(
                 $payload['amount'],
                 $payload['orderId'],
                 $payload['orderInfo'],
-                $payload['returnUrl']
+                $payload['returnUrl'],
+                $payload['notifyUrl'] ?? null,
+                $bankCode
             );
-            return ['pay_url' => $payUrl];
+
+            // Refresh transaction details (include updated fields)
+            $transaction = $this->transactionModel->getByBooking((int) $booking['id']);
+
+            return [
+                'transaction' => $transaction,
+                'pay_url' => $payUrl,
+            ];
         }
 
         throw new Exception('Unsupported payment gateway', 400);
     }
 
-    private function isSuccessStatus($gateway, $status) {
+    private function isSuccessStatus($gateway, $status)
+    {
         if ($gateway === 'Momo') {
             if ($status === 0 || $status === '0') {
                 return true;
@@ -160,7 +199,8 @@ class TransactionService {
         return false;
     }
 
-    private function buildPaymentPayload($gateway, $bookingId, $transactionCode, $amount) {
+    private function buildPaymentPayload($gateway, $bookingId, $transactionCode, $amount)
+    {
         $baseUrl = $this->getBaseUrl();
 
         if ($gateway === 'Momo') {
@@ -169,26 +209,32 @@ class TransactionService {
             return [
                 'amount' => $amount,
                 'orderId' => $transactionCode,
-                'orderInfo' => 'Booking #' . $bookingId,
+                'orderInfo' => 'Payment_for_booking_' . $bookingId,
                 'returnUrl' => $returnUrl,
                 'notifyUrl' => $notifyUrl,
             ];
         }
 
-        if ($gateway === 'VNPay') {
-            $returnUrl = getenv('VNPAY_RETURN_URL') ?: $baseUrl;
+        if ($gateway === 'VNPay' || $gateway === 'Visa') {
+            $frontendUrl = getenv('APP_URL') ?: $baseUrl;
+            // Ensure VNPay redirects back to the backend verify endpoint
+            $returnUrl = $baseUrl . '/api/transactions/vnpay/verify';
+            $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($baseUrl . '/api/transactions/vnpay/ipn');
+
             return [
                 'amount' => $amount,
                 'orderId' => $transactionCode,
-                'orderInfo' => 'Booking #' . $bookingId,
+                'orderInfo' => 'Payment_for_booking_' . $bookingId,
                 'returnUrl' => $returnUrl,
+                'notifyUrl' => $notifyUrl,
             ];
         }
 
         return [];
     }
 
-    private function getBaseUrl() {
+    private function getBaseUrl()
+    {
         $appUrl = getenv('APP_URL');
         if (!empty($appUrl)) {
             return rtrim($appUrl, '/');
@@ -199,13 +245,14 @@ class TransactionService {
         return $scheme . '://' . $host;
     }
 
-    private function resolveBookingAmount($booking) {
-        $final = isset($booking['final_price']) ? (float)$booking['final_price'] : 0.0;
+    private function resolveBookingAmount($booking)
+    {
+        $final = isset($booking['final_price']) ? (float) $booking['final_price'] : 0.0;
         if ($final > 0) {
             return $final;
         }
 
-        $total = isset($booking['total_price']) ? (float)$booking['total_price'] : 0.0;
+        $total = isset($booking['total_price']) ? (float) $booking['total_price'] : 0.0;
         return $total;
     }
 }

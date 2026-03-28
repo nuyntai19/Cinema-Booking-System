@@ -84,6 +84,16 @@ class Transaction {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function updateTransactionCode($oldCode, $newCode) {
+        $stmt = $this->db->prepare(
+            "UPDATE transactions SET transaction_code = :new_code WHERE transaction_code = :old_code"
+        );
+        return $stmt->execute([
+            ':new_code' => $newCode,
+            ':old_code' => $oldCode,
+        ]);
+    }
+
     private function generateTransactionCode($method, $bookingId) {
         $prefix = strtoupper(preg_replace('/\s+/', '', $method));
         $random = strtoupper(substr(md5(uniqid((string)$bookingId, true)), 0, 6));

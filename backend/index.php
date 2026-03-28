@@ -199,10 +199,13 @@ $router->get('/api/bookings/user/showtime/:userId/:showtimeId', 'BookingControll
 $router->post('/api/transactions', 'TransactionController@create');
 $router->get('/api/transactions/booking/:bookingId', 'TransactionController@getByBooking');
 $router->post('/api/transactions/momo/verify', 'TransactionController@verifyMomo');
+$router->get('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
 $router->post('/api/transactions/vnpay/verify', 'TransactionController@verifyVNPay');
+$router->post('/api/transactions/vnpay/ipn', 'TransactionController@verifyVNPayIpn');
 $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory');
 $router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
 $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
+$router->post('/api/transactions/visa', 'TransactionController@createVisaPayment');
 // ============================================
 // TICKET ROUTES
 // ============================================

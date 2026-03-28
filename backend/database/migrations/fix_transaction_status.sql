@@ -1,4 +1,6 @@
 -- Fix existing transactions with Pending status where booking is already Paid
+USE galaxy_cinema;
+
 UPDATE transactions t
 JOIN bookings b ON t.booking_id = b.id
 SET t.status = 'Completed'

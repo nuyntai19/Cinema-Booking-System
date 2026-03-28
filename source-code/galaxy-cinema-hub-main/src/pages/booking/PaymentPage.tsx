@@ -66,6 +66,7 @@ const PaymentPage: React.FC = () => {
   const [qrTimeLeft, setQRTimeLeft] = useState(300); // 5 minutes
   const [isProcessing, setIsProcessing] = useState(false);
   const [momoQrImageUrl, setMomoQrImageUrl] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
   const [currentBookingCode, setCurrentBookingCode] = useState<string | null>(
     null,
@@ -168,13 +169,13 @@ const PaymentPage: React.FC = () => {
             const aValidDate =
               aActive && a.start_date && a.end_date
                 ? today >= parseLocalDate(a.start_date) &&
-                  today <= parseLocalDate(a.end_date)
+                today <= parseLocalDate(a.end_date)
                 : false;
 
             const bValidDate =
               bActive && b.start_date && b.end_date
                 ? today >= parseLocalDate(b.start_date) &&
-                  today <= parseLocalDate(b.end_date)
+                today <= parseLocalDate(b.end_date)
                 : false;
 
             // ACTIVE + valid dates first
@@ -224,6 +225,7 @@ const PaymentPage: React.FC = () => {
   const resetPaymentSession = () => {
     setShowQRModal(false);
     setMomoQrImageUrl(null);
+    setPaymentUrl(null);
     setCurrentBookingId(null);
     setCurrentBookingCode(null);
     setQRTimeLeft(300);
@@ -635,16 +637,53 @@ const PaymentPage: React.FC = () => {
           return;
         }
         setMomoQrImageUrl(buildQrImageUrl(normalizeQrPayload(qrPayload)));
+        if (payUrl) setPaymentUrl(payUrl);
+        setShowQRModal(true);
+        setQRTimeLeft(300);
+        timeoutHandledRef.current = false;
       } else if (method === "atm") {
-        await TransactionService.vnpayPayment({ booking_id: bookingId });
-        setMomoQrImageUrl(null);
-      } else {
-        setMomoQrImageUrl(null);
-      }
+        const vnpayResponse = await TransactionService.vnpayPayment({ booking_id: bookingId });
+        const payUrl = vnpayResponse?.data?.pay_url;
+        if (!payUrl) {
+          await BookingService.cancel(String(bookingId));
+          setCurrentBookingId(null);
+          toast({
+            title: "Không tạo được mã VNPay",
+            description:
+              "Giao dịch đã được hủy vì hệ thống không trả về liên kết thanh toán.",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      setShowQRModal(true);
-      setQRTimeLeft(300);
-      timeoutHandledRef.current = false;
+        // Hiển thị VietQR để quét Demo
+        const bookingRef = currentBookingCode || String(bookingId);
+        const vietQrUrl = `https://img.vietqr.io/image/MB-02280123654789-compact2.png?amount=${grandTotal}&addInfo=${encodeURIComponent(`Thanh toan ve ${bookingRef}`)}&accountName=${encodeURIComponent('NGUYEN DINH SON')}`;
+
+        setMomoQrImageUrl(vietQrUrl);
+        setPaymentUrl(payUrl);
+        setShowQRModal(true);
+        setQRTimeLeft(300);
+        timeoutHandledRef.current = false;
+      } else if (method === "visa") {
+        // Visa/Mastercard qua VNPAY — endpoint riêng, redirect thẳng sang cổng thanh toán
+        const visaResponse = await TransactionService.visaPayment({ booking_id: bookingId });
+        const payUrl = visaResponse?.data?.pay_url;
+        if (!payUrl) {
+          await BookingService.cancel(String(bookingId));
+          setCurrentBookingId(null);
+          toast({
+            title: "Không tạo được liên kết thanh toán Visa",
+            description:
+              "Giao dịch đã được hủy vì hệ thống không trả về liên kết thanh toán.",
+            variant: "destructive",
+          });
+          return;
+        }
+        // Redirect sang cổng VNPAY (Visa/Mastercard) — trang hiện tại sẽ rời đi
+        window.location.href = payUrl;
+        return;
+      }
     } catch (error) {
       if (bookingId) {
         try {
@@ -656,6 +695,7 @@ const PaymentPage: React.FC = () => {
       setCurrentBookingId(null);
       setShowQRModal(false);
       setMomoQrImageUrl(null);
+      setPaymentUrl(null);
       toast({
         title: "Thanh toán thất bại",
         description: "Không thể khởi tạo giao dịch. Vui lòng thử lại.",
@@ -1183,17 +1223,19 @@ const PaymentPage: React.FC = () => {
               </div>
             </div>
             <DialogDescription>
-              Mở ứng dụng {paymentMethod.toUpperCase()} và quét mã bên dưới
+              {paymentMethod === 'atm'
+                ? 'Quét mã VietQR để Demo. Sau đó nhấn nút bên dưới để thực sự hoàn tất đơn hàng!'
+                : `Mở ứng dụng ${paymentMethod === 'momo' ? 'MoMo' : paymentMethod.toUpperCase()} và quét mã bên dưới`}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col items-center py-6">
             {/* QR Code */}
             <div className="w-48 h-48 bg-white rounded-xl p-4 shadow-lg mb-4">
-              {paymentMethod === "momo" && momoQrImageUrl ? (
+              {(paymentMethod === "momo" || paymentMethod === "atm") && momoQrImageUrl ? (
                 <img
                   src={momoQrImageUrl}
-                  alt="MoMo QR"
+                  alt={paymentMethod === "momo" ? "MoMo QR" : paymentMethod === "atm" ? "VNPay QR" : "Payment QR"}
                   className="w-full h-full object-contain rounded-lg"
                 />
               ) : (
@@ -1202,6 +1244,14 @@ const PaymentPage: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {paymentUrl && (
+              <Button asChild variant="outline" className="mb-4 w-full h-10 border-primary text-primary hover:bg-primary/10">
+                <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
+                  Hoặc nhấn vào đây để tiếp tục thanh toán
+                </a>
+              </Button>
+            )}
 
             <p className="text-lg font-bold text-primary">
               {grandTotal.toLocaleString("vi-VN")}đ
@@ -1213,7 +1263,7 @@ const PaymentPage: React.FC = () => {
 
           <div className="border-t border-border pt-4">
             <p className="text-xs text-muted-foreground text-center">
-              Hệ thống sẽ tự động cập nhật khi MoMo xác nhận thanh toán.
+              Hệ thống sẽ tự động cập nhật khi {paymentMethod === 'momo' ? 'MoMo' : paymentMethod === 'atm' ? 'VNPay' : paymentMethod.toUpperCase()} xác nhận thanh toán.
             </p>
           </div>
         </DialogContent>

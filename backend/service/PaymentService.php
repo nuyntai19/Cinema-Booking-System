@@ -80,34 +80,68 @@ class PaymentService
 
         return json_decode($result, true);
     }
-    public static function createVNPayPayment($amount, $orderId, $orderInfo, $returnUrl)
-{
-    $tmnCode = self::requiredConfig('VNP_TMNCODE');
-    $hashSecret = self::requiredConfig('VNP_HASH_SECRET');
-    $vnpUrl = self::requiredConfig('VNP_URL');
+    public static function createVNPayPayment($amount, $orderId, $orderInfo, $returnUrl, $notifyUrl = null, $bankCode = null)
+    {
+        $tmnCode = self::requiredConfig('VNP_TMNCODE');
+        $hashSecret = self::requiredConfig('VNP_HASH_SECRET');
+        $vnpUrl = self::requiredConfig('VNP_URL');
 
-    $params = [
-        'vnp_Version'   => '2.1.0',
-        'vnp_Command'   => 'pay',
-        'vnp_TmnCode'   => $tmnCode,
-        'vnp_Amount'    => $amount * 100,
-        'vnp_CurrCode'  => 'VND',
-        'vnp_TxnRef'    => $orderId,
-        'vnp_OrderInfo' => $orderInfo,
-        'vnp_OrderType' => 'other',
-        'vnp_Locale'    => 'vn',
-        'vnp_ReturnUrl' => $returnUrl,
-        'vnp_IpAddr'    => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-        'vnp_CreateDate'=> date('YmdHis')
-    ];
+        $timeZone = new DateTimeZone('Asia/Ho_Chi_Minh');
+        $now = new DateTime('now', $timeZone);
+        $expire = new DateTime('+15 minutes', $timeZone);
 
-    ksort($params);
+        $params = [
+            'vnp_Version'   => '2.1.0',
+            'vnp_Command'   => 'pay',
+            'vnp_TmnCode'   => $tmnCode,
+            'vnp_Amount'    => (string) intval(round($amount * 100)),
+            'vnp_CurrCode'  => 'VND',
+            'vnp_TxnRef'    => $orderId,
+            'vnp_OrderInfo' => $orderInfo,
+            'vnp_OrderType' => 'other',
+            'vnp_Locale'    => 'vn',
+            'vnp_ReturnUrl' => $returnUrl,
+            'vnp_IpAddr'    => self::getClientIp(),
+            'vnp_CreateDate'=> $now->format('YmdHis'),
+            'vnp_ExpireDate'=> $expire->format('YmdHis')
+        ];
 
-    $query = http_build_query($params);
-    $hash  = hash_hmac('sha512', $query, $hashSecret);
+        if (!empty($bankCode)) {
+            $params['vnp_BankCode'] = $bankCode;
+        }
 
-    return $vnpUrl . '?' . $query . '&vnp_SecureHash=' . $hash;
-}
+        // Sort params and build two strings: hashing and URL query must both be urlencoded according to VNPay v2.1.0
+        ksort($params);
+
+        $hashDataArr = [];
+        $queryArr = [];
+        foreach ($params as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            // rawurlencode encodes spaces as %20 (RFC 3986) — VNPAY requires %20, not +
+            $encodedKey   = rawurlencode($key);
+            $encodedValue = rawurlencode($value);
+            $hashDataArr[] = $encodedKey . '=' . $encodedValue;
+            $queryArr[]    = $encodedKey . '=' . $encodedValue;
+        }
+
+        $hashData = implode('&', $hashDataArr);
+        $query = implode('&', $queryArr);
+
+        $secureHash = hash_hmac('sha512', $hashData, $hashSecret);
+
+        return $vnpUrl . '?' . $query . '&vnp_SecureHash=' . $secureHash;
+    }
+
+    private static function getClientIp()
+    {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        if (strpos($ip, ':') !== false || $ip === '127.0.0.1') {
+            $ip = '13.111.12.3'; // Use a valid public IP format for VNPay Sandbox
+        }
+        return $ip;
+    }
 
     private static function requiredConfig($key)
     {
@@ -117,11 +151,11 @@ class PaymentService
 
         $value = getenv($key);
         if ($value !== false && $value !== '') {
-            return $value;
+            return trim($value);
         }
 
         if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
-            return $_ENV[$key];
+            return trim($_ENV[$key]);
         }
 
         throw new Exception('Missing payment config: ' . $key, 500);
@@ -172,6 +206,7 @@ class PaymentService
         $secureHash = $data['vnp_SecureHash'] ?? null;
 
         if (empty($secureHash)) {
+            error_log('VNPay: missing vnp_SecureHash');
             return false;
         }
 
@@ -179,10 +214,23 @@ class PaymentService
         unset($params['vnp_SecureHash'], $params['vnp_SecureHashType']);
         ksort($params);
 
-        $query = urldecode(http_build_query($params));
-        $calculatedHash = hash_hmac('sha512', $query, $hashSecret);
+        $hashDataArr = [];
+        foreach ($params as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $hashDataArr[] = rawurlencode($key) . '=' . rawurlencode($value);
+        }
 
-        return hash_equals($calculatedHash, $secureHash);
+        $hashData = implode('&', $hashDataArr);
+        $calculatedHash = hash_hmac('sha512', $hashData, $hashSecret);
+
+        $isValid = hash_equals($calculatedHash, $secureHash) || hash_equals(strtolower($calculatedHash), strtolower($secureHash));
+        if (!$isValid) {
+            error_log('VNPay signature verification failed: calculated=' . $calculatedHash . ' provided=' . $secureHash);
+        }
+
+        return $isValid;
     }
 
 }

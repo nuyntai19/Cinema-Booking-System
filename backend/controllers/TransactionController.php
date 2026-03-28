@@ -2,16 +2,19 @@
 /**
  * Transaction Controller
  */
-class TransactionController extends BaseController {
+class TransactionController extends BaseController
+{
     private $db;
     private $transactionService;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->db = Database::getInstance()->getConnection();
         $this->transactionService = new TransactionService($this->db);
     }
 
-    public function create() {
+    public function create()
+    {
         AuthMiddleware::authenticate();
 
         $data = self::getRequestData();
@@ -27,7 +30,7 @@ class TransactionController extends BaseController {
             ]);
         }
 
-        $booking = $this->transactionService->getBookingById((int)$bookingId);
+        $booking = $this->transactionService->getBookingById((int) $bookingId);
         if (!$booking) {
             Response::notFound('Booking not found');
         }
@@ -35,24 +38,25 @@ class TransactionController extends BaseController {
         $this->authorizeBookingAccess($booking);
 
         try {
-            $result = $this->transactionService->createTransactionForBooking($booking, $method, (float)$amount);
+            $result = $this->transactionService->createTransactionForBooking($booking, $method, (float) $amount);
             Response::created($result, 'Transaction created');
         } catch (Exception $e) {
             Response::error($e->getMessage(), $e->getCode() ?: 400);
         }
     }
 
-    public function getByBooking($bookingId) {
+    public function getByBooking($bookingId)
+    {
         AuthMiddleware::authenticate();
 
-        $booking = $this->transactionService->getBookingById((int)$bookingId);
+        $booking = $this->transactionService->getBookingById((int) $bookingId);
         if (!$booking) {
             Response::notFound('Booking not found');
         }
 
         $this->authorizeBookingAccess($booking);
 
-        $transaction = $this->transactionService->getTransactionByBooking((int)$bookingId);
+        $transaction = $this->transactionService->getTransactionByBooking((int) $bookingId);
         if (!$transaction) {
             Response::notFound('Transaction not found');
         }
@@ -60,28 +64,112 @@ class TransactionController extends BaseController {
         Response::success($transaction);
     }
 
-    public function verifyMomo() {
+    public function verifyMomo()
+    {
         $this->verifyGateway('Momo');
     }
 
-    public function verifyVNPay() {
-        $this->verifyGateway('VNPay');
+    public function verifyVNPay()
+    {
+        $data = array_merge($_GET, self::getRequestData());
+
+        $isGet = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET');
+
+        try {
+            $result = $this->transactionService->processGatewayVerification('VNPay', $data);
+
+            if ($isGet) {
+                $appUrl = getenv('APP_URL');
+                if (empty($appUrl)) {
+                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+                    $appUrl = $scheme . '://' . $host;
+                } else {
+                    $appUrl = rtrim($appUrl, '/');
+                }
+
+                // Redirect user to the frontend booking success page
+                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:5173';
+                $returnUrl = $frontendUrl . '/booking/success';
+                $transactionCode = $result['transaction_code'] ?? ($data['vnp_TxnRef'] ?? null);
+                $status = $result['status'] ?? 'Failed';
+                $bookingId = $result['booking_id'] ?? null;
+
+                $params = [
+                    'transaction_code' => $transactionCode,
+                    'status' => $status,
+                    'gateway' => 'VNPay'
+                ];
+                if ($bookingId) {
+                    $params['booking_id'] = $bookingId;
+                }
+
+                if (!empty($data['vnp_ResponseCode'])) {
+                    $params['vnp_ResponseCode'] = $data['vnp_ResponseCode'];
+                }
+
+                $location = $returnUrl . (strpos($returnUrl, '?') === false ? '?' : '&') . http_build_query($params);
+                header('Location: ' . $location);
+                exit;
+            }
+
+            Response::success($result, 'VNPay verification processed');
+        } catch (Exception $e) {
+            if ($isGet) {
+                $appUrl = getenv('APP_URL');
+                if (empty($appUrl)) {
+                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+                    $appUrl = $scheme . '://' . $host;
+                } else {
+                    $appUrl = rtrim($appUrl, '/');
+                }
+
+                // Redirect user to the frontend booking failed page on failure
+                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:5173';
+                $returnUrl = $frontendUrl . '/booking/failed';
+                $location = $returnUrl . (strpos($returnUrl, '?') === false ? '?' : '&') . 'status=Failed';
+                header('Location: ' . $location);
+                exit;
+            }
+
+            Response::error($e->getMessage(), $e->getCode() ?: 400);
+        }
     }
 
-    public function getHistory($userId) {
+    // IPN endpoint for VNPay (server-to-server callback). This should return plain '00' on success.
+    public function verifyVNPayIpn()
+    {
+        $data = array_merge($_GET, self::getRequestData());
+
+        try {
+            $result = $this->transactionService->processGatewayVerification('VNPay', $data);
+            header('Content-Type: text/plain');
+            echo '00';
+            exit;
+        } catch (Exception $e) {
+            header('Content-Type: text/plain');
+            echo '01';
+            exit;
+        }
+    }
+
+    public function getHistory($userId)
+    {
         AuthMiddleware::authenticate();
 
-        self::authorizeUserId((int)$userId);
+        self::authorizeUserId((int) $userId);
 
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : Config::$items_per_page;
+        $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : Config::$items_per_page;
 
-        list($transactions, $total) = $this->transactionService->getHistory((int)$userId, $page, $limit);
+        list($transactions, $total) = $this->transactionService->getHistory((int) $userId, $page, $limit);
 
         Response::paginated($transactions, $total, $page, $limit);
     }
 
-    private function verifyGateway($gateway) {
+    private function verifyGateway($gateway)
+    {
         $data = array_merge($_GET, self::getRequestData());
 
         try {
@@ -92,15 +180,23 @@ class TransactionController extends BaseController {
         }
     }
 
-    public function createMoMoPayment() {
+    public function createMoMoPayment()
+    {
         $this->createPayment('Momo');
     }
 
-    public function createVNPayPayment() {
+    public function createVNPayPayment()
+    {
         $this->createPayment('VNPay');
     }
 
-    private function createPayment($gateway) {
+    public function createVisaPayment()
+    {
+        $this->createPayment('Visa');
+    }
+
+    private function createPayment($gateway)
+    {
         AuthMiddleware::authenticate();
 
         $data = self::getRequestData();
@@ -113,7 +209,7 @@ class TransactionController extends BaseController {
             ]);
         }
 
-        $booking = $this->transactionService->getBookingById((int)$bookingId);
+        $booking = $this->transactionService->getBookingById((int) $bookingId);
         if (!$booking) {
             Response::notFound('Booking not found');
         }
@@ -122,23 +218,82 @@ class TransactionController extends BaseController {
 
         try {
             // Amount is resolved server-side from booking final price.
+            // Visa gateway reuses VNPay infrastructure (same sandbox, separate endpoint).
             $gatewayResponse = $this->transactionService->createPaymentForBooking($gateway, $booking);
-            Response::success($gatewayResponse, $gateway . ' payment created');
+
+            // Ensure VNPay/Visa returns a `pay_url` for frontend redirect. If service didn't provide it,
+            // generate one from current transaction data and config.
+            if ($gateway === 'VNPay' || $gateway === 'Visa') {
+                $hasPayUrl = is_array($gatewayResponse) && !empty($gatewayResponse['pay_url']);
+                if (!$hasPayUrl) {
+                    $tx = $this->transactionService->getTransactionByBooking((int) $booking['id']);
+                    $amount = isset($tx['amount']) ? (float) $tx['amount'] : ($booking['total_price'] ?? 0.0);
+                    $orderId = isset($tx['transaction_code']) ? $tx['transaction_code'] : uniqid('vnp_');
+                    $orderInfo = 'Thanh toan don hang so ' . $booking['id'];
+
+                    $appUrl = getenv('APP_URL');
+                    if (empty($appUrl)) {
+                        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                        $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+                        $appUrl = $scheme . '://' . $host;
+                    } else {
+                        $appUrl = rtrim($appUrl, '/');
+                    }
+
+                    $returnUrl = $appUrl . '/api/transactions/vnpay/verify';
+                    $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($appUrl . '/api/transactions/vnpay/ipn');
+
+                    $bankCode = ($gateway === 'Visa') ? 'INTCARD' : '';
+                    $payUrl = PaymentService::createVNPayPayment(
+                        $amount,
+                        $orderId,
+                        $orderInfo,
+                        $returnUrl,
+                        $notifyUrl,
+                        $bankCode
+                    );
+
+                    if (is_array($gatewayResponse)) {
+                        $gatewayResponse['pay_url'] = $payUrl;
+                    } else {
+                        $gatewayResponse = [
+                            'transaction' => $tx,
+                            'pay_url' => $payUrl,
+                        ];
+                    }
+                }
+            }
+
+            // Normalize response: if service returned ['transaction'=>..., 'pay_url'=>...],
+            // flatten so frontend can access pay_url directly under data.
+            $responseData = $gatewayResponse;
+            if (is_array($gatewayResponse) && array_key_exists('transaction', $gatewayResponse)) {
+                $responseData = $gatewayResponse['transaction'];
+                if (!empty($gatewayResponse['pay_url'])) {
+                    $responseData['pay_url'] = $gatewayResponse['pay_url'];
+                }
+                if (!empty($gatewayResponse['qr_code_url'])) {
+                    $responseData['qr_code_url'] = $gatewayResponse['qr_code_url'];
+                }
+            }
+
+            Response::success($responseData, $gateway . ' payment created');
         } catch (Exception $e) {
             Response::error($e->getMessage(), $e->getCode() ?: 400);
         }
     }
 
 
-    private function authorizeBookingAccess($booking) {
-        $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
+    private function authorizeBookingAccess($booking)
+    {
+        $authUserId = (int) ($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
         if ($authRole === 'Admin' || $authRole === 'Manager') {
             return;
         }
 
-        if ($authUserId !== (int)$booking['user_id']) {
+        if ($authUserId !== (int) $booking['user_id']) {
             Response::forbidden('Insufficient permissions');
         }
     }

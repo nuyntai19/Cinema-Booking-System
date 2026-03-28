@@ -78,8 +78,15 @@ const BookingHistoryPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
   const [isDownloadingTicket, setIsDownloadingTicket] = useState(false);
+  // Delay auth check by 1 render cycle to give AuthProvider time to read localStorage
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    setAuthChecked(true);
+  }, []);
+
+  useEffect(() => {
+    if (!authChecked) return; // Wait until auth state is settled
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -213,7 +220,7 @@ const BookingHistoryPage: React.FC = () => {
     };
 
     fetchBookings();
-  }, [user, isAuthenticated, navigate]);
+  }, [user, isAuthenticated, navigate, authChecked]);
 
   const filteredBookings = bookings.filter((booking) => {
     const matchesSearch =

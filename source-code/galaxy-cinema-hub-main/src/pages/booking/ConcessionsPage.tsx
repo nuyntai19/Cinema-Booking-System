@@ -157,6 +157,7 @@ const ConcessionsPage: React.FC = () => {
   );
   const grandTotal = ticketTotal + concessionTotal;
   const seatCodes = selectedSeats.map((s) => `${s.row}${s.number}`);
+  const hasConcessionSelected = items.some((item) => item.quantity > 0);
 
   const handleContinue = () => {
     navigate("/booking/payment");
@@ -332,10 +333,16 @@ const ConcessionsPage: React.FC = () => {
               <div className="space-y-3">
                 <Button
                   onClick={handleContinue}
-                  className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                  disabled={!hasConcessionSelected}
+                  className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Tiến Hành Thanh Toán
                 </Button>
+                {!hasConcessionSelected && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    Vui lòng chọn ít nhất một combo/bắp nước để tiếp tục
+                  </p>
+                )}
                 <Button variant="ghost" onClick={handleSkip} className="w-full">
                   Bỏ qua bước này
                 </Button>

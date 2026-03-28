@@ -1,4 +1,5 @@
 SET NAMES utf8mb4;
+USE galaxy_cinema;
 
 UPDATE promotions SET description='Giảm 50K cho khách hàng mới' WHERE code='WELCOME2026';
 UPDATE promotions SET description='Voucher sinh nhật - Giảm 20%' WHERE code='BIRTHDAY';

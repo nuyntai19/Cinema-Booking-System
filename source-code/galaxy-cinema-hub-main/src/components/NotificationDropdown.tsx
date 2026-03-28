@@ -267,9 +267,8 @@ const NotificationDropdown: React.FC = () => {
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-4 hover:bg-muted/50 transition-colors ${
-                    !notification.isRead ? "bg-primary/5" : ""
-                  }`}
+                  className={`p-4 hover:bg-muted/50 transition-colors ${!notification.isRead ? "bg-primary/5" : ""
+                    }`}
                 >
                   <div className="flex gap-3">
                     {/* Icon */}

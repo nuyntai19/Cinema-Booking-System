@@ -20,14 +20,16 @@ SET time_zone = "+00:00";
 --
 -- Cơ sở dữ liệu: `galaxy_cinema`
 --
+USE galaxy_cinema;
 
 -- --------------------------------------------------------
 
 --
 -- Cấu trúc bảng cho bảng `promotions`
+-- Safe to re-run: uses CREATE TABLE IF NOT EXISTS
 --
 
-CREATE TABLE `promotions` (
+CREATE TABLE IF NOT EXISTS `promotions` (
   `id` int(11) NOT NULL,
   `code` varchar(50) NOT NULL COMMENT 'Mã public',
   `description` text DEFAULT NULL,
@@ -44,9 +46,10 @@ CREATE TABLE `promotions` (
 
 --
 -- Đang đổ dữ liệu cho bảng `promotions`
+-- Uses INSERT IGNORE to skip rows that already exist
 --
 
-INSERT INTO `promotions` (`id`, `code`, `description`, `discount_amount`, `discount_type`, `min_order_value`, `start_date`, `end_date`, `is_auto_apply`, `usage_limit`, `created_at`, `max_discount`) VALUES
+INSERT IGNORE INTO `promotions` (`id`, `code`, `description`, `discount_amount`, `discount_type`, `min_order_value`, `start_date`, `end_date`, `is_auto_apply`, `usage_limit`, `created_at`, `max_discount`) VALUES
 (1, 'WELCOME2026', 'Giảm 50K cho khách hàng mới', 50000.00, 'FIXED', 200000.00, '2026-01-01', '2026-12-31', 0, NULL, '2026-03-06 19:01:02', NULL),
 (2, 'BIRTHDAY', 'Voucher sinh nhật - Giảm 20%', 20.00, 'PERCENT', 100000.00, '2026-01-01', '2026-12-31', 1, 1, '2026-03-06 19:01:02', NULL),
 (3, 'WEEKEND20', 'Giảm 20% cuối tuần', 20.00, 'PERCENT', 150000.00, '2026-01-01', '2026-12-31', 0, NULL, '2026-03-06 19:01:02', NULL),
@@ -60,21 +63,20 @@ INSERT INTO `promotions` (`id`, `code`, `description`, `discount_amount`, `disco
 (18, 'TIER_PLATINUM', 'Chúc mừng lên hạng Kim Cương - Giảm 100K', 100000.00, 'FIXED', 0.00, '2020-01-01', '2030-12-31', 1, NULL, '2026-03-06 21:47:24', NULL);
 
 --
--- Chỉ mục cho các bảng đã đổ
+-- Chỉ mục cho các bảng đã đổ (chỉ thêm nếu chưa có PRIMARY KEY)
 --
 
---
--- Chỉ mục cho bảng `promotions`
---
-ALTER TABLE `promotions`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `code` (`code`),
-  ADD KEY `idx_code` (`code`),
-  ADD KEY `idx_dates` (`start_date`,`end_date`);
+-- Only add keys if table was just created (no primary key yet)
+SET @has_pk = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'promotions' AND CONSTRAINT_TYPE = 'PRIMARY KEY');
 
---
--- AUTO_INCREMENT cho các bảng đã đổ
---
+SET @stmt = IF(@has_pk = 0,
+  'ALTER TABLE `promotions` ADD PRIMARY KEY (`id`), ADD UNIQUE KEY `code` (`code`), ADD KEY `idx_code` (`code`), ADD KEY `idx_dates` (`start_date`,`end_date`)',
+  'SELECT "Primary key already exists, skipping index creation" AS info'
+);
+PREPARE execStmt FROM @stmt;
+EXECUTE execStmt;
+DEALLOCATE PREPARE execStmt;
 
 --
 -- AUTO_INCREMENT cho bảng `promotions`

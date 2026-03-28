@@ -1,13 +1,79 @@
-import React, { useState } from "react";
-import { useLocation, Link } from "react-router-dom";
-import { Check, Calendar, MapPin, Clock, Download, Home } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useLocation, Link, useSearchParams } from "react-router-dom";
+import { Check, Calendar, MapPin, Clock, Download, Home, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { BookingService } from "@/services/booking.service";
+import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api-config";
 
 const BookingSuccessPage: React.FC = () => {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const [bookingData, setBookingData] = useState<any>(location.state || null);
+  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id"));
+
+  useEffect(() => {
+    const fetchBookingDetails = async () => {
+      if (location.state) return;
+      
+      const bookingId = searchParams.get("booking_id");
+      if (!bookingId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem("token") || localStorage.getItem("galaxy_cinema_token");
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.BOOKINGS.DETAIL(bookingId)}`, {
+          method: "GET",
+          headers,
+        });
+
+        if (response.ok) {
+          const res = await response.json();
+          if (res.success && res.data) {
+            const b = res.data;
+            setBookingData({
+              bookingCode: b.booking_code,
+              ticketCode: null,
+              movie: {
+                title: b.movie_title,
+                poster: b.movie_poster || "",
+                backdrop: b.movie_poster || "",
+              },
+              seats: b.seats || [],
+              total: b.total_price,
+              discount: 0,
+              promoCode: null,
+              showtime: {
+                date: b.showtime_date,
+                time: b.showtime_start_time,
+                cinema: b.cinema_name,
+                hall: b.hall_name
+              }
+            });
+          }
+        }
+      } catch (err) {
+         // Let the UI handle missing bookingData seamlessly
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookingDetails();
+  }, [location.state, searchParams]);
+
   const {
     bookingCode,
     ticketCode,
@@ -17,7 +83,7 @@ const BookingSuccessPage: React.FC = () => {
     discount,
     promoCode,
     showtime,
-  } = location.state || {};
+  } = bookingData || {};
   const [isSavingImage, setIsSavingImage] = useState(false);
 
   const activeTicketCode = bookingCode || ticketCode || null;
@@ -190,7 +256,42 @@ const BookingSuccessPage: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-white/80">Đang tải thông tin vé...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeTicketCode) {
+    if (searchParams.get("status") === "Success") {
+      return (
+        <div className="min-h-screen bg-gradient-cinema flex items-center justify-center p-4">
+          <div className="w-full max-w-md animate-scale-in text-center">
+            <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center glow-success mb-6">
+              <Check className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-4">
+              Giao Dịch Thành Công!
+            </h1>
+            <p className="text-white/80 text-lg leading-relaxed mb-2">
+              Chân thành cảm ơn quý khách.
+            </p>
+            <p className="text-white/70 leading-relaxed mb-2">
+              Chúc quý khách có một trải nghiệm xem phim thật tuyệt vời.
+            </p>
+            <p className="text-white/60 text-sm leading-relaxed">
+              Vui lòng trở về trang trước để xem lịch sử đặt vé. Xin cảm ơn.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
