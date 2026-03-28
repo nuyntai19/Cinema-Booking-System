@@ -13,7 +13,10 @@ import {
   Loader2,
   Upload,
   X,
+  FileUp,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +72,8 @@ const AdminConcessions: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [concessions, setConcessions] = useState<Concession[]>([]);
 
@@ -417,26 +422,101 @@ const AdminConcessions: React.FC = () => {
     );
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      const mappedData = jsonData.map((row: any) => ({
+        name: row["Tên sản phẩm"] || "",
+        price: row["Giá (VNĐ)"] || 0,
+        category: row["Danh mục (Combo/Drink/Snack)"] === "Combo" ? "combo" : row["Danh mục (Combo/Drink/Snack)"] === "Drink" ? "drink" : "snack",
+        image_url: row["Link Ảnh sản phẩm (URL)"] || "",
+      }));
+
+      const response = await apiCall<{success: boolean, data: {message: string, success_count: number, errors: string[]}}>(
+        `${API_ENDPOINTS.CONCESSIONS}/import`,
+        {
+          method: "POST",
+          body: JSON.stringify(mappedData),
+        }
+      );
+
+      if (response.success) {
+        toast({
+          title: "Import thành công",
+          description: response.data?.message || `Đã import thành công ${response.data?.success_count || 0} bắp nước`,
+        });
+        if (response.data?.errors && response.data.errors.length > 0) {
+          console.warn("Import warning:", response.data.errors);
+          toast({
+            title: "Có lỗi khi import một số dòng",
+            description: "Xem chi tiết lỗi trong Console",
+            variant: "destructive",
+          });
+        }
+        await fetchConcessions();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Lỗi import",
+        description: error.message || "Không thể đọc file excel",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Quản Lý Bắp Nước</h1>
           <p className="text-muted-foreground">
             Quản lý sản phẩm và tồn kho concessions
           </p>
         </div>
-        <Button
-          onClick={() => {
-            resetForm();
-            setIsCreateDialogOpen(true);
-          }}
-          disabled={loading}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm Sản Phẩm
-        </Button>
+        <div className="flex gap-2">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+          />
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            Nhập Excel
+          </Button>
+
+          <Button
+            className="bg-primary hover:bg-primary/90"
+            onClick={() => {
+              resetForm();
+              setIsCreateDialogOpen(true);
+            }}
+            disabled={loading}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm Sản Phẩm
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

@@ -33,6 +33,9 @@ export const API_ENDPOINTS = {
   // Genres
   GENRES: `${API_BASE_URL}/api/genres`,
 
+  // Posters (Hero Banner)
+  POSTERS: `${API_BASE_URL}/api/posters`,
+
   // Cinemas
   CINEMAS: `${API_BASE_URL}/api/cinemas`,
   CINEMA_DETAIL: (id: number) => `${API_BASE_URL}/api/cinemas/${id}`,

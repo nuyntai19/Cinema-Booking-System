@@ -10,7 +10,12 @@ import {
   Loader2,
   Upload,
   X,
+  FileUp,
+  Download,
+  Tag,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +103,15 @@ const AdminMovies: React.FC = () => {
   // File upload state
   const [posterFile, setPosterFile] = useState<File | null>(null);
   const [uploadingPoster, setUploadingPoster] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Genre management state
+  const [genreLoading, setGenreLoading] = useState(false);
+  const [showAddGenreModal, setShowAddGenreModal] = useState(false);
+  const [showEditGenreModal, setShowEditGenreModal] = useState(false);
+  const [editingGenre, setEditingGenre] = useState<Genre & { movie_count?: number } | null>(null);
+  const [genreFormData, setGenreFormData] = useState({ name: "", description: "" });
 
   // Fetch movies from API
   useEffect(() => {
@@ -135,7 +149,7 @@ const AdminMovies: React.FC = () => {
     try {
       const response = await apiCall<{
         success: boolean;
-        data: { genres: Genre[] };
+        data: { genres: (Genre & { movie_count?: number })[] };
       }>(API_ENDPOINTS.GENRES, {
         method: "GET",
       });
@@ -144,6 +158,82 @@ const AdminMovies: React.FC = () => {
       }
     } catch (error: unknown) {
       console.error("Error fetching genres:", error);
+    }
+  };
+
+  const handleCreateGenre = async () => {
+    if (!genreFormData.name.trim()) {
+      toast({ title: "Lỗi", description: "Tên thể loại không được để trống", variant: "destructive" });
+      return;
+    }
+    try {
+      setGenreLoading(true);
+      const response = await apiCall<{ success: boolean; data: { message: string } }>(
+        API_ENDPOINTS.GENRES,
+        { method: "POST", body: JSON.stringify(genreFormData) }
+      );
+      if (response.success) {
+        toast({ title: "Thành công", description: "Thêm thể loại thành công" });
+        setShowAddGenreModal(false);
+        setGenreFormData({ name: "", description: "" });
+        fetchGenres();
+      }
+    } catch (error: unknown) {
+      toast({ title: "Lỗi", description: error instanceof Error ? error.message : "Không thể thêm thể loại", variant: "destructive" });
+    } finally {
+      setGenreLoading(false);
+    }
+  };
+
+  const handleUpdateGenre = async () => {
+    if (!editingGenre || !genreFormData.name.trim()) {
+      toast({ title: "Lỗi", description: "Tên thể loại không được để trống", variant: "destructive" });
+      return;
+    }
+    try {
+      setGenreLoading(true);
+      const response = await apiCall<{ success: boolean; data: { message: string } }>(
+        `${API_ENDPOINTS.GENRES}/${editingGenre.id}`,
+        { method: "PUT", body: JSON.stringify(genreFormData) }
+      );
+      if (response.success) {
+        toast({ title: "Thành công", description: "Cập nhật thể loại thành công" });
+        setShowEditGenreModal(false);
+        setEditingGenre(null);
+        setGenreFormData({ name: "", description: "" });
+        fetchGenres();
+      }
+    } catch (error: unknown) {
+      toast({ title: "Lỗi", description: error instanceof Error ? error.message : "Không thể cập nhật", variant: "destructive" });
+    } finally {
+      setGenreLoading(false);
+    }
+  };
+
+  const handleDeleteGenre = async (genre: Genre & { movie_count?: number }) => {
+    if ((genre.movie_count ?? 0) > 0) {
+      toast({
+        title: "Không thể xóa",
+        description: `Thể loại "${genre.name}" đang được gắn với ${genre.movie_count} phim. Hãy gỡ thể loại khỏi các phim trước.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!confirm(`Xóa thể loại "${genre.name}"? Thao tác này không thể hoàn tác.`)) return;
+    try {
+      setGenreLoading(true);
+      const response = await apiCall<{ success: boolean }>(  
+        `${API_ENDPOINTS.GENRES}/${genre.id}`,
+        { method: "DELETE" }
+      );
+      if (response.success) {
+        toast({ title: "Thành công", description: `Đã xóa thể loại "${genre.name}"` });
+        fetchGenres();
+      }
+    } catch (error: unknown) {
+      toast({ title: "Lỗi", description: error instanceof Error ? error.message : "Không thể xóa", variant: "destructive" });
+    } finally {
+      setGenreLoading(false);
     }
   };
 
@@ -590,6 +680,68 @@ const AdminMovies: React.FC = () => {
     setShowAddModal(true);
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      const mappedData = jsonData.map((row: any) => ({
+        title: row["Tên phim"] || "",
+        duration: row["Thời lượng (phút)"] || 0,
+        age_rating: row["Phân loại (P/K/T13/T16/T18/C)"] || "P",
+        origin: row["Nguồn gốc (Vietnam/International)"] === "International" ? "International" : "Vietnam",
+        status: row["Trạng thái (Now Showing/Coming Soon/Ended)"] || "Coming Soon",
+        director: row["Đạo diễn"] || "",
+        cast: row["Diễn viên"] || "",
+        release_date: row["Ngày phát hành (YYYY-MM-DD)"] || "",
+        description: row["Tóm tắt phim"] || "",
+        trailer_url: row["Link Trailer (URL)"] || "",
+        poster_url: row["Link Poster (URL)"] || "",
+      }));
+
+      const response = await apiCall<{success: boolean, data: {message: string, success_count: number, errors: string[]}}>(
+        `${API_ENDPOINTS.MOVIES}/import`,
+        {
+          method: "POST",
+          body: JSON.stringify(mappedData),
+        }
+      );
+
+      if (response.success) {
+        toast({
+          title: "Import thành công",
+          description: response.data?.message || `Đã import thành công ${response.data?.success_count || 0} phim`,
+        });
+        if (response.data?.errors && response.data.errors.length > 0) {
+          console.warn("Import warning:", response.data.errors);
+          toast({
+            title: "Có lỗi khi import một số dòng",
+            description: "Xem chi tiết lỗi trong Console",
+            variant: "destructive",
+          });
+        }
+        await fetchMovies();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Lỗi import",
+        description: error.message || "Không thể đọc file excel",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -600,16 +752,34 @@ const AdminMovies: React.FC = () => {
             Danh sách và quản lý phim đang chiếu
           </p>
         </div>
-        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-          <DialogTrigger asChild>
-            <Button
-              className="bg-primary hover:bg-primary/90"
-              onClick={openAddModal}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Thêm Phim Mới
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+          />
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            Nhập Excel
+          </Button>
+
+          <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+            <DialogTrigger asChild>
+              <Button
+                className="bg-primary hover:bg-primary/90"
+                onClick={openAddModal}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Thêm Phim Mới
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Thêm Phim Mới</DialogTitle>
@@ -867,8 +1037,20 @@ const AdminMovies: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
+      {/* Tabs: Phim | Thể Loại */}
+      <Tabs defaultValue="movies">
+        <TabsList className="mb-4">
+          <TabsTrigger value="movies">Danh Sách Phim</TabsTrigger>
+          <TabsTrigger value="genres">
+            <Tag className="w-4 h-4 mr-1" /> Thể Loại
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ---- Tab Phim ---- */}
+        <TabsContent value="movies">
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
@@ -1273,6 +1455,163 @@ const AdminMovies: React.FC = () => {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : null}
               Lưu Thay Đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+        </TabsContent>
+
+        {/* ---- Tab Thể Loại ---- */}
+        <TabsContent value="genres">
+          <Card>
+            <CardContent className="p-0">
+              <div className="flex justify-between items-center px-4 py-3 border-b">
+                <h2 className="font-semibold text-base">Danh sách thể loại phim</h2>
+                <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => { setGenreFormData({ name: "", description: "" }); setShowAddGenreModal(true); }}>
+                  <Plus className="w-4 h-4 mr-1" /> Thêm Thể Loại
+                </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">#</TableHead>
+                    <TableHead>Tên thể loại</TableHead>
+                    <TableHead className="w-[120px] text-center">Số phim</TableHead>
+                    <TableHead className="w-[120px] text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {genreLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ) : genres.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                        Chưa có thể loại nào
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (genres as (Genre & { movie_count?: number })[]).map((genre, idx) => (
+                      <TableRow key={genre.id}>
+                        <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 text-primary" />
+                            {genre.name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${ (genre.movie_count ?? 0) > 0 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground" }`}>
+                            {genre.movie_count ?? 0}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600"
+                              onClick={() => {
+                                setEditingGenre(genre);
+                                setGenreFormData({ name: genre.name, description: (genre as any).description ?? "" });
+                                setShowEditGenreModal(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => handleDeleteGenre(genre)}
+                              disabled={(genre.movie_count ?? 0) > 0}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* --- Modal Thêm Thể Loại --- */}
+      <Dialog open={showAddGenreModal} onOpenChange={setShowAddGenreModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Thêm Thể Loại Mới</DialogTitle>
+            <DialogDescription>Nhập tên thể loại phim mới</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="genre-name">Tên thể loại *</Label>
+              <Input
+                id="genre-name"
+                placeholder="VD: Hành động, Tâm lý, Hoạt hình..."
+                value={genreFormData.name}
+                onChange={(e) => setGenreFormData({ ...genreFormData, name: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateGenre()}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="genre-desc">Mô tả (tùy chọn)</Label>
+              <Input
+                id="genre-desc"
+                placeholder="Mô tả ngắn..."
+                value={genreFormData.description}
+                onChange={(e) => setGenreFormData({ ...genreFormData, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddGenreModal(false)} disabled={genreLoading}>Hủy</Button>
+            <Button onClick={handleCreateGenre} disabled={genreLoading}>
+              {genreLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Thêm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- Modal Sửa Thể Loại --- */}
+      <Dialog open={showEditGenreModal} onOpenChange={setShowEditGenreModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sửa Thể Loại</DialogTitle>
+            <DialogDescription>Cập nhật tên thể loại</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-genre-name">Tên thể loại *</Label>
+              <Input
+                id="edit-genre-name"
+                value={genreFormData.name}
+                onChange={(e) => setGenreFormData({ ...genreFormData, name: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && handleUpdateGenre()}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-genre-desc">Mô tả (tùy chọn)</Label>
+              <Input
+                id="edit-genre-desc"
+                value={genreFormData.description}
+                onChange={(e) => setGenreFormData({ ...genreFormData, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditGenreModal(false)} disabled={genreLoading}>Hủy</Button>
+            <Button onClick={handleUpdateGenre} disabled={genreLoading}>
+              {genreLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Lưu
             </Button>
           </DialogFooter>
         </DialogContent>

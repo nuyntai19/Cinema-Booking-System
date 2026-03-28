@@ -31,5 +31,39 @@ class BaseController{
         if ($returnBoolean) return false;
         Response::forbidden('Insufficient permissions');
     }
+    /**
+     * Check if current user is Admin
+     */
+    protected function isAdmin(): bool
+    {
+        $authRole = $_REQUEST['auth_user_role'] ?? null;
+        return $authRole === 'Admin';
+    }
+
+    /**
+     * Check if current user is Manager
+     */
+    protected function isManager(): bool
+    {
+        $authRole = $_REQUEST['auth_user_role'] ?? null;
+        return $authRole === 'Manager';
+    }
+
+    /**
+     * Check if current user is Admin or Manager
+     */
+    protected function isAdminOrManager(): bool
+    {
+        $authRole = $_REQUEST['auth_user_role'] ?? null;
+        return $authRole === 'Admin' || $authRole === 'Manager';
+    }
+
+    /**
+     * Check if current user is authenticated (any role)
+     */
+    protected function isAuthenticated(): bool
+    {
+        return !empty($_REQUEST['auth_user_id']);
+    }
 }
 ?>

@@ -457,4 +457,195 @@ class AdminController extends BaseController {
             Response::serverError('Không thể tải danh sách giao dịch: ' . $e->getMessage());
         }
     }
+
+    public function getTransactionsExportDetails() {
+        AuthMiddleware::requireManager();
+
+        try {
+            $q = trim((string)($_GET['q'] ?? ''));
+            $status = strtolower(trim((string)($_GET['status'] ?? '')));
+            $paymentMethod = trim((string)($_GET['payment_method'] ?? ''));
+            $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+            $dateTo = trim((string)($_GET['date_to'] ?? ''));
+
+            $joins = " FROM bookings b
+                INNER JOIN showtimes s ON s.id = b.showtime_id
+                INNER JOIN movies m ON m.id = s.movie_id
+                INNER JOIN cinema_halls h ON h.id = s.cinema_hall_id
+                INNER JOIN cinemas c ON c.id = h.cinema_id
+                LEFT JOIN transactions t ON t.id = (
+                    SELECT t2.id
+                    FROM transactions t2
+                    WHERE t2.booking_id = b.id
+                    ORDER BY t2.created_at DESC, t2.id DESC
+                    LIMIT 1
+                )
+                LEFT JOIN users u ON u.id = b.user_id
+                LEFT JOIN user_profiles up ON up.user_id = u.id
+                LEFT JOIN pos_customers pc ON pc.id = b.guest_customer_id";
+
+            $statusExpr = "CASE
+                WHEN t.status = 'Success' THEN 'success'
+                WHEN t.status = 'Pending' THEN 'pending'
+                WHEN t.status = 'Failed' THEN 'failed'
+                WHEN b.status = 'Cancelled' THEN 'refunded'
+                ELSE 'pending'
+            END";
+
+            $where = [];
+            $params = [];
+
+            if ($q !== '') {
+                $where[] = "(
+                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q
+                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q
+                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q
+                    OR LOWER(COALESCE(u.email, '')) LIKE :q
+                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q
+                    OR LOWER(COALESCE(m.title, '')) LIKE :q
+                )";
+                $params[':q'] = '%' . mb_strtolower($q, 'UTF-8') . '%';
+            }
+
+            if (in_array($status, ['success', 'pending', 'failed', 'refunded'], true)) {
+                $where[] = "$statusExpr = :status";
+                $params[':status'] = $status;
+            }
+
+            if ($paymentMethod !== '') {
+                $where[] = "LOWER(COALESCE(t.payment_method, '')) = :payment_method";
+                $params[':payment_method'] = mb_strtolower($paymentMethod, 'UTF-8');
+            }
+
+            if ($dateFrom !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) >= :date_from";
+                $params[':date_from'] = $dateFrom;
+            }
+
+            if ($dateTo !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) <= :date_to";
+                $params[':date_to'] = $dateTo;
+            }
+
+            $whereSql = empty($where) ? '' : (' WHERE ' . implode(' AND ', $where));
+
+            $ticketSql = "SELECT
+                    b.id AS booking_id,
+                    b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Vé' AS item_type,
+                    CONCAT('Ghế ', se.row_code, se.number, ' (', st.name, ')') AS item_name,
+                    COALESCE(tk.price, 0) AS unit_price,
+                    1 AS quantity,
+                    COALESCE(tk.price, 0) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN tickets tk ON tk.booking_id = b.id
+                LEFT JOIN seats se ON se.id = tk.seat_id
+                LEFT JOIN seat_types st ON st.id = se.seat_type_id
+                " . $whereSql;
+
+            $concessionSql = "SELECT
+                    b.id AS booking_id,
+                    b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Bắp nước' AS item_type,
+                    con.name AS item_name,
+                    COALESCE(bc.price, 0) AS unit_price,
+                    bc.quantity AS quantity,
+                    (COALESCE(bc.price, 0) * bc.quantity) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN booking_concessions bc ON bc.booking_id = b.id
+                LEFT JOIN concessions con ON con.id = bc.concession_id
+                " . $whereSql;
+
+            $finalSql = "($ticketSql) UNION ALL ($concessionSql) ORDER BY transaction_date DESC, booking_id DESC";
+
+            $stmt = $this->db->prepare($finalSql);
+            // We reuse params array since where is duplicated in both UNION branches
+            foreach ($params as $key => $value) {
+                // Must bind twice if using named parameters in dual queries, but PDO named params can be problematic in UNIONs. 
+                // However, PDO accepts parameter passing by overriding with an array on execute. Let's use execute(array) below to avoid binding issues per occurrence.
+            }
+            // Better to build a single execute array with two sets of params or use positional.
+            // Let's use named parameters by executing the statement with an associative array. Wait, PDO allows reusing named parameters multiple times in the query if emulation is on, but fails if emulation is off.
+            // To be safe, we will just prepare and bind properly.
+            
+            // To be thoroughly safe with PDO and UNION, I append `1` and `2` to the parameters or use `?` placeholders.
+            // An easier way is to just do a subquery or CTE instead of UNION, or just use `execute` with the param array because MySQL PDO in PHP usually supports it since 5.3+. Wait, no, `execute($params)` fails if a named param appears twice.
+            // Let's rewrite the query to avoid named param duplication or just replace values directly since they are bound safely. Wait, I MUST USE PARAMS.
+            // I'll dynamically rename keys in $params for ticket and concession.
+            
+            $finalParams = [];
+            $ticketWhereSql = $whereSql;
+            $concessionWhereSql = $whereSql;
+            
+            foreach ($params as $key => $value) {
+                $cleanKey = ltrim($key, ':');
+                $tKey = ':t_' . $cleanKey;
+                $cKey = ':c_' . $cleanKey;
+                $finalParams[$tKey] = $value;
+                $finalParams[$cKey] = $value;
+                $ticketWhereSql = str_replace($key, $tKey, $ticketWhereSql);
+                $concessionWhereSql = str_replace($key, $cKey, $concessionWhereSql);
+            }
+
+            $ticketSqlReal = "SELECT
+                    b.id AS booking_id,
+                    b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Vé' AS item_type,
+                    CONCAT('Ghế ', se.row_code, se.number, ' (', st.name, ')') AS item_name,
+                    COALESCE(tk.price, 0) AS unit_price,
+                    1 AS quantity,
+                    COALESCE(tk.price, 0) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN tickets tk ON tk.booking_id = b.id
+                LEFT JOIN seats se ON se.id = tk.seat_id
+                LEFT JOIN seat_types st ON st.id = se.seat_type_id
+                " . $ticketWhereSql;
+
+            $concessionSqlReal = "SELECT
+                    b.id AS booking_id,
+                    b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Bắp nước' AS item_type,
+                    con.name AS item_name,
+                    COALESCE(bc.price, 0) AS unit_price,
+                    bc.quantity AS quantity,
+                    (COALESCE(bc.price, 0) * bc.quantity) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN booking_concessions bc ON bc.booking_id = b.id
+                LEFT JOIN concessions con ON con.id = bc.concession_id
+                " . $concessionWhereSql;
+
+            $finalSqlReal = "($ticketSqlReal) UNION ALL ($concessionSqlReal) ORDER BY transaction_date DESC, booking_id DESC";
+
+            $stmtReal = $this->db->prepare($finalSqlReal);
+            $stmtReal->execute($finalParams);
+            $rows = $stmtReal->fetchAll(PDO::FETCH_ASSOC);
+
+            // Format rows
+            $items = array_map(function ($row) {
+                $transactionDate = !empty($row['transaction_date']) ? new DateTime($row['transaction_date']) : null;
+                return [
+                    'bookingCode' => $row['booking_code'],
+                    'customerName' => $row['customer_name'],
+                    'itemType' => $row['item_type'],
+                    'itemName' => $row['item_name'],
+                    'unitPrice' => (float)$row['unit_price'],
+                    'quantity' => (int)$row['quantity'],
+                    'totalPrice' => (float)$row['total_price'],
+                    'transactionDate' => $transactionDate ? $transactionDate->format('Y-m-d H:i:s') : '-',
+                ];
+            }, $rows);
+
+            Response::success(['items' => $items]);
+        } catch (Exception $e) {
+            Response::serverError('Không thể tải chi tiết giao dịch export: ' . $e->getMessage());
+        }
+    }
 }

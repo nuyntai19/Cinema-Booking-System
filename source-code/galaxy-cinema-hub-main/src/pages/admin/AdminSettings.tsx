@@ -14,19 +14,18 @@ import { useToast } from "@/hooks/use-toast";
 import { systemConfig } from "@/data/mockData";
 import { SystemConfig } from "@/types/cinema";
 
+import { AdminHeroBanner } from "@/components/admin/AdminHeroBanner";
+
 const AdminSettings: React.FC = () => {
   const { toast } = useToast();
   const [config, setConfig] = useState<SystemConfig>(systemConfig);
 
   const handleSave = () => {
-    // Update the global systemConfig object
     Object.assign(systemConfig, config);
-
     toast({
       title: "Đã lưu cấu hình",
       description: "Các thay đổi đã được áp dụng thành công",
     });
-
     console.log("Updated system config:", systemConfig);
   };
 
@@ -52,11 +51,14 @@ const AdminSettings: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold">Cấu Hình Hệ Thống</h1>
         <p className="text-muted-foreground">
-          Điều chỉnh các thông số hoạt động của hệ thống
+          Điều chỉnh các thông số hoạt động của hệ thống và giao diện
         </p>
       </div>
 
       <div className="grid gap-6 max-w-4xl">
+        {/* Hero Banner Manager */}
+        <AdminHeroBanner />
+
         {/* Legal Compliance Settings */}
         <Card>
           <CardHeader>

@@ -2,41 +2,60 @@ import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+import { apiCall, API_ENDPOINTS } from '@/lib/api';
+
 interface HeroBannerProps {
   slides?: {
-    image: string;
-    title?: string;
+    image_url: string;
+    title?: string | null;
+    target_url?: string | null;
   }[];
 }
 
 const defaultSlides = [
   {
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1920&h=600&fit=crop',
+    image_url: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1920&h=600&fit=crop',
     title: 'Experience Cinema',
   },
   {
-    image: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1920&h=600&fit=crop',
+    image_url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1920&h=600&fit=crop',
     title: 'Premium Movies',
   },
   {
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1920&h=600&fit=crop',
+    image_url: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1920&h=600&fit=crop',
     title: 'IMAX Experience',
   },
 ];
 
-const HeroBanner: React.FC<HeroBannerProps> = ({ slides = defaultSlides }) => {
+const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
   const [currentSlide, setCurrentSlide] = React.useState(0);
+  const [activeSlides, setActiveSlides] = React.useState(initialSlides || defaultSlides);
+
+  React.useEffect(() => {
+    if (initialSlides) return; // If manually passed
+    const fetchBanners = async () => {
+      try {
+        const res = await apiCall<{ success: boolean; data: { posters: any[] } }>(API_ENDPOINTS.POSTERS);
+        if (res.success && res.data?.posters?.length > 0) {
+          setActiveSlides(res.data.posters);
+        }
+      } catch (err) {
+        // keep default
+      }
+    };
+    fetchBanners();
+  }, [initialSlides]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
+      setCurrentSlide((prev) => (prev + 1) % activeSlides.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, [activeSlides.length]);
 
   const goToSlide = (index: number) => setCurrentSlide(index);
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % activeSlides.length);
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + activeSlides.length) % activeSlides.length);
 
   return (
     <div className="relative w-full h-[300px] sm:h-[400px] lg:h-[500px] overflow-hidden bg-secondary">
@@ -45,19 +64,28 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides = defaultSlides }) => {
         className="flex transition-transform duration-700 ease-out h-full"
         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
       >
-        {slides.map((slide, index) => (
+        {activeSlides.map((slide, index) => (
           <div
             key={index}
-            className="min-w-full h-full relative"
+            className="min-w-full h-full relative cursor-pointer group"
+            onClick={() => {
+               if (slide.target_url) window.location.href = slide.target_url;
+            }}
           >
             <img
-              src={slide.image}
+              src={slide.image_url}
               alt={slide.title || `Slide ${index + 1}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />
             {/* Gradient Overlay - keeps center clear */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60 group-hover:opacity-80 transition-opacity" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+            
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 text-center text-white opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300">
+               {slide.target_url && (
+                  <span className="bg-primary/90 hidden sm:inline-block px-4 py-2 rounded-full text-sm font-semibold shadow-lg">Khám phá ngay</span>
+               )}
+            </div>
           </div>
         ))}
       </div>
@@ -82,7 +110,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides = defaultSlides }) => {
 
       {/* Dots */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-        {slides.map((_, index) => (
+        {activeSlides.map((_, index) => (
           <button
             key={index}
             onClick={() => goToSlide(index)}

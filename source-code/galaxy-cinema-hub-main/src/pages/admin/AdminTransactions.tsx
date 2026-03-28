@@ -10,11 +10,26 @@ import {
   FileText,
   BarChart,
   LineChart as LineChartIcon,
+  Eye,
+  Loader2,
+  Film,
+  MapPin,
+  Calendar,
+  Armchair,
+  Popcorn,
+  Ticket,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -30,11 +45,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { API_BASE_URL, API_ENDPOINTS, apiCall } from "@/lib/api";
 import * as XLSX from "xlsx";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import type { TDocumentDefinitions } from "pdfmake/interfaces";
+import type { TDocumentDefinitions, Content, TableCell as PdfTableCell } from "pdfmake/interfaces";
 import {
   CartesianGrid,
   Cell,
@@ -93,6 +108,48 @@ interface TransactionItem {
   paymentMethod: string;
   status: "success" | "pending" | "failed" | "refunded";
   transactionDate: string;
+  bookingId?: number;
+}
+
+interface TicketDetail {
+  ticket_code: string;
+  row_code: string;
+  number: number;
+  seat_type: string;
+  price: number;
+  status: string;
+}
+
+interface ConcessionDetail {
+  name: string;
+  quantity: number;
+  price: number;
+  image_url?: string;
+}
+
+interface BookingDetail {
+  id: number;
+  booking_code: string;
+  customer_name: string;
+  customer_email: string;
+  movie_title: string;
+  cinema_name: string;
+  hall_name: string;
+  show_date: string;
+  show_time: string;
+  total_price: number;
+  discount_amount: number;
+  final_price: number;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+  start_time?: string;
+  transaction?: {
+    payment_method: string;
+    status: string;
+  };
+  tickets: TicketDetail[];
+  concessions: ConcessionDetail[];
 }
 
 interface ApiResponse<T> {
@@ -125,6 +182,9 @@ interface AdminTransactionsData {
 const AdminTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<BookingDetail | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -323,6 +383,48 @@ const AdminTransactions: React.FC = () => {
   const formatVND = (value: number): string =>
     `${Math.round(Number(value) || 0).toLocaleString("vi-VN")}đ`;
 
+  const openDetail = async (transaction: TransactionItem) => {
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setSelectedDetail(null);
+    try {
+      // Resolve bookingId: prefer explicit bookingId, fallback to numeric id
+      const bookingId = transaction.bookingId ?? Number(transaction.id);
+      const res = await apiCall<{ success: boolean; data: BookingDetail }>(
+        `${API_BASE_URL}/api/bookings/${bookingId}`,
+      );
+      if (res.success && res.data) {
+        setSelectedDetail(res.data);
+      } else {
+        throw new Error("Không tìm thấy chi tiết booking");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Lỗi tải chi tiết";
+      setSelectedDetail({
+        id: 0,
+        booking_code: transaction.bookingCode,
+        customer_name: transaction.customerName,
+        customer_email: transaction.customerEmail,
+        movie_title: transaction.movieTitle,
+        cinema_name: transaction.cinemaName,
+        hall_name: "",
+        show_date: transaction.showDate,
+        show_time: transaction.showTime,
+        total_price: transaction.amount,
+        discount_amount: 0,
+        final_price: transaction.amount,
+        status: transaction.status,
+        payment_method: transaction.paymentMethod,
+        payment_status: transaction.status,
+        tickets: [],
+        concessions: [],
+        _error: msg,
+      } as BookingDetail & { _error?: string });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const getStatusLabel = (status: TransactionItem["status"]): string => {
     const labels: Record<TransactionItem["status"], string> = {
       success: "Thành công",
@@ -344,6 +446,14 @@ const AdminTransactions: React.FC = () => {
     const params = buildQueryParams(1, 5000);
     const res = await apiCall<ApiResponse<AdminTransactionsData>>(
       `${API_ENDPOINTS.ADMIN_TRANSACTIONS}?${params.toString()}`,
+    );
+    return res.data?.items || [];
+  };
+
+  const fetchTransactionDetailsForExport = async (): Promise<any[]> => {
+    const params = buildQueryParams(1, 5000);
+    const res = await apiCall<{ success: boolean; data: { items: any[] } }>(
+      `${API_ENDPOINTS.ADMIN_TRANSACTIONS}/export-details?${params.toString()}`,
     );
     return res.data?.items || [];
   };
@@ -511,6 +621,36 @@ const AdminTransactions: React.FC = () => {
       ];
       XLSX.utils.book_append_sheet(workbook, detailSheet, "GiaoDich");
 
+      // Sheet 2: Chi tiết giao dịch (Vé + Bắp nước)
+      const detailsArray = await fetchTransactionDetailsForExport();
+      const itemDetailRows = detailsArray.map((item, index) => ({
+        STT: index + 1,
+        "Mã đặt vé": item.bookingCode,
+        "Khách hàng": item.customerName,
+        "Loại": item.itemType,
+        "Sản phẩm": item.itemName,
+        "Đơn giá": formatVND(Number(item.unitPrice || 0)),
+        "Số lượng": item.quantity,
+        "Thành tiền": formatVND(Number(item.totalPrice || 0)),
+        "Thời gian giao dịch": item.transactionDate && item.transactionDate !== "-"
+          ? formatDateTime(item.transactionDate)
+          : "-",
+      }));
+
+      const itemDetailSheet = XLSX.utils.json_to_sheet(itemDetailRows);
+      itemDetailSheet["!cols"] = [
+        { wch: 6 },
+        { wch: 16 },
+        { wch: 22 },
+        { wch: 12 },
+        { wch: 26 },
+        { wch: 14 },
+        { wch: 10 },
+        { wch: 14 },
+        { wch: 22 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, itemDetailSheet, "ChiTietGiaoDich");
+
       const exportDate = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(workbook, `giao-dich-${exportDate}.xlsx`);
     } finally {
@@ -617,7 +757,7 @@ const AdminTransactions: React.FC = () => {
         total > 0 ? `${((part / total) * 100).toFixed(1)}%` : "0%";
 
       const buildMetricCard = (label: string, value: string, hint?: string, fillColor = "#eef2ff") => {
-        const stack: Array<Record<string, unknown>> = [
+        const stack: Content[] = [
           { text: label.toUpperCase(), style: "metricLabel" },
           { text: value, style: "metricValue" },
         ];
@@ -667,7 +807,7 @@ const AdminTransactions: React.FC = () => {
         refunded: rows.filter((row) => row.status === "refunded").length,
       };
 
-      const paymentTableBody = [
+      const paymentTableBody: PdfTableCell[][] = [
         [
           { text: "Hình thức", style: "tableHeader" },
           { text: "Số giao dịch", style: "tableHeader", alignment: "right" },
@@ -683,9 +823,9 @@ const AdminTransactions: React.FC = () => {
           { text: formatNumber(transferCount), style: "tableCell", alignment: "right" },
           { text: toPercent(transferCount, monthRows.length), style: "tableCell", alignment: "right" },
         ],
-      ];
+      ] as unknown as PdfTableCell[][];
 
-      const statusTableBody = [
+      const statusTableBody: PdfTableCell[][] = [
         [
           { text: "Trạng thái", style: "tableHeader" },
           { text: "Số lượng", style: "tableHeader", alignment: "right" },
@@ -696,9 +836,9 @@ const AdminTransactions: React.FC = () => {
           { text: formatNumber(value), style: "tableCell", alignment: "right" },
           { text: toPercent(value, totalTransactions), style: "tableCell", alignment: "right" },
         ]),
-      ];
+      ] as unknown as PdfTableCell[][];
 
-      const movieTableBody = [
+      const movieTableBody: PdfTableCell[][] = [
         [
           { text: "Hạng", style: "tableHeader", alignment: "center" },
           { text: "Phim", style: "tableHeader" },
@@ -711,7 +851,7 @@ const AdminTransactions: React.FC = () => {
           { text: formatNumber(item.tickets), style: "tableCell", alignment: "right" },
           { text: formatVND(item.revenue), style: "tableCell", alignment: "right" },
         ]),
-      ];
+      ] as unknown as PdfTableCell[][];
 
       if (topMovies.length === 0) {
         movieTableBody.push([
@@ -787,13 +927,13 @@ const AdminTransactions: React.FC = () => {
         ),
       ];
 
-      const metricRows: Array<Record<string, unknown>> = [];
+      const metricRows: Content[] = [];
       for (let i = 0; i < metricBlocks.length; i += 2) {
         metricRows.push({
           columns: metricBlocks.slice(i, i + 2),
           columnGap: 14,
           margin: [0, i === 0 ? 16 : 8, 0, 0],
-        });
+        } as unknown as Content);
       }
 
       const exportDate = new Date().toISOString().slice(0, 10);
@@ -886,7 +1026,7 @@ const AdminTransactions: React.FC = () => {
           header: { fontSize: 20, bold: true, alignment: "center", color: "#111827" },
           meta: { fontSize: 11, color: "#4b5563", alignment: "center" },
           sectionTitle: { fontSize: 14, bold: true, color: "#111827", margin: [0, 24, 0, 10] },
-          metricLabel: { fontSize: 10, color: "#6b7280", letterSpacing: 0.5 },
+          metricLabel: { fontSize: 10, color: "#6b7280" },
           metricValue: { fontSize: 18, bold: true, color: "#111827", margin: [0, 4, 0, 2] },
           metricHint: { fontSize: 10, color: "#4b5563" },
           tableHeader: { color: "#ffffff", bold: true },
@@ -1456,13 +1596,14 @@ const AdminTransactions: React.FC = () => {
                 <TableHead>Thanh Toán</TableHead>
                 <TableHead>Trạng Thái</TableHead>
                 <TableHead>Thời Gian</TableHead>
+                <TableHead className="text-center">Chi Tiết</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={10}
                     className="text-center py-8 text-muted-foreground"
                   >
                     Đang tải dữ liệu giao dịch...
@@ -1472,7 +1613,7 @@ const AdminTransactions: React.FC = () => {
               {!isLoading && error && (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={10}
                     className="text-center py-8 text-red-500"
                   >
                     {error}
@@ -1482,7 +1623,7 @@ const AdminTransactions: React.FC = () => {
               {!isLoading && !error && transactions.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={10}
                     className="text-center py-8 text-muted-foreground"
                   >
                     Không có giao dịch phù hợp
@@ -1531,6 +1672,17 @@ const AdminTransactions: React.FC = () => {
                       {transaction.transactionDate
                         ? formatDateTime(transaction.transactionDate)
                         : "-"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                        onClick={() => openDetail(transaction)}
+                      >
+                        <Eye className="w-3 h-3" />
+                        Chi tiết
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1601,6 +1753,187 @@ const AdminTransactions: React.FC = () => {
         </CardContent>
       </Card>
       )}
+
+      {/* ===================== TRANSACTION DETAIL DIALOG ===================== */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Ticket className="w-5 h-5 text-blue-500" />
+              Chi Tiết Giao Dịch
+            </DialogTitle>
+          </DialogHeader>
+
+          {detailLoading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <p className="text-sm text-muted-foreground">Đang tải chi tiết...</p>
+            </div>
+          )}
+
+          {!detailLoading && selectedDetail && (
+            <div className="space-y-5">
+
+              {/* Booking info */}
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Thông Tin Đặt Vé</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Mã đặt vé:</span>
+                    <p className="font-mono font-bold text-primary">{selectedDetail.booking_code}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Trạng thái:</span>
+                    <p className="font-medium capitalize">{selectedDetail.status}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Khách hàng:</span>
+                    <p className="font-medium">{selectedDetail.customer_name || "(Khách vãng lai)"}</p>
+                  </div>
+                  {selectedDetail.customer_email && selectedDetail.customer_email !== "-" && !selectedDetail.customer_email.includes("@guest.local") ? (
+                    <div>
+                      <span className="text-muted-foreground">Email:</span>
+                      <p className="text-xs break-all">{selectedDetail.customer_email}</p>
+                    </div>
+                  ) : null}
+                  <div>
+                    <span className="text-muted-foreground">Thanh toán:</span>
+                    <p className="font-medium">{selectedDetail.transaction?.payment_method || selectedDetail.payment_method || "-"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">TT thanh toán:</span>
+                    <p className="font-medium">{selectedDetail.transaction?.status || selectedDetail.payment_status || "-"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Show info */}
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Suất Chiếu</h3>
+                <div className="flex flex-col gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Film className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span className="font-semibold">{selectedDetail.movie_title}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{selectedDetail.cinema_name}{selectedDetail.hall_name ? ` — ${selectedDetail.hall_name}` : ""}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-green-500 shrink-0" />
+                    <span>
+                      {selectedDetail.start_time ? (
+                        <>
+                          {formatDate(selectedDetail.start_time)} lúc{" "}
+                          {new Date(selectedDetail.start_time).toLocaleTimeString("vi-VN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </>
+                      ) : (
+                        <>
+                          {selectedDetail.show_date ? formatDate(selectedDetail.show_date) : "-"}
+                          {selectedDetail.show_time ? ` lúc ${selectedDetail.show_time}` : ""}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tickets */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Armchair className="w-4 h-4" /> Vé ({selectedDetail.tickets?.length ?? 0})
+                </h3>
+                {selectedDetail.tickets && selectedDetail.tickets.length > 0 ? (
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Ghế</th>
+                          <th className="text-left px-3 py-2 font-medium">Loại</th>
+                          <th className="text-right px-3 py-2 font-medium">Giá vé</th>
+                          <th className="text-center px-3 py-2 font-medium">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedDetail.tickets.map((ticket, idx) => (
+                          <tr key={ticket.ticket_code ?? idx} className="border-t">
+                            <td className="px-3 py-2 font-mono font-bold">
+                              {ticket.row_code}{ticket.number}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">{ticket.seat_type}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-primary">
+                              {formatVND(ticket.price)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <Badge variant="outline" className="text-xs">{ticket.status}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic pl-1">Không có thông tin vé</p>
+                )}
+              </div>
+
+              {/* Concessions */}
+              {selectedDetail.concessions && selectedDetail.concessions.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <Popcorn className="w-4 h-4" /> Bắp Nước ({selectedDetail.concessions.length})
+                  </h3>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Sản phẩm</th>
+                          <th className="text-center px-3 py-2 font-medium">SL</th>
+                          <th className="text-right px-3 py-2 font-medium">Đơn giá</th>
+                          <th className="text-right px-3 py-2 font-medium">Thành tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedDetail.concessions.map((item, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="px-3 py-2 font-medium">{item.name}</td>
+                            <td className="px-3 py-2 text-center">{item.quantity}</td>
+                            <td className="px-3 py-2 text-right text-muted-foreground">{formatVND(item.price)}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{formatVND(item.price * item.quantity)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Price summary */}
+              <Separator />
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tổng vé + bắp nước:</span>
+                  <span>{formatVND(selectedDetail.total_price)}</span>
+                </div>
+                {selectedDetail.discount_amount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Giảm giá / voucher:</span>
+                    <span>- {formatVND(selectedDetail.discount_amount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base">
+                  <span>Thanh toán:</span>
+                  <span className="text-primary">{formatVND(selectedDetail.final_price)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

@@ -152,6 +152,7 @@ $router->get('/api/customers/stats', 'CustomerController@getStats'); // Staff/Ad
 $router->get('/api/movies', 'MovieController@index');
 $router->get('/api/movies/:id', 'MovieController@show');
 $router->post('/api/movies', 'MovieController@create'); // Admin
+$router->post('/api/movies/import', 'MovieController@import'); // Admin bulk import
 $router->put('/api/movies/:id', 'MovieController@update'); // Admin
 $router->delete('/api/movies/:id', 'MovieController@delete'); // Admin
 $router->post('/api/movies/:id/upload-poster', 'MovieController@uploadPoster'); // Admin - Upload poster
@@ -164,6 +165,18 @@ $router->get('/api/movies/:id/reviews', 'MovieController@getReviews');
 // ============================================
 $router->get('/api/genres', 'GenreController@index');
 $router->get('/api/genres/:id', 'GenreController@show');
+$router->post('/api/genres', 'GenreController@create'); // Admin/Manager
+$router->put('/api/genres/:id', 'GenreController@update'); // Admin/Manager
+$router->delete('/api/genres/:id', 'GenreController@delete'); // Admin only
+
+// ============================================
+// POSTER ROUTES (HERO BANNER)
+// ============================================
+$router->get('/api/posters', 'PosterController@index'); // Public & Admin
+$router->post('/api/posters', 'PosterController@create'); // Admin/Manager
+$router->post('/api/posters/:id', 'PosterController@update'); // Dùng POST cho Update có upload file
+$router->put('/api/posters/:id', 'PosterController@update'); // Admin/Manager
+$router->delete('/api/posters/:id', 'PosterController@delete'); // Admin/Manager
 
 // ============================================
 // CINEMA ROUTES
@@ -266,6 +279,7 @@ $router->get('/api/concessions', 'ConcessionController@index');
 $router->get('/api/concessions/available', 'ConcessionController@getAvailable'); // Get available concessions
 $router->get('/api/concessions/:id', 'ConcessionController@show');
 $router->post('/api/concessions', 'ConcessionController@create'); // Admin
+$router->post('/api/concessions/import', 'ConcessionController@import'); // Admin bulk import
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin
 $router->delete('/api/concessions/:id', 'ConcessionController@delete'); // Admin
 $router->post('/api/concessions/:id/upload-image', 'ConcessionController@uploadImage'); // Admin - Upload concession image
@@ -301,6 +315,7 @@ $router->get('/api/admin/revenue', 'AdminController@getRevenueReport'); // Admin
 $router->get('/api/admin/seat-heatmap', 'AdminController@getSeatHeatmap'); // Admin
 $router->get('/api/admin/recent-transactions', 'AdminController@getRecentTransactions'); // Admin
 $router->get('/api/admin/transactions', 'AdminController@getTransactions'); // Admin with pagination/filter
+$router->get('/api/admin/transactions/export-details', 'AdminController@getTransactionsExportDetails'); // Admin detailed export
 
 // ============================================
 // SYSTEM CONFIG ROUTES
