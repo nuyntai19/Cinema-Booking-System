@@ -121,9 +121,13 @@ const MovieDetailPage: React.FC = () => {
 
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
+  const getLocalDateString = (d: Date) => {
+    const tzOffsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().split("T")[0];
+  };
+
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
+    return getLocalDateString(new Date());
   });
   const [showAgeModal, setShowAgeModal] = useState(false);
   const [pendingShowtime, setPendingShowtime] = useState<{
@@ -259,7 +263,7 @@ const MovieDetailPage: React.FC = () => {
             movieId: String(s.movie_id),
             cinemaId: cinemaKey,
             roomId: s.hall_name,
-            date: startDate.toISOString().split("T")[0],
+            date: getLocalDateString(startDate),
             time: startDate.toTimeString().slice(0, 5),
             start_time: s.start_time,
             hall: s.hall_name,

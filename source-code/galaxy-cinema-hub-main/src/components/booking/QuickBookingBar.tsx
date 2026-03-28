@@ -33,6 +33,10 @@ const QuickBookingBar: React.FC = () => {
   const navigate = useNavigate();
   const { setSelectedMovie, setSelectedCinema, setSelectedShowtime } =
     useBooking();
+  const getLocalDateString = (d: Date) => {
+    const tzOffsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().split("T")[0];
+  };
   const [genreId, setGenreId] = useState<string>("");
   const [movieId, setMovieId] = useState<string>("");
   const [cinemaId, setCinemaId] = useState<string>("");
@@ -155,7 +159,7 @@ const QuickBookingBar: React.FC = () => {
             movieId: String(s.movie_id),
             cinemaId: String(s.cinema_id),
             roomId: s.hall_name,
-            date: startDate.toISOString().split("T")[0],
+            date: getLocalDateString(startDate),
             time: startDate.toTimeString().slice(0, 5),
             price: {
               standard: s.base_price || 90000,
@@ -185,7 +189,7 @@ const QuickBookingBar: React.FC = () => {
     const d = new Date();
     d.setDate(d.getDate() + i);
     return {
-      value: d.toISOString().split("T")[0],
+      value: getLocalDateString(d),
       label:
         i === 0
           ? "Hôm nay"

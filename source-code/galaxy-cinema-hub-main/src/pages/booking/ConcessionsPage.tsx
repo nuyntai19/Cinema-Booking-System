@@ -103,8 +103,9 @@ const ConcessionsPage: React.FC = () => {
             price: Number(c.price) || 0,
             quantity: selectedMap.get(String(c.id)) || 0,
             image:
-              c.imageUrl ||
-              "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
+              c.image_url
+                ? getImageUrl(c.image_url)
+                : "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
           }));
           setItems(mappedItems);
         } else {

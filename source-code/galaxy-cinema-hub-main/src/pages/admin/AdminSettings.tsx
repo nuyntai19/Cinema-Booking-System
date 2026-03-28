@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -9,24 +9,120 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Save, Clock, Shield, TrendingUp, Award } from "lucide-react";
+import { Save, Clock, Shield, TrendingUp, Award, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { systemConfig } from "@/data/mockData";
 import { SystemConfig } from "@/types/cinema";
+import { apiCall, API_ENDPOINTS } from "@/lib/api";
 
 import { AdminHeroBanner } from "@/components/admin/AdminHeroBanner";
 
 const AdminSettings: React.FC = () => {
   const { toast } = useToast();
   const [config, setConfig] = useState<SystemConfig>(systemConfig);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    Object.assign(systemConfig, config);
-    toast({
-      title: "Đã lưu cấu hình",
-      description: "Các thay đổi đã được áp dụng thành công",
-    });
-    console.log("Updated system config:", systemConfig);
+  // Membership tiers from DB (ids are needed for PUT)
+  const [dbTiers, setDbTiers] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchSettings();
+    fetchMemberships();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true);
+      const res = await apiCall<{ success: boolean; data: any }>(
+        API_ENDPOINTS.SETTINGS,
+      );
+      if (res.success && res.data) {
+        const dbConfig = res.data;
+        const mappedConfig: Partial<SystemConfig> = {};
+        if (dbConfig.curfew_u13) mappedConfig.curfewTimeU13 = dbConfig.curfew_u13.substring(0, 5);
+        if (dbConfig.curfew_u16) mappedConfig.curfewTimeU16 = dbConfig.curfew_u16.substring(0, 5);
+        if (dbConfig.min_vietnamese_quota) mappedConfig.minVietnameseQuota = Number(dbConfig.min_vietnamese_quota);
+        if (dbConfig.seat_hold_duration) mappedConfig.seatHoldDuration = Math.max(1, Math.floor(Number(dbConfig.seat_hold_duration) / 60));
+        if (dbConfig.cleanup_duration) mappedConfig.defaultCleanupDuration = Number(dbConfig.cleanup_duration);
+        if (dbConfig.loyalty_points_rate) mappedConfig.loyaltyPointsRate = Number(dbConfig.loyalty_points_rate);
+        setConfig(prev => ({ ...prev, ...mappedConfig }));
+      }
+    } catch (error) {
+      toast({ title: "Lỗi tải cấu hình", description: "Không thể lấy cấu hình mới nhất từ máy chủ", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMemberships = async () => {
+    try {
+      const res = await apiCall<{ success: boolean; data: { memberships: any[] } }>(
+        API_ENDPOINTS.MEMBERSHIPS,
+      );
+      if (res.success && res.data?.memberships) {
+        const tiers = res.data.memberships;
+        setDbTiers(tiers);
+        // Map DB tiers → local config keys (bronze/silver/gold/platinum by order)
+        const tierNames = ["bronze", "silver", "gold", "platinum"];
+        const sortedTiers = [...tiers].sort((a, b) => Number(a.min_points_required) - Number(b.min_points_required));
+        const mappedTiers: Record<string, { minSpent: number; discount: number }> = {};
+        sortedTiers.forEach((t, i) => {
+          mappedTiers[tierNames[i]] = {
+            minSpent: Number(t.min_points_required),
+            discount: Number(t.discount_rate),
+          };
+        });
+        setConfig(prev => ({ ...prev, membershipTiers: { ...prev.membershipTiers, ...mappedTiers } }));
+      }
+    } catch (error) {
+      console.error("Failed to load memberships:", error);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+
+      // 1. Save system_configs (giờ giới nghiêm, booking, loyalty rate, vietnamese quota)
+      const payload = {
+        curfew_u13: config.curfewTimeU13 + ":00",
+        curfew_u16: config.curfewTimeU16 + ":00",
+        min_vietnamese_quota: config.minVietnameseQuota,
+        seat_hold_duration: config.seatHoldDuration * 60,
+        cleanup_duration: config.defaultCleanupDuration,
+        loyalty_points_rate: config.loyaltyPointsRate,
+      };
+
+      const settingsRes = await apiCall<{ success: boolean; message: string }>(
+        API_ENDPOINTS.SETTINGS,
+        { method: "PUT", body: JSON.stringify(payload) }
+      );
+      if (!settingsRes.success) throw new Error(settingsRes.message || "Lỗi lưu system settings");
+
+      // 2. Save membership tiers → bảng memberships
+      const tierNames = ["bronze", "silver", "gold", "platinum"];
+      const sortedDbTiers = [...dbTiers].sort((a, b) => Number(a.min_points_required) - Number(b.min_points_required));
+      const tiersPayload = sortedDbTiers.map((dbTier, i) => ({
+        id: dbTier.id,
+        min_points_required: config.membershipTiers[tierNames[i] as keyof typeof config.membershipTiers]?.minSpent ?? dbTier.min_points_required,
+        discount_rate: config.membershipTiers[tierNames[i] as keyof typeof config.membershipTiers]?.discount ?? dbTier.discount_rate,
+      }));
+
+      const memberRes = await apiCall<{ success: boolean; message: string }>(
+        API_ENDPOINTS.MEMBERSHIPS,
+        { method: "PUT", body: JSON.stringify({ tiers: tiersPayload }) }
+      );
+      if (!memberRes.success) throw new Error(memberRes.message || "Lỗi lưu membership tiers");
+
+      Object.assign(systemConfig, config);
+      toast({ title: "Đã lưu cấu hình", description: "Cấu hình hệ thống và hạng thành viên đã được cập nhật thành công" });
+
+    } catch (error: any) {
+      toast({ title: "Lỗi khi lưu", description: error.message || "Không thể cập nhật cấu hình hệ thống", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateConfig = (key: string, value: any) => {
@@ -364,9 +460,9 @@ const AdminSettings: React.FC = () => {
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <Button onClick={handleSave} size="lg" className="gap-2">
-            <Save className="w-4 h-4" />
-            Lưu Cấu Hình
+          <Button onClick={handleSave} size="lg" className="gap-2" disabled={saving || loading}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? "Đang lưu..." : "Lưu Cấu Hình"}
           </Button>
         </div>
       </div>

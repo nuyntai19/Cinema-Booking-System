@@ -138,6 +138,12 @@ $router->post('/api/users/:id/upload-avatar', 'UserController@uploadAvatar'); //
 $router->get('/api/roles', 'RoleController@index'); // Get all roles
 
 // ============================================
+// SETTINGS ROUTES
+// ============================================
+$router->get('/api/settings', 'SystemConfigController@getSettings');
+$router->put('/api/settings', 'SystemConfigController@updateSettings'); // Admin/Manager
+
+// ============================================
 // CUSTOMER ROUTES (POS - Khách Vãng Lai)
 // ============================================
 $router->post('/api/customers/lookup-or-create', 'CustomerController@lookupOrCreate'); // Staff - POS
@@ -251,6 +257,7 @@ $router->get('/api/loyalty/points/:userId', 'LoyaltyController@getCurrentPoints'
 $router->post('/api/loyalty/earn', 'LoyaltyController@earnPoints');
 $router->post('/api/loyalty/redeem', 'LoyaltyController@redeemPoints');
 $router->get('/api/memberships', 'MembershipController@index');
+$router->put('/api/memberships', 'MembershipController@update');
 $router->get('/api/memberships/user/:userId', 'MembershipController@getUserTier');
 $router->get('/api/memberships/check-upgrade/:userId', 'MembershipController@checkUpgrade');
 $router->get('/api/memberships/:id', 'MembershipController@show');

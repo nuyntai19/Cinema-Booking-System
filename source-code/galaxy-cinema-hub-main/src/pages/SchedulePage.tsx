@@ -37,8 +37,13 @@ const SchedulePage: React.FC = () => {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const { setSelectedMovie, setSelectedShowtime } = useBooking();
+  const getLocalDateString = (d: Date) => {
+    const tzOffsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().split("T")[0];
+  };
+
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    getLocalDateString(new Date())
   );
   const [selectedCinema, setSelectedCinema] = useState<string>("all");
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
@@ -157,7 +162,7 @@ const SchedulePage: React.FC = () => {
           </h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {dates.map((date) => {
-              const dateStr = date.toISOString().split("T")[0];
+              const dateStr = getLocalDateString(date);
               const isSelected = selectedDate === dateStr;
               return (
                 <button

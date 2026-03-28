@@ -22,7 +22,13 @@ class Showtime
      */
     private function getCleanupDurationMinutes()
     {
-        $minutes = (int) (Config::$showtime_cleanup_minutes ?? 15);
+        // Read from system_configs (dynamic), fallback to Config.php
+        try {
+            $configModel = new SystemConfig();
+            $minutes = (int) $configModel->get('cleanup_duration', Config::$showtime_cleanup_minutes ?? 15);
+        } catch (Exception $e) {
+            $minutes = (int) (Config::$showtime_cleanup_minutes ?? 15);
+        }
         return $minutes > 0 ? $minutes : 15;
     }
 
@@ -353,7 +359,13 @@ class Showtime
             $vietnamese = (int) $stmt->fetch(PDO::FETCH_ASSOC)['vn_count'];
 
             $percentage = $total > 0 ? ($vietnamese / $total) * 100 : 100;
-            $minQuota = Config::$min_vietnamese_quota ?? 15;
+            // Read quota from system_configs (dynamic), fallback to 15
+            try {
+                $configModel = new SystemConfig();
+                $minQuota = (float) $configModel->get('min_vietnamese_quota', 15);
+            } catch (Exception $ce) {
+                $minQuota = Config::$min_vietnamese_quota ?? 15;
+            }
 
             return [
                 'total' => $total,

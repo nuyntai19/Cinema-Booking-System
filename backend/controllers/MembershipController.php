@@ -160,4 +160,31 @@ class MembershipController {
             return Response::error('Lỗi: '.$e->getMessage(), 500);
         }
     }
+
+    /**
+     * PUT /api/memberships
+     * Bulk update membership tiers (min_points_required, discount_rate)
+     */
+    public function update() {
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $tiers = $input['tiers'] ?? null;
+
+            if (!$tiers || !is_array($tiers)) {
+                return Response::error('Dữ liệu không hợp lệ. Cần truyền mảng tiers.', 400);
+            }
+
+            $ok = $this->membershipModel->updateAll($tiers);
+            if (!$ok) {
+                return Response::error('Không thể cập nhật hạng thành viên', 500);
+            }
+
+            return Response::success([
+                'message'     => 'Cập nhật hạng thành viên thành công',
+                'memberships' => $this->membershipModel->getAll(),
+            ]);
+        } catch (Exception $e) {
+            return Response::error('Lỗi: ' . $e->getMessage(), 500);
+        }
+    }
 }

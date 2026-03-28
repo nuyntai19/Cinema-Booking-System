@@ -247,10 +247,17 @@ class ShowtimeController
             $date = date('Y-m-d', strtotime($startTime));
             $quota = $this->showtimeModel->checkVietnameseQuota($cinemaId, $date);
 
-            // Nếu thêm phim ngoại mà tỷ lệ phim Việt sẽ dưới 15% → cảnh báo
+            // Nếu thêm phim ngoại mà tỷ lệ phim Việt sẽ dưới ngưỡng tối thiểu → từ chối
             if ($movie['origin'] === 'International' && !$quota['passed']) {
+                // Read current quota setting for error message
+                try {
+                    $configModel = new SystemConfig();
+                    $minQuotaDisplay = (float) $configModel->get('min_vietnamese_quota', 15);
+                } catch (Exception $ce) {
+                    $minQuotaDisplay = Config::$min_vietnamese_quota ?? 15;
+                }
                 return Response::error(
-                    "Tỷ lệ phim Việt (" . $quota['percentage'] . "%) dưới mức tối thiểu 15%. Vui lòng thêm suất chiếu phim Việt trước.",
+                    "Tỷ lệ phim Việt (" . $quota['percentage'] . "%) dưới mức tối thiểu " . $minQuotaDisplay . "%. Vui lòng thêm suất chiếu phim Việt trước.",
                     400
                 );
             }
@@ -858,7 +865,13 @@ class ShowtimeController
                             break;
                         }
 
-                        $minQuota = Config::$min_vietnamese_quota ?? 15;
+                        // Read quota from DB dynamically
+                        try {
+                            $configModel = new SystemConfig();
+                            $minQuota = (float) $configModel->get('min_vietnamese_quota', 15);
+                        } catch (Exception $ce) {
+                            $minQuota = Config::$min_vietnamese_quota ?? 15;
+                        }
                         $requiredVNAfterAdd = (int) ceil((($dailyTotal + 1) * $minQuota) / 100);
                         $mustPickVietnam = $dailyVN < $requiredVNAfterAdd;
 

@@ -49,6 +49,37 @@ import StaffScanHistory from "./pages/staff/StaffScanHistory";
 import StaffPaymentHistory from "./pages/staff/StaffPaymentHistory";
 import NotFound from "./pages/NotFound";
 
+import { useEffect } from "react";
+import { apiCall, API_ENDPOINTS } from "@/lib/api";
+import { systemConfig } from "@/data/mockData";
+
+const SettingsLoader = () => {
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await apiCall<{ success: boolean; data: any }>(
+          API_ENDPOINTS.SETTINGS,
+        );
+        if (res.success && res.data) {
+          const dbConfig = res.data;
+          if (dbConfig.curfew_u13) systemConfig.curfewTimeU13 = dbConfig.curfew_u13.substring(0, 5);
+          if (dbConfig.curfew_u16) systemConfig.curfewTimeU16 = dbConfig.curfew_u16.substring(0, 5);
+          if (dbConfig.min_vietnamese_quota) systemConfig.minVietnameseQuota = Number(dbConfig.min_vietnamese_quota);
+          if (dbConfig.seat_hold_duration) systemConfig.seatHoldDuration = Math.max(1, Math.floor(Number(dbConfig.seat_hold_duration) / 60));
+          if (dbConfig.cleanup_duration) systemConfig.defaultCleanupDuration = Number(dbConfig.cleanup_duration);
+          if (dbConfig.loyalty_points_rate) systemConfig.loyaltyPointsRate = Number(dbConfig.loyalty_points_rate);
+          
+          console.log("System config loaded from DB:", systemConfig);
+        }
+      } catch (error) {
+        console.error("Failed to load system settings", error);
+      }
+    };
+    void fetchSettings();
+  }, []);
+  return null;
+};
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -60,6 +91,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <SettingsLoader />
               <BookingFlowGuard />
               <Routes>
                 {/* Client Routes */}

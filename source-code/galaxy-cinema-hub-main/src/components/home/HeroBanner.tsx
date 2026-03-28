@@ -36,11 +36,20 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
     const fetchBanners = async () => {
       try {
         const res = await apiCall<{ success: boolean; data: { posters: any[] } }>(API_ENDPOINTS.POSTERS);
-        if (res.success && res.data?.posters?.length > 0) {
-          setActiveSlides(res.data.posters);
+        if (res.success && res.data?.posters) {
+          // Lọc ra những banner đang mở (is_active = true)
+          const activePosters = res.data.posters.filter((p: any) => p.is_active === true);
+          
+          if (activePosters.length > 0) {
+            setActiveSlides(activePosters);
+          } else {
+            // Nếu tắt hết banner thì khôi phục lại ảnh cũ mặc định
+            setActiveSlides(defaultSlides);
+          }
         }
       } catch (err) {
         // keep default
+        setActiveSlides(defaultSlides);
       }
     };
     fetchBanners();

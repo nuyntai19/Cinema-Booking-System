@@ -23,6 +23,9 @@ export const API_ENDPOINTS = {
     ME: "/auth/me",
   },
 
+  // Settings
+  SETTINGS: "/settings",
+
   // Tickets
   TICKETS: {
     GET_BY_CODE: (code: string) => `/tickets/code/${code}`,

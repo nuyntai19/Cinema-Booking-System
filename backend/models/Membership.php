@@ -53,4 +53,28 @@ class Membership {
         }
         return 0.0;
     }
+
+    /**
+     * Bulk update membership tiers (by id)
+     * @param array $tiers - [{id, min_points_required, discount_rate}, ...]
+     * @return bool
+     */
+    public function updateAll($tiers) {
+        try {
+            $stmt = $this->db->prepare(
+                "UPDATE {$this->table} SET min_points_required = :points, discount_rate = :discount WHERE id = :id"
+            );
+            foreach ($tiers as $tier) {
+                $stmt->execute([
+                    ':points'   => (int) ($tier['min_points_required'] ?? 0),
+                    ':discount' => (float) ($tier['discount_rate'] ?? 0),
+                    ':id'       => (int) $tier['id'],
+                ]);
+            }
+            return true;
+        } catch (PDOException $e) {
+            error_log('Membership UpdateAll Error: ' . $e->getMessage());
+            return false;
+        }
+    }
 }

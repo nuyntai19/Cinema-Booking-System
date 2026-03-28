@@ -50,8 +50,17 @@ class LoyaltyHistory {
     }
 
     public static function calculatePoints($amount) {
-        // amount / 10000 = 1 point (round down)
-        return (int)floor($amount / 10000);
+        // Read rate from system_configs (dynamic), fallback to 10000
+        $rate = 10000;
+        try {
+            require_once __DIR__ . '/../models/SystemConfig.php';
+            $configModel = new SystemConfig();
+            $dbRate = (int) $configModel->get('loyalty_points_rate', 10000);
+            if ($dbRate > 0) $rate = $dbRate;
+        } catch (Exception $e) {
+            // Fallback: keep default
+        }
+        return (int)floor($amount / $rate);
     }
 
     public function getTotalPoints($userId) {

@@ -87,9 +87,11 @@ export interface Concession {
   id: string;
   name: string;
   price: number;
+  image_url?: string;
   imageUrl?: string;
   category?: string;
-  isAvailable: boolean;
+  isAvailable?: boolean;
+  is_available?: boolean | number;
   createdAt: string;
 }
 

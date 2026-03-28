@@ -110,7 +110,7 @@ const SeatSelectionPage: React.FC = () => {
   };
 
   const [seatMap, setSeatMap] = useState<Seat[][]>([]);
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(systemConfig.seatHoldDuration * 60);
   const [ageWarningOpen, setAgeWarningOpen] = useState(false);
   const [curfewWarningOpen, setCurfewWarningOpen] = useState(false);
   const [ageValidation, setAgeValidation] = useState<ValidationError | null>(
@@ -377,9 +377,18 @@ const SeatSelectionPage: React.FC = () => {
     };
   }, [selectedShowtime, searchParams, user, addSeat, removeSeat]);
 
+  // Track if we've synced the async config load
+  const hasSyncedConfig = useRef(false);
+
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
+      // If systemConfig was updated asynchronously by SettingsLoader (e.g. on F5 reload)
+      if (!hasSyncedConfig.current && systemConfig.seatHoldDuration !== 5) {
+        setTimeLeft(systemConfig.seatHoldDuration * 60);
+        hasSyncedConfig.current = true;
+      }
+
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);

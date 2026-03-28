@@ -194,7 +194,7 @@ const AdminScheduler: React.FC = () => {
           API_ENDPOINTS.CINEMAS,
         ),
         apiCall<{ success: boolean; data: { showtimes: BackendShowtime[] } }>(
-          `${API_ENDPOINTS.SHOWTIMES}?limit=200`,
+          `${API_ENDPOINTS.SHOWTIMES}?limit=5000`,
         ),
       ]);
 
@@ -204,6 +204,7 @@ const AdminScheduler: React.FC = () => {
       const backendShowtimes = showtimesRes.data?.showtimes || [];
       const mapped: Showtime[] = backendShowtimes.map((s) => {
         const startDate = new Date(s.start_time);
+        const tzOffsetMs = startDate.getTimezoneOffset() * 60000;
         return {
           id: String(s.id),
           movieId: String(s.movie_id),
@@ -212,8 +213,8 @@ const AdminScheduler: React.FC = () => {
           cinemaName: s.cinema_name,
           hallId: String(s.cinema_hall_id),
           room: s.hall_name,
-          date: startDate.toISOString().split("T")[0],
-          time: startDate.toTimeString().slice(0, 5),
+          date: new Date(startDate.getTime() - tzOffsetMs).toISOString().split("T")[0],
+          time: startDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
           price: s.base_price || 90000,
           availableSeats: s.total_seats || 0,
           totalSeats: s.total_seats || 0,

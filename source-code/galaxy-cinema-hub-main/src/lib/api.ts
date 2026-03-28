@@ -14,6 +14,9 @@ export const API_ENDPOINTS = {
   FORGOT_PASSWORD: `${API_BASE_URL}/api/auth/forgot-password`,
   RESET_PASSWORD: `${API_BASE_URL}/api/auth/reset-password`,
 
+  // Settings
+  SETTINGS: `${API_BASE_URL}/api/settings`,
+
   // Users
   USERS: `${API_BASE_URL}/api/users`,
   USER_PROFILE: (id: number) => `${API_BASE_URL}/api/users/${id}/profile`,
