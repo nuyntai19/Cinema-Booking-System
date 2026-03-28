@@ -320,6 +320,82 @@ class MovieController
     }
 
     /**
+     * POST /api/movies/import
+     * Nhập nhiều phim từ Excel (dạng mảng JSON)
+     * Authorization: Admin/Manager only
+     */
+    public function import()
+    {
+        try {
+            if (!$this->isAdminOrManager()) {
+                return Response::error('Không có quyền truy cập', 403);
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+
+            if (!is_array($input) || empty($input)) {
+                return Response::error('Dữ liệu không hợp lệ hoặc rỗng', 400);
+            }
+
+            $successCount = 0;
+            $errors = [];
+
+            foreach ($input as $index => $item) {
+                try {
+                    $requiredFields = ['title', 'duration', 'release_date', 'origin'];
+                    $valid = true;
+                    foreach ($requiredFields as $field) {
+                        if (empty($item[$field])) {
+                            $errors[] = "Dòng " . ($index + 1) . ": Thiếu trường bắt buộc '{$field}'";
+                            $valid = false;
+                            break;
+                        }
+                    }
+                    if (!$valid) continue;
+
+                    // Enforce required fields
+                    $director = trim((string)($item['director'] ?? ''));
+                    $cast = trim((string)($item['cast'] ?? ''));
+                    if ($director === '' || $cast === '') {
+                        $errors[] = "Dòng " . ($index + 1) . ": Phim '{$item['title']}' thiếu đạo diễn hoặc diễn viên";
+                        continue;
+                    }
+                    
+                    if (!isset($item['status'])) {
+                        $item['status'] = 'Coming Soon';
+                    }
+
+                    $item['director'] = $director;
+                    $item['cast'] = $cast;
+                    
+                    if (isset($item['duration'])) {
+                        $item['duration'] = (int)$item['duration'];
+                    }
+
+                    $movieId = $this->movieModel->create($item);
+                    if ($movieId) {
+                        $successCount++;
+                    } else {
+                        $errors[] = "Dòng " . ($index + 1) . ": Không thể lưu phim '{$item['title']}'";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Dòng " . ($index + 1) . ": Lỗi khi lưu phim '{$item['title']}' - " . $e->getMessage();
+                }
+            }
+
+            return Response::success([
+                'message' => "Import hoàn tất: Thành công $successCount, Thất bại " . count($errors),
+                'success_count' => $successCount,
+                'errors' => $errors
+            ], 200);
+
+        } catch (Exception $e) {
+            error_log("MovieController Import Error: " . $e->getMessage());
+            return Response::error('Lỗi khi import danh sách phim', 500);
+        }
+    }
+
+    /**
      * PUT /api/movies/{id}
      * Cập nhật phim
      * Authorization: Admin/Manager only

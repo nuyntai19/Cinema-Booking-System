@@ -66,14 +66,10 @@ class Genre {
      */
     public function create($data) {
         try {
-            $query = "INSERT INTO {$this->table} (name, description) 
-                      VALUES (:name, :description)";
+            $query = "INSERT INTO {$this->table} (name) VALUES (:name)";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':name', $data['name']);
-            
-            $description = $data['description'] ?? null;
-            $stmt->bindParam(':description', $description);
             
             if ($stmt->execute()) {
                 return $this->db->lastInsertId();
@@ -92,18 +88,11 @@ class Genre {
      */
     public function update($id, $data) {
         try {
-            $query = "UPDATE {$this->table} SET 
-                      name = :name,
-                      description = :description,
-                      updated_at = CURRENT_TIMESTAMP
-                      WHERE id = :id";
+            $query = "UPDATE {$this->table} SET name = :name WHERE id = :id";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
             $stmt->bindParam(':name', $data['name']);
-            
-            $description = $data['description'] ?? null;
-            $stmt->bindParam(':description', $description);
             
             return $stmt->execute();
             

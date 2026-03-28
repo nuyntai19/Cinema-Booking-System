@@ -99,6 +99,66 @@ class ConcessionController
     }
 
     /**
+     * Nhập nhiều concession từ Excel (Manager)
+     * POST /api/concessions/import
+     * Body: [{ "name": "Combo 1", "price": 89000, "category": "Combo", "image_url": "..." }]
+     */
+    public function import()
+    {
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+
+            if (!is_array($input) || empty($input)) {
+                Response::error('Dữ liệu không hợp lệ hoặc rỗng', 400);
+            }
+
+            $successCount = 0;
+            $errors = [];
+
+            foreach ($input as $index => $item) {
+                try {
+                    if (empty($item['name'])) {
+                        $errors[] = "Dòng " . ($index + 1) . ": Thiếu tên sản phẩm";
+                        continue;
+                    }
+
+                    if (empty($item['price']) || !is_numeric($item['price']) || $item['price'] <= 0) {
+                        $errors[] = "Dòng " . ($index + 1) . ": Giá sản phẩm không hợp lệ";
+                        continue;
+                    }
+
+                    $data = [
+                        'name' => trim($item['name']),
+                        'price' => floatval($item['price']),
+                        'category' => $item['category'] ?? null,
+                        'image_url' => $item['image_url'] ?? null,
+                        'is_available' => isset($item['is_available']) ? (bool)$item['is_available'] : true
+                    ];
+
+                    $concessionId = $this->concessionModel->create($data);
+
+                    if ($concessionId) {
+                        $successCount++;
+                    } else {
+                        $errors[] = "Dòng " . ($index + 1) . ": Không thể tạo sản phẩm '{$item['name']}'";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Dòng " . ($index + 1) . ": Lỗi khi lưu '{$item['name']}' - " . $e->getMessage();
+                }
+            }
+
+            Response::success([
+                'message' => "Import hoàn tất: Thành công $successCount, Thất bại " . count($errors),
+                'success_count' => $successCount,
+                'errors' => $errors
+            ], 200);
+
+        } catch (Exception $e) {
+            Response::serverError('Lỗi khi import danh sách: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Cập nhật concession (Manager)
      * PUT /api/concessions/:id
      */

@@ -144,12 +144,18 @@ class Booking {
     public function getById($id) {
         $stmt = $this->db->prepare(
             "SELECT b.*, s.start_time, s.end_time, s.cinema_hall_id, m.title AS movie_title, m.duration_minutes,
-                    c.name AS cinema_name, h.name AS hall_name
+                    c.name AS cinema_name, h.name AS hall_name,
+                    COALESCE(up.full_name, pc.name, CONCAT('User #', COALESCE(b.user_id, 'null'))) AS customer_name,
+                    COALESCE(u.email, CASE WHEN pc.phone IS NOT NULL THEN CONCAT(pc.phone, '@guest.local') ELSE '-' END) AS customer_email,
+                    COALESCE(pc.phone, up.phone, '-') AS customer_phone
              FROM bookings b
              JOIN showtimes s ON b.showtime_id = s.id
              JOIN movies m ON s.movie_id = m.id
              JOIN cinema_halls h ON s.cinema_hall_id = h.id
              JOIN cinemas c ON h.cinema_id = c.id
+             LEFT JOIN users u ON u.id = b.user_id
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             LEFT JOIN pos_customers pc ON pc.id = b.guest_customer_id
              WHERE b.id = :id"
         );
         $stmt->execute([':id' => $id]);

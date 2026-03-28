@@ -133,6 +133,19 @@ CREATE TABLE movie_genres (
     FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Bảng Poster Trang Chủ (Hero Banner)
+CREATE TABLE home_posters (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NULL COMMENT 'Tên chiến dịch/banner (tùy chọn)',
+    image_url VARCHAR(500) NOT NULL COMMENT 'Đường dẫn ảnh đã upload lên Cloudinary',
+    target_url VARCHAR(500) NULL COMMENT 'Link điều hướng khi user click',
+    display_order INT DEFAULT 0 COMMENT 'Thứ tự ưu tiên hiển thị (số lớn hiển thị trước hoặc sau tùy chuẩn)',
+    is_active BOOLEAN DEFAULT TRUE COMMENT 'Mở/tắt banner',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_active_order (is_active, display_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Bảng Cụm Rạp
 CREATE TABLE cinemas (
     id INT AUTO_INCREMENT PRIMARY KEY,
