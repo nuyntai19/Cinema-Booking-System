@@ -1,3 +1,5 @@
+USE galaxy_cinema;
+
 -- Migration: Add POS guest customer support
 -- Run once on existing database (or re-run safely on MySQL 8+)
 

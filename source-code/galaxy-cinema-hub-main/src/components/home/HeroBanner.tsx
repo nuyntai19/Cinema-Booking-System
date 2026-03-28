@@ -2,7 +2,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-import { apiCall, API_ENDPOINTS } from '@/lib/api';
+import { apiCall, API_ENDPOINTS, getImageUrl } from '@/lib/api';
 
 interface HeroBannerProps {
   slides?: {
@@ -58,7 +58,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + activeSlides.length) % activeSlides.length);
 
   return (
-    <div className="relative w-full h-[300px] sm:h-[400px] lg:h-[500px] overflow-hidden bg-secondary">
+    <div className="relative w-full aspect-[2.4/1] sm:aspect-[2.2/1] lg:aspect-[2/1] max-h-[750px] overflow-hidden bg-secondary">
       {/* Slides */}
       <div
         className="flex transition-transform duration-700 ease-out h-full"
@@ -73,7 +73,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
             }}
           >
             <img
-              src={slide.image_url}
+              src={getImageUrl(slide.image_url)}
               alt={slide.title || `Slide ${index + 1}`}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />

@@ -86,11 +86,27 @@ class PosterController
                 return;
             }
 
-            $imageUrl = CloudinaryUploader::upload($_FILES['poster_image']['tmp_name']);
+            $publicId = 'poster_' . time() . '_' . rand(1000, 9999);
+            $imageUrl = CloudinaryUploader::uploadImage($_FILES['poster_image']['tmp_name'], $publicId, 'posters');
             
             if (!$imageUrl) {
-                Response::error('Lỗi khi upload ảnh lên Cloudinary', 500);
-                return;
+                $file = $_FILES['poster_image'];
+                $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $ifEmptyExt = $extension ? '.' . $extension : '';
+                $filename = $publicId . $ifEmptyExt;
+                
+                $uploadDir = __DIR__ . '/../uploads/posters/';
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                $filePath = $uploadDir . $filename;
+                if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+                    Response::error('Lỗi khi lưu ảnh xuống máy chủ local (do cấu hình Cloudinary chưa bật)', 500);
+                    return;
+                }
+                
+                $imageUrl = 'uploads/posters/' . $filename;
             }
 
             $data = [
@@ -147,7 +163,26 @@ class PosterController
 
             // Nếu admin có đẩy file thay thế ảnh
             if (isset($_FILES['poster_image']) && $_FILES['poster_image']['error'] === UPLOAD_ERR_OK) {
-                $newImageUrl = CloudinaryUploader::upload($_FILES['poster_image']['tmp_name']);
+                $publicId = 'poster_' . time() . '_' . rand(1000, 9999);
+                $newImageUrl = CloudinaryUploader::uploadImage($_FILES['poster_image']['tmp_name'], $publicId, 'posters');
+                
+                if (!$newImageUrl) {
+                    $file = $_FILES['poster_image'];
+                    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                    $ifEmptyExt = $extension ? '.' . $extension : '';
+                    $filename = $publicId . $ifEmptyExt;
+                    
+                    $uploadDir = __DIR__ . '/../uploads/posters/';
+                    if (!file_exists($uploadDir)) {
+                        mkdir($uploadDir, 0777, true);
+                    }
+                    
+                    $filePath = $uploadDir . $filename;
+                    if (move_uploaded_file($file['tmp_name'], $filePath)) {
+                        $newImageUrl = 'uploads/posters/' . $filename;
+                    }
+                }
+
                 if ($newImageUrl) {
                     $imageUrl = $newImageUrl;
                 }

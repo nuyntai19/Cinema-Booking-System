@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Image as ImageIcon, Plus, Trash2, Edit, Upload, GripVertical, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiCall } from "@/lib/api";
+import { apiCall, getImageUrl } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/api";
 
 interface Poster {
@@ -212,7 +212,7 @@ export const AdminHeroBanner: React.FC = () => {
                 <div key={poster.id} className="flex gap-4 p-4 border rounded-lg bg-card items-center shadow-sm relative overflow-hidden">
                   <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-full text-xs font-bold shrink-0">{idx + 1}</div>
                   <div className="h-20 w-48 shrink-0 bg-muted rounded overflow-hidden shadow-inner hidden sm:block">
-                     <img src={poster.image_url} alt="Banner" className={`w-full h-full object-cover ${!poster.is_active && 'opacity-50 grayscale'}`} />
+                     <img src={getImageUrl(poster.image_url)} alt="Banner" className={`w-full h-full object-cover ${!poster.is_active && 'opacity-50 grayscale'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className={`font-semibold truncate ${!poster.is_active && 'text-muted-foreground'}`}>{poster.title || "Không có tiêu đề"}</h4>
@@ -257,7 +257,7 @@ export const AdminHeroBanner: React.FC = () => {
                 >
                     {previewUrl ? (
                       <div className="relative w-full aspect-[21/9] rounded overflow-hidden shadow-md">
-                         <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                         <img src={previewUrl.startsWith("blob:") ? previewUrl : getImageUrl(previewUrl)} alt="Preview" className="w-full h-full object-cover" />
                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                             <Upload className="w-8 h-8 text-white mb-2" />
                             <span className="text-white font-medium text-sm">Bấm để thay đổi ảnh</span>

@@ -164,9 +164,11 @@ export const apiCall = async <T = unknown>(
     );
   }
 
-  const defaultHeaders: HeadersInit = {
-    "Content-Type": "application/json",
-  };
+  const defaultHeaders: Record<string, string> = {};
+
+  if (!(options?.body instanceof FormData)) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
 
   if (token) {
     defaultHeaders["Authorization"] = `Bearer ${token}`;
@@ -232,6 +234,10 @@ export const getImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Already full URL
   }
+  
+  // Remove leading slash to prevent double slashes (e.g. http://localhost:8000//uploads...)
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  
   // Relative path - prepend API base URL
-  return `${API_BASE_URL}/${path}`;
+  return `${API_BASE_URL}/${cleanPath}`;
 };
