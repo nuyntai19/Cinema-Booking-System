@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import LocationPickerMap from "@/components/cinema/LocationPickerMap";
 
 
 interface Cinema {
@@ -144,6 +145,8 @@ const AdminCinemas: React.FC = () => {
     city: "Thành phố Hồ Chí Minh",
     hotline: "",
     manager: "",
+    lat: null as number | null,
+    lng: null as number | null,
   });
 
   const filteredCinemas = cinemas.filter((cinema) => {
@@ -201,6 +204,8 @@ const AdminCinemas: React.FC = () => {
           district: formData.district,
           city: formData.city,
           hotline: formData.hotline,
+          lat: formData.lat,
+          lng: formData.lng,
         }),
       });
       toast({
@@ -208,7 +213,7 @@ const AdminCinemas: React.FC = () => {
         description: `Đã thêm rạp ${formData.name}`,
       });
       setIsAddDialogOpen(false);
-      setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "" });
+      setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "", lat: null, lng: null });
       // Refresh the list
       await fetchCinemas();
     } catch (error) {
@@ -229,6 +234,8 @@ const AdminCinemas: React.FC = () => {
       city: cinema.city || "Thành phố Hồ Chí Minh",
       hotline: cinema.hotline,
       manager: cinema.manager,
+      lat: cinema.lat,
+      lng: cinema.lng,
     });
     setIsEditDialogOpen(true);
   };
@@ -248,6 +255,8 @@ const AdminCinemas: React.FC = () => {
             district: formData.district,
             city: formData.city,
             hotline: formData.hotline,
+            lat: formData.lat,
+            lng: formData.lng,
           }),
         });
         toast({
@@ -255,7 +264,7 @@ const AdminCinemas: React.FC = () => {
           description: `Đã cập nhật rạp ${formData.name}`,
         });
         setIsEditDialogOpen(false);
-        setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "" });
+        setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "", lat: null, lng: null });
         // Re-fetch from server to ensure UI shows the actual saved data
         await fetchCinemas();
       } catch (error) {
@@ -372,7 +381,7 @@ const AdminCinemas: React.FC = () => {
               Thêm Rạp
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Thêm Rạp Mới</DialogTitle>
               <DialogDescription>
@@ -456,6 +465,14 @@ const AdminCinemas: React.FC = () => {
                     setFormData({ ...formData, manager: e.target.value })
                   }
                   placeholder="Tên quản lý rạp"
+                />
+              </div>
+              <div className="col-span-2 pt-2">
+                <LocationPickerMap 
+                  lat={formData.lat} 
+                  lng={formData.lng} 
+                  onChange={(lat, lng) => setFormData({ ...formData, lat, lng })}
+                  addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
                 />
               </div>
             </div>
@@ -647,7 +664,7 @@ const AdminCinemas: React.FC = () => {
 
       {/* Edit Cinema Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh Sửa Rạp Chiếu</DialogTitle>
             <DialogDescription>
@@ -731,6 +748,14 @@ const AdminCinemas: React.FC = () => {
                   setFormData({ ...formData, manager: e.target.value })
                 }
                 placeholder="Nguyễn Văn A"
+              />
+            </div>
+            <div className="grid gap-2 col-span-2 pt-2">
+              <LocationPickerMap 
+                lat={formData.lat} 
+                lng={formData.lng} 
+                onChange={(lat, lng) => setFormData({ ...formData, lat, lng })}
+                addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
               />
             </div>
           </div>
