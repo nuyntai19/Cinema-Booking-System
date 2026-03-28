@@ -1193,17 +1193,9 @@ const PaymentPage: React.FC = () => {
       <Dialog
         open={showQRModal}
         onOpenChange={(open) => {
-          if (open) {
-            setShowQRModal(true);
-            return;
+          if (!open) {
+            setShowQRModal(false);
           }
-
-          if (!paymentHandledRef.current && currentBookingId) {
-            setShowCancelPaymentConfirm(true);
-            return;
-          }
-
-          setShowQRModal(false);
         }}
       >
         <DialogContent className="sm:max-w-md">
@@ -1257,14 +1249,21 @@ const PaymentPage: React.FC = () => {
               {grandTotal.toLocaleString("vi-VN")}đ
             </p>
             <p className="text-sm text-muted-foreground">
-              Galaxy Cinema - {movie.title}
+              Galaxy Cinema - {movie?.title}
             </p>
           </div>
 
-          <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-4 flex flex-col gap-3">
             <p className="text-xs text-muted-foreground text-center">
               Hệ thống sẽ tự động cập nhật khi {paymentMethod === 'momo' ? 'MoMo' : paymentMethod === 'atm' ? 'VNPay' : paymentMethod.toUpperCase()} xác nhận thanh toán.
             </p>
+            <Button
+              variant="outline"
+              className="w-full text-muted-foreground"
+              onClick={() => setShowQRModal(false)}
+            >
+              Chọn phương thức khác
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
