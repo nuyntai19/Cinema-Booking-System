@@ -9,9 +9,14 @@ class Booking {
         $this->db = $db;
     }
 
-    public function create($userId, $showtimeId, $seatIds, $concessions = [], $userVoucherId = null) {
+    public function create($userId, $showtimeId, $seatIds, $concessions = [], $userVoucherId = null, $guestCustomerId = null) {
         if (empty($seatIds)) {
             throw new Exception('Danh sách ghế không được để trống');
+        }
+
+        // Must provide either userId (authenticated user) or guestCustomerId (POS walk-in)
+        if (!$userId && !$guestCustomerId) {
+            throw new Exception('Phải cung cấp user_id hoặc guest_customer_id');
         }
 
         $showtime = $this->getShowtime($showtimeId);
@@ -41,11 +46,16 @@ class Booking {
             $totalPrice = $pricing['total_price'];
 
             $voucherDiscount = 0;
-            if ($userVoucherId) {
+            // Only apply voucher discount if booking for authenticated user, not guest
+            if ($userVoucherId && $userId) {
                 $voucherDiscount = $this->applyVoucherDiscount($userVoucherId, $userId, $totalPrice);
             }
 
-            $membershipDiscount = $this->applyMembershipDiscount($userId, $totalPrice);
+            $membershipDiscount = 0;
+            // Only apply membership discount if booking for authenticated user, not guest
+            if ($userId) {
+                $membershipDiscount = $this->applyMembershipDiscount($userId, $totalPrice);
+            }
 
             $discountAmount = $voucherDiscount + $membershipDiscount;
             if ($discountAmount > $totalPrice) {
@@ -58,12 +68,13 @@ class Booking {
             $bookingCode = $this->generateBookingCode();
 
             $stmt = $this->db->prepare(
-                "INSERT INTO bookings (booking_code, user_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
-                 VALUES (:booking_code, :user_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
+                "INSERT INTO bookings (booking_code, user_id, guest_customer_id, showtime_id, user_voucher_id, total_price, discount_amount, final_price, status)
+                 VALUES (:booking_code, :user_id, :guest_customer_id, :showtime_id, :user_voucher_id, :total_price, :discount_amount, :final_price, 'Pending')"
             );
             $stmt->execute([
                 ':booking_code' => $bookingCode,
-                ':user_id' => $userId,
+                ':user_id' => $userId ?: null,
+                ':guest_customer_id' => $guestCustomerId ?: null,
                 ':showtime_id' => $showtimeId,
                 ':user_voucher_id' => $userVoucherId ?: null,
                 ':total_price' => $totalPrice,
@@ -72,6 +83,11 @@ class Booking {
             ]);
 
             $bookingId = (int)$this->db->lastInsertId();
+
+            // If guest customer, increment their booking count
+            if ($guestCustomerId) {
+                $this->incrementGuestCustomerBooking($guestCustomerId);
+            }
 
             // Create tickets (HOLDING)
             $holdExpiresAt = date('Y-m-d H:i:s', time() + $this->getSeatHoldDuration());
@@ -265,6 +281,158 @@ class Booking {
         return (int)$row['total'];
     }
 
+    public function getPosPaymentHistory($filters = [], $page = 1, $limit = 20) {
+        $offset = ($page - 1) * $limit;
+        $where = ["b.guest_customer_id IS NOT NULL"];
+        $params = [];
+
+        if (!empty($filters['phone'])) {
+            $where[] = 'pc.phone LIKE :phone';
+            $params[':phone'] = '%' . trim($filters['phone']) . '%';
+        }
+        if (!empty($filters['booking_code'])) {
+            $where[] = 'b.booking_code LIKE :booking_code';
+            $params[':booking_code'] = '%' . trim($filters['booking_code']) . '%';
+        }
+        if (!empty($filters['movie_title'])) {
+            $where[] = 'm.title LIKE :movie_title';
+            $params[':movie_title'] = '%' . trim($filters['movie_title']) . '%';
+        }
+        if (!empty($filters['booking_status'])) {
+            $where[] = 'b.status = :booking_status';
+            $params[':booking_status'] = $filters['booking_status'];
+        }
+        if (!empty($filters['payment_status'])) {
+            $where[] = 'tx.status = :payment_status';
+            $params[':payment_status'] = $filters['payment_status'];
+        }
+        if (!empty($filters['date_from'])) {
+            $where[] = 'DATE(b.created_at) >= :date_from';
+            $params[':date_from'] = $filters['date_from'];
+        }
+        if (!empty($filters['date_to'])) {
+            $where[] = 'DATE(b.created_at) <= :date_to';
+            $params[':date_to'] = $filters['date_to'];
+        }
+
+        $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+        $sql =
+            "SELECT
+                b.id,
+                b.booking_code,
+                b.status AS booking_status,
+                b.total_price,
+                b.final_price,
+                b.created_at,
+                pc.id AS guest_customer_id,
+                pc.phone AS customer_phone,
+                pc.name AS customer_name,
+                s.start_time,
+                m.title AS movie_title,
+                c.name AS cinema_name,
+                h.name AS hall_name,
+                tx.status AS payment_status,
+                tx.payment_method,
+                GROUP_CONCAT(CONCAT(se.row_code, se.number) ORDER BY se.row_code, se.number SEPARATOR ', ') AS seats
+             FROM bookings b
+             JOIN pos_customers pc ON b.guest_customer_id = pc.id
+             JOIN showtimes s ON b.showtime_id = s.id
+             JOIN movies m ON s.movie_id = m.id
+             JOIN cinema_halls h ON s.cinema_hall_id = h.id
+             JOIN cinemas c ON h.cinema_id = c.id
+             LEFT JOIN tickets t ON t.booking_id = b.id
+             LEFT JOIN seats se ON se.id = t.seat_id
+             LEFT JOIN (
+                SELECT t1.booking_id, t1.status, t1.payment_method
+                FROM transactions t1
+                INNER JOIN (
+                    SELECT booking_id, MAX(id) AS max_id
+                    FROM transactions
+                    GROUP BY booking_id
+                ) latest ON latest.max_id = t1.id
+             ) tx ON tx.booking_id = b.id
+             $whereSql
+             GROUP BY
+                b.id, b.booking_code, b.status, b.total_price, b.final_price, b.created_at,
+                pc.id, pc.phone, pc.name,
+                s.start_time, m.title, c.name, h.name,
+                tx.status, tx.payment_method
+             ORDER BY b.created_at DESC
+             LIMIT :limit OFFSET :offset";
+
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function countPosPaymentHistory($filters = []) {
+        $where = ["b.guest_customer_id IS NOT NULL"];
+        $params = [];
+
+        if (!empty($filters['phone'])) {
+            $where[] = 'pc.phone LIKE :phone';
+            $params[':phone'] = '%' . trim($filters['phone']) . '%';
+        }
+        if (!empty($filters['booking_code'])) {
+            $where[] = 'b.booking_code LIKE :booking_code';
+            $params[':booking_code'] = '%' . trim($filters['booking_code']) . '%';
+        }
+        if (!empty($filters['movie_title'])) {
+            $where[] = 'm.title LIKE :movie_title';
+            $params[':movie_title'] = '%' . trim($filters['movie_title']) . '%';
+        }
+        if (!empty($filters['booking_status'])) {
+            $where[] = 'b.status = :booking_status';
+            $params[':booking_status'] = $filters['booking_status'];
+        }
+        if (!empty($filters['payment_status'])) {
+            $where[] = 'tx.status = :payment_status';
+            $params[':payment_status'] = $filters['payment_status'];
+        }
+        if (!empty($filters['date_from'])) {
+            $where[] = 'DATE(b.created_at) >= :date_from';
+            $params[':date_from'] = $filters['date_from'];
+        }
+        if (!empty($filters['date_to'])) {
+            $where[] = 'DATE(b.created_at) <= :date_to';
+            $params[':date_to'] = $filters['date_to'];
+        }
+
+        $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+        $sql =
+            "SELECT COUNT(DISTINCT b.id) AS total
+             FROM bookings b
+             JOIN pos_customers pc ON b.guest_customer_id = pc.id
+             JOIN showtimes s ON b.showtime_id = s.id
+             JOIN movies m ON s.movie_id = m.id
+             LEFT JOIN (
+                SELECT t1.booking_id, t1.status
+                FROM transactions t1
+                INNER JOIN (
+                    SELECT booking_id, MAX(id) AS max_id
+                    FROM transactions
+                    GROUP BY booking_id
+                ) latest ON latest.max_id = t1.id
+             ) tx ON tx.booking_id = b.id
+             $whereSql";
+
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_STR);
+        }
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)($row['total'] ?? 0);
+    }
+
     public function getAll($filters = [], $page = 1, $limit = 20) {
         $offset = ($page - 1) * $limit;
         $where = [];
@@ -341,12 +509,21 @@ class Booking {
     public function confirm($id) {
         $this->db->beginTransaction();
         try {
+            $booking = $this->getById($id);
+            if (!$booking) {
+                throw new Exception('Booking not found');
+            }
+
             $this->updateStatus($id, 'Paid');
 
             $stmt = $this->db->prepare(
                 "UPDATE tickets SET status = 'SOLD', hold_expires_at = NULL WHERE booking_id = :booking_id AND status = 'HOLDING'"
             );
             $stmt->execute([':booking_id' => $id]);
+
+            // Ensure payment transaction history is always present for confirmed bookings
+            // (important for counter/POS cash sales).
+            $this->ensureTransactionForConfirmedBooking($booking);
 
             // Mark voucher used if any
             $stmt = $this->db->prepare("SELECT user_voucher_id FROM bookings WHERE id = :id");
@@ -362,7 +539,6 @@ class Booking {
             // Award loyalty points for this paid booking
             try {
                 require_once __DIR__ . '/LoyaltyHistory.php';
-                $booking = $this->getById($id);
                 if ($booking && !empty($booking['final_price']) && !empty($booking['user_id'])) {
                     $finalPrice = (float)$booking['final_price'];
                     $userId = (int)$booking['user_id'];
@@ -380,7 +556,6 @@ class Booking {
             // Notify this exact account after successful payment.
             try {
                 require_once __DIR__ . '/Notification.php';
-                $booking = $booking ?? $this->getById($id);
                 if ($booking && !empty($booking['user_id'])) {
                     $notification = new Notification();
                     $title = 'Thanh toán thành công';
@@ -401,6 +576,59 @@ class Booking {
         } catch (Exception $e) {
             $this->db->rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Upsert transaction row when booking is confirmed outside gateway verification flow.
+     */
+    private function ensureTransactionForConfirmedBooking($booking) {
+        $bookingId = (int)$booking['id'];
+        $amount = isset($booking['final_price']) ? (float)$booking['final_price'] : (float)($booking['total_price'] ?? 0);
+
+        $select = $this->db->prepare("SELECT id, status FROM transactions WHERE booking_id = :booking_id ORDER BY id DESC LIMIT 1");
+        $select->execute([':booking_id' => $bookingId]);
+        $existing = $select->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existing) {
+            $code = $this->generatePosTransactionCode($bookingId);
+            $insert = $this->db->prepare(
+                "INSERT INTO transactions (booking_id, payment_method, amount, transaction_code, status)
+                 VALUES (:booking_id, 'Cash', :amount, :transaction_code, 'Success')"
+            );
+            $insert->execute([
+                ':booking_id' => $bookingId,
+                ':amount' => $amount,
+                ':transaction_code' => $code,
+            ]);
+            return;
+        }
+
+        if (($existing['status'] ?? '') !== 'Success') {
+            $update = $this->db->prepare("UPDATE transactions SET status = 'Success', amount = :amount, updated_at = NOW() WHERE id = :id");
+            $update->execute([
+                ':amount' => $amount,
+                ':id' => (int)$existing['id'],
+            ]);
+        }
+    }
+
+    private function generatePosTransactionCode($bookingId) {
+        return 'POS-' . date('YmdHis') . '-' . (int)$bookingId . '-' . strtoupper(substr(md5(uniqid((string)$bookingId, true)), 0, 6));
+    }
+
+    /**
+     * Increment guest customer's total bookings count
+     */
+    private function incrementGuestCustomerBooking($guestCustomerId) {
+        try {
+            $update = $this->db->prepare(
+                "UPDATE pos_customers SET total_bookings = total_bookings + 1 WHERE id = :id"
+            );
+            $update->execute([':id' => (int)$guestCustomerId]);
+        } catch (Exception $e) {
+            // Log but don't fail the booking if guest counter fails
+            error_log("Failed to increment guest customer booking count: " . $e->getMessage());
         }
     }
 

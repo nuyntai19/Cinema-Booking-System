@@ -45,6 +45,8 @@ import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
+import StaffScanHistory from "./pages/staff/StaffScanHistory";
+import StaffPaymentHistory from "./pages/staff/StaffPaymentHistory";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -131,6 +133,11 @@ const App = () => (
                   <Route index element={<StaffScanner />} />
                   <Route path="scanner" element={<StaffScanner />} />
                   <Route path="pos" element={<StaffPOS />} />
+                  <Route path="scan-history" element={<StaffScanHistory />} />
+                  <Route
+                    path="payment-history"
+                    element={<StaffPaymentHistory />}
+                  />
                 </Route>
 
                 {/* 404 */}

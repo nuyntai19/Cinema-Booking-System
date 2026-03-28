@@ -40,13 +40,14 @@ class BookingService {
         return $this->bookingModel->getByUserAndShowtime((int)$userId, (int)$showtimeId);
     }
 
-    public function createBooking($userId, $showtimeId, $seatIds, $concessions, $userVoucherId) {
+    public function createBooking($userId, $showtimeId, $seatIds, $concessions, $userVoucherId, $guestCustomerId = null) {
         return $this->bookingModel->create(
-            (int)$userId,
+            $userId ? (int)$userId : null,
             (int)$showtimeId,
             $seatIds,
             $concessions,
-            $userVoucherId ? (int)$userVoucherId : null
+            $userVoucherId ? (int)$userVoucherId : null,
+            $guestCustomerId ? (int)$guestCustomerId : null
         );
     }
 
@@ -63,5 +64,12 @@ class BookingService {
         $total = $this->bookingModel->countUserBookings((int)$userId);
 
         return [$bookings, $total];
+    }
+
+    public function getPosPaymentHistory($filters, $page, $limit) {
+        $items = $this->bookingModel->getPosPaymentHistory($filters, $page, $limit);
+        $total = $this->bookingModel->countPosPaymentHistory($filters);
+
+        return [$items, $total];
     }
 }

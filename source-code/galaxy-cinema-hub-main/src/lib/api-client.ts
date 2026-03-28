@@ -16,6 +16,7 @@ export class ApiError extends Error {
     public message: string,
     public statusCode: number,
     public errors?: Record<string, string>,
+    public data?: any,
   ) {
     super(message);
     this.name = "ApiError";
@@ -105,6 +106,7 @@ class ApiClient {
           "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
           response.status,
           data?.errors,
+          data,
         );
       }
 
@@ -112,6 +114,7 @@ class ApiClient {
         data?.message || "An error occurred",
         response.status,
         data?.errors,
+        data,
       );
     }
 

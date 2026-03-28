@@ -369,11 +369,23 @@ const AdminMovies: React.FC = () => {
     if (!selectedMovie) return;
 
     try {
+      const director = formData.director.trim();
+      const cast = formData.cast.trim();
+
       // Validate required fields
       if (!formData.title || !formData.duration || !formData.release_date) {
         toast({
           title: "Lỗi",
           description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!director || !cast) {
+        toast({
+          title: "Thiếu thông tin bắt buộc",
+          description: "Vui lòng nhập đầy đủ Đạo diễn và Diễn viên trước khi cập nhật phim",
           variant: "destructive",
         });
         return;
@@ -421,8 +433,8 @@ const AdminMovies: React.FC = () => {
         description: formData.description || null,
         release_date: formData.release_date,
         status: formData.status,
-        director: formData.director || null,
-        cast: formData.cast || null,
+        director,
+        cast,
         genre_ids: formData.genre_ids,
       };
 

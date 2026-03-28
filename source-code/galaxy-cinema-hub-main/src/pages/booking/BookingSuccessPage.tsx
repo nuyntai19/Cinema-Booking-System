@@ -118,11 +118,19 @@ const BookingSuccessPage: React.FC = () => {
     : "";
 
   const showtimeDate = showtime?.date || showtime?.start_time || null;
+  const showtimeHall =
+    showtime?.hall ||
+    showtime?.hall_name ||
+    showtime?.room ||
+    showtime?.room_name ||
+    "";
+  const showtimeCinema =
+    showtime?.cinema || showtime?.cinema_name || showtime?.cinemaName || "";
   const showtimeTimeText =
-    showtime?.time && showtime?.hall
-      ? `${showtime.time} - ${showtime.hall}`
+    showtime?.time && showtimeHall
+      ? `${showtime.time} - ${showtimeHall}`
       : showtime?.time || "";
-  const cinemaText = showtime?.cinema || "Galaxy Nguyễn Du";
+  const cinemaText = showtimeCinema || "Đang cập nhật";
 
   const waitForImages = async (container: HTMLElement) => {
     const images = Array.from(container.querySelectorAll("img"));
@@ -193,7 +201,7 @@ const BookingSuccessPage: React.FC = () => {
 
           <div style="margin-top:16px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.28);display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:22px;line-height:1.4;">
             <div><span style="color:#9fb2ee;">Rạp:</span> ${cinemaText}</div>
-            <div><span style="color:#9fb2ee;">Phòng:</span> ${showtime?.hall || "Đang cập nhật"}</div>
+            <div><span style="color:#9fb2ee;">Phòng:</span> ${showtimeHall || "Đang cập nhật"}</div>
             <div><span style="color:#9fb2ee;">Ngày chiếu:</span> ${showtimeDate ? formatDate(showtimeDate) : formatDate(new Date().toISOString())}</div>
             <div><span style="color:#9fb2ee;">Suất chiếu:</span> ${showtime?.time || "Đang cập nhật"}</div>
             <div style="grid-column:1 / -1;"><span style="color:#9fb2ee;">Ghế:</span> ${seatText || "Đang cập nhật"}</div>

@@ -54,6 +54,7 @@ export const API_ENDPOINTS = {
 
   // Bookings
   BOOKINGS: `${API_BASE_URL}/api/bookings`,
+  POS_BOOKING_HISTORY: `${API_BASE_URL}/api/bookings/pos-history`,
   BOOKING_DETAIL: (id: number) => `${API_BASE_URL}/api/bookings/${id}`,
   USER_BOOKINGS: (userId: number) =>
     `${API_BASE_URL}/api/bookings/user/${userId}`,
@@ -111,6 +112,7 @@ export const API_ENDPOINTS = {
   ADMIN_REVENUE: `${API_BASE_URL}/api/admin/revenue`,
   ADMIN_SEAT_HEATMAP: `${API_BASE_URL}/api/admin/seat-heatmap`,
   ADMIN_RECENT_TRANSACTIONS: `${API_BASE_URL}/api/admin/recent-transactions`,
+  ADMIN_TRANSACTIONS: `${API_BASE_URL}/api/admin/transactions`,
 
   // Loyalty
   LOYALTY_POINTS: (userId: number) =>

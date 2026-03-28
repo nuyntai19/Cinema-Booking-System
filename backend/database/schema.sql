@@ -76,6 +76,22 @@ CREATE TABLE loyalty_history (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Bảng Khách Hàng Vãng Lai (POS)
+CREATE TABLE pos_customers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    phone VARCHAR(20) UNIQUE NOT NULL COMMENT 'Số điện thoại khách',
+    name VARCHAR(255) COMMENT 'Tên khách (tuỳ chọn)',
+    guest_customer_code VARCHAR(50) UNIQUE COMMENT 'Mã khách vãng lai (GUEST-...)',
+    total_bookings INT DEFAULT 0 COMMENT 'Số lần mua vé',
+    first_visit_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_by_staff_id INT NULL COMMENT 'Staff tạo bản ghi này',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by_staff_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_phone (phone),
+    INDEX idx_guest_code (guest_customer_code),
+    INDEX idx_first_visit (first_visit_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================
 -- NHÓM 2: PHIM & HẠ TẦNG RẠP
 -- ============================================
@@ -234,7 +250,8 @@ CREATE TABLE user_vouchers (
 -- Bảng Đơn Đặt Vé
 CREATE TABLE bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT NULL COMMENT 'FK -> users nếu user đã đăng nhập, NULL nếu khách vãng lai',
+    guest_customer_id INT NULL COMMENT 'FK -> pos_customers nếu khách vãng lai, NULL nếu user đã đăng nhập',
     showtime_id INT NOT NULL,
     booking_code VARCHAR(20) UNIQUE NOT NULL COMMENT 'Mã đặt vé duy nhất (GXY-YYYY-XXXXX)',
     user_voucher_id INT NULL COMMENT 'FK -> user_vouchers nếu dùng voucher',
@@ -245,9 +262,11 @@ CREATE TABLE bookings (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (guest_customer_id) REFERENCES pos_customers(id) ON DELETE CASCADE,
     FOREIGN KEY (showtime_id) REFERENCES showtimes(id) ON DELETE RESTRICT,
     FOREIGN KEY (user_voucher_id) REFERENCES user_vouchers(id) ON DELETE SET NULL,
     INDEX idx_user (user_id),
+    INDEX idx_guest_customer (guest_customer_id),
     INDEX idx_showtime (showtime_id),
     INDEX idx_status (status),
     INDEX idx_created (created_at),
@@ -271,6 +290,22 @@ CREATE TABLE tickets (
     INDEX idx_seat_status (seat_id, status),
     INDEX idx_ticket_code (ticket_code),
     INDEX idx_hold_expires (hold_expires_at, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Bảng Lịch Sử Duyệt Vé Tại Cổng
+CREATE TABLE ticket_scan_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    ticket_code_input VARCHAR(50) NOT NULL,
+    scanned_by_user_id INT NULL COMMENT 'User staff duyệt vào cổng',
+    scan_result ENUM('APPROVED') NOT NULL DEFAULT 'APPROVED',
+    note VARCHAR(255) NULL,
+    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    FOREIGN KEY (scanned_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_booking_scan_time (booking_id, scanned_at),
+    INDEX idx_scanned_by (scanned_by_user_id),
+    INDEX idx_ticket_code_input (ticket_code_input)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng Bắp Nước

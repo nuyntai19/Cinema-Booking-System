@@ -9,17 +9,27 @@ class BaseController{
         }
         return $data;
     }
-    public static function authorizeUserId($userId) {
+
+    /**
+     * Authorize user ID
+     * @param int $userId User ID to check
+     * @param bool $returnBoolean If true, return bool; if false, throw 403 on fail
+     * @return bool|void Returns bool if $returnBoolean=true, else throws 403
+     */
+    public static function authorizeUserId($userId, $returnBoolean = false) {
         $authUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
         $authRole = $_REQUEST['auth_user_role'] ?? null;
 
-        if ($authRole === 'Admin' || $authRole === 'Manager') {
+        $isAdmin = $authRole === 'Admin' || $authRole === 'Manager' || $authRole === 'Staff';
+        $isSelf = $authUserId === $userId;
+
+        if ($isAdmin || $isSelf) {
+            if ($returnBoolean) return true;
             return;
         }
 
-        if ($authUserId !== $userId) {
-            Response::forbidden('Insufficient permissions');
-        }
+        if ($returnBoolean) return false;
+        Response::forbidden('Insufficient permissions');
     }
 }
 ?>

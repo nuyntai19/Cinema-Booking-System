@@ -262,6 +262,10 @@ const MovieDetailPage: React.FC = () => {
             date: startDate.toISOString().split("T")[0],
             time: startDate.toTimeString().slice(0, 5),
             start_time: s.start_time,
+            hall: s.hall_name,
+            cinema: s.cinema_name,
+            hall_name: s.hall_name,
+            cinema_name: s.cinema_name,
             price: {
               standard: s.base_price || 90000,
               vip: (s.base_price || 90000) * 1.5,

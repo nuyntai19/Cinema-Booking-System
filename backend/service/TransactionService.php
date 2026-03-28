@@ -52,6 +52,7 @@ class TransactionService
         }
 
         if ($gateway === 'Momo' && !PaymentService::verifyMomoPayment($data)) {
+            error_log('MoMo verify failed. Keys=' . implode(',', array_keys((array)$data)) . ' orderId=' . (string)($data['orderId'] ?? ''));
             throw new Exception('MoMo signature verification failed', 400);
         }
 
@@ -99,7 +100,7 @@ class TransactionService
         ];
     }
 
-    public function createPaymentForBooking($gateway, $booking)
+    public function createPaymentForBooking($gateway, $booking, $options = [])
     {
         if ($booking['status'] !== 'Pending') {
             throw new Exception('Booking is not in pending status', 400);
@@ -130,7 +131,8 @@ class TransactionService
             $gateway,
             (int) $booking['id'],
             $transaction['transaction_code'],
-            $amount
+            $amount,
+            $options
         );
 
         if ($gateway === 'Momo') {
@@ -199,13 +201,19 @@ class TransactionService
         return false;
     }
 
-    private function buildPaymentPayload($gateway, $bookingId, $transactionCode, $amount)
+    private function buildPaymentPayload($gateway, $bookingId, $transactionCode, $amount, $options = [])
     {
         $baseUrl = $this->getBaseUrl();
 
         if ($gateway === 'Momo') {
-            $returnUrl = getenv('MOMO_RETURN_URL') ?: $baseUrl;
+            $isPos = !empty($options['is_pos']);
             $notifyUrl = getenv('MOMO_NOTIFY_URL') ?: ($baseUrl . '/api/transactions/momo/verify');
+            // POS QR flow should not redirect customer phone to localhost/front-end dev URL.
+            if ($isPos) {
+                $returnUrl = getenv('MOMO_POS_RETURN_URL') ?: 'https://momo.vn/';
+            } else {
+                $returnUrl = getenv('MOMO_RETURN_URL') ?: $baseUrl;
+            }
             return [
                 'amount' => $amount,
                 'orderId' => $transactionCode,
