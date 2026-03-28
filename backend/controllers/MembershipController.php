@@ -90,8 +90,9 @@ class MembershipController {
 
     public function checkUpgrade($userId) {
         try {
-            $lh = new LoyaltyHistory();
-            $points = max(0, $lh->getTotalPoints($userId));
+            $user = $this->userModel->findById($userId);
+            if (!$user) throw new Exception('User not found');
+            $points = max(0, (int)($user['current_points'] ?? 0));
             $eligibleTier = $this->membershipModel->getTierByPoints($points);
 
             // Get next tier info

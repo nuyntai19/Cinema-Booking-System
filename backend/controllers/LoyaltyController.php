@@ -55,7 +55,8 @@ class LoyaltyController {
         $checkStmt->execute([':uid' => $userId, ':bid' => $relatedBookingId]);
         if ($checkStmt->fetch()) {
             // Already awarded — return current totals without error
-            $newTotal = $this->historyModel->getTotalPoints($userId);
+            $user = $this->userModel->findById($userId);
+            $newTotal = (int)($user['current_points'] ?? 0);
             return Response::success(['earned_points' => 0, 'current_points' => $newTotal, 'already_awarded' => true]);
         }
 

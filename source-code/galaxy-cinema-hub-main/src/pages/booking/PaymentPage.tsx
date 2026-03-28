@@ -928,7 +928,9 @@ const PaymentPage: React.FC = () => {
 
                     const eligible =
                       !isUsed && isValid && meetsMinOrder && !isOutOfStock;
-                    const isApplied = promoCode === (v.code || v.promo_code);
+                    const isApplied = appliedVoucherId 
+                      ? appliedVoucherId === Number(v.id) 
+                      : promoCode && promoCode === (v.code || v.promo_code);
 
                     // Determine status for display
                     let statusLabel = "";
@@ -1044,7 +1046,7 @@ const PaymentPage: React.FC = () => {
                       const isOutOfStock = hasLimit && remaining <= 0;
 
                       const eligible = isPromoEligible(p) && !isOutOfStock;
-                      const isApplied = promoCode === p.code;
+                      const isApplied = promoCode === p.code && !appliedVoucherId;
                       return (
                         <div
                           key={`promo-${p.id}`}
