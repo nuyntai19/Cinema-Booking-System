@@ -720,27 +720,31 @@ const ProfilePage: React.FC = () => {
           </div>
 
           {/* Loyalty History & Vouchers */}
-          <div className="space-y-6">
-            {/* User Vouchers */}
-            <UserVouchersCard
-              vouchers={liveUserVouchers}
-              promotions={livePromotions}
-              currentPoints={liveCurrentPoints}
-              rewardTiers={rewardTiers}
-              isRedeeming={isRedeeming}
-              onRedeemPoints={handleRedeemPoints}
-              onUseVoucher={(voucherId) => {
-                toast({
-                  title: "Sử dụng voucher",
-                  description: "Hãy áp dụng mã voucher khi thanh toán",
-                });
-              }}
-            />
+          <div className="md:col-span-3 grid md:grid-cols-2 gap-4 md:gap-6">
+            <div className="space-y-6">
+              {/* User Vouchers */}
+              <UserVouchersCard
+                vouchers={liveUserVouchers}
+                promotions={livePromotions}
+                currentPoints={liveCurrentPoints}
+                rewardTiers={rewardTiers}
+                isRedeeming={isRedeeming}
+                onRedeemPoints={handleRedeemPoints}
+                onUseVoucher={(voucherId) => {
+                  toast({
+                    title: "Sử dụng voucher",
+                    description: "Hãy áp dụng mã voucher khi thanh toán",
+                  });
+                }}
+              />
+            </div>
 
-            {/* Loyalty History */}
-            <LoyaltyHistoryCard
-              history={liveLoyaltyHistory}
-            />
+            <div className="space-y-6">
+              {/* Loyalty History */}
+              <LoyaltyHistoryCard
+                history={liveLoyaltyHistory}
+              />
+            </div>
           </div>
         </div>
       </div>
