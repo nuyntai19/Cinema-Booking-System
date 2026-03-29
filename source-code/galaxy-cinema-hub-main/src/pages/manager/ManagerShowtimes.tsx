@@ -1,0 +1,498 @@
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Plus, Calendar, Clock, Film, Trash2, Edit3, X,
+  RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  AlertCircle, CheckCircle2
+} from "lucide-react";
+import { apiCall, API_ENDPOINTS } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+interface Showtime {
+  id: number; movie_id: number; movie_title: string; poster_url: string | null;
+  duration: number; hall_id: number; hall_name: string;
+  start_time: string; end_time: string; base_price: number;
+  total_seats: number; sold_seats: number; occupancy: number;
+}
+interface Hall { id: number; name: string; total_seats: number; }
+interface Movie { id: number; title: string; duration: number; age_rating: string; }
+interface ShowtimeFormData { movie_id: string; cinema_hall_id: string; start_time: string; base_price: string; }
+
+const EMPTY_FORM: ShowtimeFormData = { movie_id: "", cinema_hall_id: "", start_time: "", base_price: "90000" };
+
+const fmt = (v: number) =>
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
+
+const fmtTime = (s: string) =>
+  new Date(s).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+const fmtDate = (s: string) =>
+  new Date(s).toLocaleDateString("vi-VN", { weekday: "short", month: "2-digit", day: "2-digit" });
+
+const occColors = (occ: number) =>
+  occ >= 70 ? { bar: "bg-emerald-500", text: "text-emerald-400", badge: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" }
+  : occ >= 40 ? { bar: "bg-amber-500", text: "text-amber-400", badge: "bg-amber-500/15 border-amber-500/30 text-amber-400" }
+  : { bar: "bg-red-500", text: "text-red-400", badge: "bg-red-500/15 border-red-500/30 text-red-400" };
+
+// Generate 7-day range from given date
+const getWeekDays = (center: Date) => {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(center);
+    d.setDate(d.getDate() - 3 + i);
+    return d;
+  });
+};
+
+const ManagerShowtimes: React.FC = () => {
+  const { toast } = useToast();
+  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
+  const [halls, setHalls] = useState<Hall[]>([]);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<ShowtimeFormData>(EMPTY_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Showtime | null>(null);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [filterHall, setFilterHall] = useState("");
+  const [filterMovie, setFilterMovie] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "week">("list");
+  const [weekCenter, setWeekCenter] = useState(new Date());
+  const weekDays = getWeekDays(weekCenter);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (selectedDate) params.set("date", selectedDate);
+      if (filterHall) params.set("hall_id", filterHall);
+      if (filterMovie) params.set("movie_id", filterMovie);
+
+      const [stRes, hallRes, movRes] = await Promise.all([
+        apiCall<{ success: boolean; data: { showtimes: Showtime[] } }>(
+          `${API_ENDPOINTS.MANAGER_SHOWTIMES}?${params.toString()}`
+        ),
+        apiCall<{ success: boolean; data: { halls: Hall[] } }>(API_ENDPOINTS.MANAGER_CINEMA_HALLS),
+        apiCall<{ success: boolean; data: { movies: Movie[] } }>(API_ENDPOINTS.MANAGER_MOVIES_AVAILABLE),
+      ]);
+      if (stRes.success) setShowtimes(stRes.data.showtimes ?? []);
+      if (hallRes.success) setHalls(hallRes.data.halls ?? []);
+      if (movRes.success) setMovies(movRes.data.movies ?? []);
+    } catch (e: unknown) {
+      toast({ title: "Lỗi", description: e instanceof Error ? e.message : "Không thể tải dữ liệu", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate, filterHall, filterMovie, toast]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  // Compute estimated end time for form preview
+  const estimatedEnd = (() => {
+    if (!form.start_time || !form.movie_id) return null;
+    const movie = movies.find(m => String(m.id) === form.movie_id);
+    if (!movie) return null;
+    const end = new Date(new Date(form.start_time).getTime() + (movie.duration + 15) * 60000);
+    return end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  })();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setSubmitting(true);
+    try {
+      const payload = { ...form, base_price: parseFloat(form.base_price) };
+      if (editingId) {
+        await apiCall(API_ENDPOINTS.MANAGER_SHOWTIME(editingId), { method: "PUT", body: JSON.stringify(payload) });
+        toast({ title: "✅ Thành công", description: "Cập nhật suất chiếu thành công" });
+      } else {
+        await apiCall(API_ENDPOINTS.MANAGER_SHOWTIMES, { method: "POST", body: JSON.stringify(payload) });
+        toast({ title: "✅ Thành công", description: "Tạo suất chiếu thành công" });
+      }
+      setShowForm(false); setForm(EMPTY_FORM); setEditingId(null);
+      void fetchData();
+    } catch (e: unknown) {
+      toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Thao tác thất bại", variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  const handleEdit = (st: Showtime) => {
+    setForm({
+      movie_id: String(st.movie_id),
+      cinema_hall_id: String(st.hall_id),
+      start_time: st.start_time.slice(0, 16),
+      base_price: String(st.base_price),
+    });
+    setEditingId(st.id); setShowForm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      await apiCall(API_ENDPOINTS.MANAGER_SHOWTIME(deleteConfirm.id), { method: "DELETE" });
+      toast({ title: "✅ Đã xóa", description: "Xóa suất chiếu thành công" });
+      setDeleteConfirm(null); void fetchData();
+    } catch (e: unknown) {
+      toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xóa thất bại", variant: "destructive" });
+    }
+  };
+
+  // Week view: group showtimes by day
+  const getShowsForDay = (d: Date) => {
+    const iso = d.toISOString().slice(0, 10);
+    return showtimes.filter(s => s.start_time.slice(0, 10) === iso);
+  };
+
+  const isToday = (d: Date) => d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+  const isSelected = (d: Date) => d.toISOString().slice(0, 10) === selectedDate;
+
+  return (
+    <div className="p-4 lg:p-6 space-y-5">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold text-white">Quản Lý Lịch Chiếu</h1>
+          <p className="text-sm text-white/40 mt-0.5">Xếp lịch và quản lý suất chiếu của rạp</p>
+        </div>
+        <button
+          onClick={() => { setShowForm(true); setForm(EMPTY_FORM); setEditingId(null); }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium text-sm hover:opacity-90 transition-all shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 hover:scale-[1.02]"
+        >
+          <Plus className="w-4 h-4" /> Thêm Suất Chiếu
+        </button>
+      </div>
+
+      {/* Controls bar */}
+      <div className="flex flex-wrap gap-3 items-center p-4 rounded-2xl border border-white/8 bg-white/3">
+        {/* View toggle */}
+        <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+          {[{ v: "list" as const, label: "Danh sách" }, { v: "week" as const, label: "7 ngày" }].map(opt => (
+            <button key={opt.v} onClick={() => setViewMode(opt.v)}
+              className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                viewMode === opt.v ? "bg-orange-500 text-white shadow-lg" : "text-white/50 hover:text-white"
+              )}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Date picker */}
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-white/40" />
+          <input
+            type="date" value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 transition-colors"
+          />
+        </div>
+
+        {/* Hall filter */}
+        <select
+          value={filterHall}
+          onChange={e => setFilterHall(e.target.value)}
+          className="h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 transition-colors [&>option]:bg-[#1a1a2e]"
+        >
+          <option value="">Tất cả phòng</option>
+          {halls.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+        </select>
+
+        {/* Movie filter */}
+        <select
+          value={filterMovie}
+          onChange={e => setFilterMovie(e.target.value)}
+          className="h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 transition-colors max-w-[180px] [&>option]:bg-[#1a1a2e]"
+        >
+          <option value="">Tất cả phim</option>
+          {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+        </select>
+
+        <button
+          onClick={() => { setSelectedDate(new Date().toISOString().slice(0, 10)); setFilterHall(""); setFilterMovie(""); }}
+          className="px-3 h-9 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/8 transition-colors"
+        >
+          Xóa lọc
+        </button>
+
+        <button
+          onClick={() => void fetchData()}
+          className="ml-auto flex items-center gap-1.5 px-3 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs transition-all border border-white/8"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} /> Tải lại
+        </button>
+      </div>
+
+      {/* Week mini-calendar */}
+      {viewMode === "week" && (
+        <div className="rounded-2xl border border-white/8 bg-white/3 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => setWeekCenter(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-medium text-white">
+              {weekDays[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })} – {weekDays[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+            </span>
+            <button
+              onClick={() => setWeekCenter(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {weekDays.map((d, i) => {
+              const shows = getShowsForDay(d);
+              const today = isToday(d);
+              const sel = isSelected(d);
+              return (
+                <button
+                  key={i}
+                  onClick={() => setSelectedDate(d.toISOString().slice(0, 10))}
+                  className={cn(
+                    "flex flex-col items-center p-2 rounded-xl transition-all",
+                    sel ? "bg-orange-500/20 border border-orange-500/40" : "hover:bg-white/5 border border-transparent",
+                    today && !sel && "border-white/15"
+                  )}
+                >
+                  <span className={cn("text-xs mb-1", today ? "text-orange-400 font-bold" : "text-white/40")}>
+                    {d.toLocaleDateString("vi-VN", { weekday: "short" }).slice(0, 2)}
+                  </span>
+                  <span className={cn("text-sm font-semibold", sel ? "text-orange-400" : today ? "text-white" : "text-white/70")}>
+                    {d.getDate()}
+                  </span>
+                  {shows.length > 0 && (
+                    <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
+                      {shows.slice(0, 3).map((_, si) => (
+                        <div key={si} className="w-1 h-1 rounded-full bg-orange-400 opacity-80" />
+                      ))}
+                      {shows.length > 3 && <span className="text-[8px] text-orange-400">+</span>}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Showtimes List */}
+      <div className="rounded-2xl border border-white/8 bg-white/3">
+        <div className="flex items-center justify-between p-4 border-b border-white/8">
+          <div className="flex items-center gap-3">
+            <Film className="w-4 h-4 text-orange-400" />
+            <span className="text-sm font-semibold text-white">
+              Lịch Chiếu · {new Date(selectedDate).toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" })}
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-xs font-medium">
+              {showtimes.length} suất
+            </span>
+          </div>
+          {loading && <RefreshCw className="w-4 h-4 animate-spin text-white/30" />}
+        </div>
+
+        <div className="p-4">
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-20 rounded-xl bg-white/5 animate-pulse" />
+              ))}
+            </div>
+          ) : showtimes.length === 0 ? (
+            <div className="py-16 text-center">
+              <Film className="w-10 h-10 mx-auto mb-3 text-white/20" />
+              <p className="text-white/30 text-sm">Không có suất chiếu nào</p>
+              <button
+                onClick={() => { setShowForm(true); setForm(EMPTY_FORM); setEditingId(null); }}
+                className="mt-3 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+              >
+                + Thêm suất chiếu mới
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {showtimes.map(st => {
+                const occ = occColors(st.occupancy);
+                return (
+                  <div
+                    key={st.id}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-white/6 bg-white/2 hover:bg-white/5 hover:border-white/12 transition-all group"
+                  >
+                    {/* Time */}
+                    <div className="text-center shrink-0 w-14">
+                      <div className="text-sm font-bold text-orange-400">{fmtTime(st.start_time)}</div>
+                      <div className="text-xs text-white/30">{fmtTime(st.end_time)}</div>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-px h-10 bg-white/10 shrink-0" />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-white truncate">{st.movie_title}</div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-xs text-white/40">{st.hall_name}</span>
+                        <span className="text-white/20 text-xs">·</span>
+                        <span className="text-xs text-white/40">{st.duration} phút</span>
+                        <span className="text-white/20 text-xs">·</span>
+                        <span className="text-xs text-orange-400/80">{fmt(st.base_price)}</span>
+                      </div>
+                    </div>
+
+                    {/* Occupancy */}
+                    <div className="shrink-0 hidden sm:flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-white/40">{st.sold_seats}/{st.total_seats}</span>
+                        <span className={cn("text-xs font-bold", occ.text)}>{st.occupancy}%</span>
+                      </div>
+                      <div className="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div className={cn("h-full rounded-full transition-all", occ.bar)} style={{ width: `${st.occupancy}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 shrink-0 transition-opacity">
+                      <button
+                        onClick={() => handleEdit(st)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-all border border-white/20"
+                        title="Chỉnh sửa"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(st)}
+                        disabled={st.sold_seats > 0}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-white/80 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-white/20"
+                        title={st.sold_seats > 0 ? "Không thể xóa: đã có vé bán" : "Xóa suất chiếu"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Form Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1a1a2e] shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-white/10">
+              <h2 className="font-semibold text-white">{editingId ? "Sửa Suất Chiếu" : "Thêm Suất Chiếu Mới"}</h2>
+              <button onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={e => void handleSubmit(e)} className="p-5 space-y-4">
+              {/* Movie */}
+              <div>
+                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Phim *</label>
+                <select
+                  value={form.movie_id}
+                  onChange={e => setForm(f => ({ ...f, movie_id: e.target.value }))}
+                  required
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 [&>option]:bg-[#1a1a2e]"
+                >
+                  <option value="">Chọn phim...</option>
+                  {movies.map(m => (
+                    <option key={m.id} value={m.id}>{m.title} ({m.duration} phút) · {m.age_rating}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Hall */}
+              <div>
+                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Phòng chiếu *</label>
+                <select
+                  value={form.cinema_hall_id}
+                  onChange={e => setForm(f => ({ ...f, cinema_hall_id: e.target.value }))}
+                  required
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 [&>option]:bg-[#1a1a2e]"
+                >
+                  <option value="">Chọn phòng...</option>
+                  {halls.map(h => (
+                    <option key={h.id} value={h.id}>{h.name} ({h.total_seats} ghế)</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Start time */}
+              <div>
+                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Thời gian bắt đầu *</label>
+                <input
+                  type="datetime-local"
+                  value={form.start_time}
+                  onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
+                  required
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50"
+                />
+                {estimatedEnd && (
+                  <p className="mt-1.5 text-xs text-white/40 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    Kết thúc dự kiến: <span className="text-emerald-400 font-medium">{estimatedEnd}</span> (phim + 15 phút dọn rạp)
+                  </p>
+                )}
+              </div>
+
+              {/* Price */}
+              <div>
+                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Giá vé cơ sở (VNĐ) *</label>
+                <input
+                  type="number"
+                  value={form.base_price}
+                  onChange={e => setForm(f => ({ ...f, base_price: e.target.value }))}
+                  required min="10000" step="5000"
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50"
+                />
+                <p className="mt-1 text-xs text-white/30">{fmt(parseFloat(form.base_price) || 0)}</p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="flex-1 h-10 rounded-xl border border-white/15 text-white/60 hover:text-white hover:border-white/30 text-sm transition-all">
+                  Hủy
+                </button>
+                <button type="submit" disabled={submitting}
+                  className="flex-1 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20">
+                  {submitting ? <RefreshCw className="w-4 h-4 animate-spin mx-auto" /> : editingId ? "Cập nhật" : "Tạo suất chiếu"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-red-500/20 bg-[#1a1a2e] shadow-2xl p-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-400" />
+            </div>
+            <h3 className="font-semibold text-white mb-1">Xóa suất chiếu?</h3>
+            <p className="text-sm text-white/50 mb-1">{deleteConfirm.movie_title}</p>
+            <p className="text-xs text-white/30 mb-5">{fmtDate(deleteConfirm.start_time)} · {fmtTime(deleteConfirm.start_time)} · {deleteConfirm.hall_name}</p>
+            <p className="text-xs text-red-400/80 mb-5">Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="flex-1 h-10 rounded-xl border border-white/15 text-white/60 hover:text-white text-sm transition-all">
+                Hủy
+              </button>
+              <button onClick={() => void handleDelete()}
+                className="flex-1 h-10 rounded-xl bg-red-500/90 hover:bg-red-500 text-white font-medium text-sm transition-all shadow-lg shadow-red-500/20">
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ManagerShowtimes;

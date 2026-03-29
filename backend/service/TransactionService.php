@@ -207,7 +207,7 @@ class TransactionService
 
         if ($gateway === 'Momo') {
             $isPos = !empty($options['is_pos']);
-            $notifyUrl = getenv('MOMO_NOTIFY_URL') ?: ($baseUrl . '/api/transactions/momo/verify');
+            $notifyUrl = getenv('MOMO_NOTIFY_URL') ?: ($baseUrl . '/index.php/api/transactions/momo/verify');
             // POS QR flow should not redirect customer phone to localhost/front-end dev URL.
             if ($isPos) {
                 $returnUrl = getenv('MOMO_POS_RETURN_URL') ?: 'https://momo.vn/';
@@ -225,9 +225,9 @@ class TransactionService
 
         if ($gateway === 'VNPay' || $gateway === 'Visa') {
             $frontendUrl = getenv('APP_URL') ?: $baseUrl;
-            // Ensure VNPay redirects back to the backend verify endpoint
-            $returnUrl = $baseUrl . '/api/transactions/vnpay/verify';
-            $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($baseUrl . '/api/transactions/vnpay/ipn');
+            // Ensure VNPay redirects back to the backend verify endpoint via index.php for built-in server compatibility
+            $returnUrl = $baseUrl . '/index.php/api/transactions/vnpay/verify';
+            $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($baseUrl . '/index.php/api/transactions/vnpay/ipn');
 
             return [
                 'amount' => $amount,

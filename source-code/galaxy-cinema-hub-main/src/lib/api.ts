@@ -134,6 +134,23 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/memberships/user/${userId}`,
   MEMBERSHIP_CHECK_UPGRADE: (userId: number) =>
     `${API_BASE_URL}/api/memberships/check-upgrade/${userId}`,
+
+  // ── Manager (Cinema-scoped) ────────────────────────────
+  MANAGER_DASHBOARD_STATS: `${API_BASE_URL}/api/manager/dashboard/stats`,
+  MANAGER_DASHBOARD_REVENUE: `${API_BASE_URL}/api/manager/dashboard/revenue`,
+  MANAGER_DASHBOARD_UPCOMING: `${API_BASE_URL}/api/manager/dashboard/upcoming-shows`,
+  MANAGER_CINEMA_INFO: `${API_BASE_URL}/api/manager/cinema/info`,
+  MANAGER_CINEMA_HALLS: `${API_BASE_URL}/api/manager/cinema/halls`,
+  MANAGER_MOVIES_AVAILABLE: `${API_BASE_URL}/api/manager/movies/available`,
+  MANAGER_SHOWTIMES: `${API_BASE_URL}/api/manager/showtimes`,
+  MANAGER_SHOWTIME: (id: number) => `${API_BASE_URL}/api/manager/showtimes/${id}`,
+  MANAGER_STAFF: `${API_BASE_URL}/api/manager/staff`,
+  MANAGER_STAFF_IMPORT: `${API_BASE_URL}/api/manager/staff/import`,
+  MANAGER_STAFF_DETAIL: (id: number) => `${API_BASE_URL}/api/manager/staff/${id}`,
+  MANAGER_STAFF_TOGGLE: (id: number) => `${API_BASE_URL}/api/manager/staff/${id}/toggle-status`,
+  MANAGER_REPORT_REVENUE: `${API_BASE_URL}/api/manager/reports/revenue`,
+  MANAGER_REPORT_OCCUPANCY: `${API_BASE_URL}/api/manager/reports/occupancy`,
+  MANAGER_REPORT_EXPORT: `${API_BASE_URL}/api/manager/reports/export`,
 };
 
 // Helper function for API calls

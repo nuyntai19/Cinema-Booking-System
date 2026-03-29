@@ -27,6 +27,11 @@ class Router
         $this->addRoute('DELETE', $path, $handler);
     }
 
+    public function patch($path, $handler)
+    {
+        $this->addRoute('PATCH', $path, $handler);
+    }
+
     private function addRoute($method, $path, $handler)
     {
         // Convert :param to regex pattern

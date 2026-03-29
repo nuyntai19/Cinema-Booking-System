@@ -275,14 +275,34 @@ class AuthController {
             ];
             $roleName = $roleMap[(int)$user['role_id']] ?? 'Guest';
 
-            // Generate JWT token
-            $token = JWT::encode([
-                'user_id' => $user['id'],
-                'email' => $user['email'],
-                'role_id' => $user['role_id'],
-                'role' => $roleName,
-                'exp' => time() + Config::$jwt_expiration
-            ], Config::$jwt_secret);
+            // Nếu là Manager → lấy cinema_id được gán
+            $cinemaId = null;
+            $cinemaName = null;
+            if ((int)$user['role_id'] === 4) {
+                try {
+                    $db = Database::getInstance()->getConnection();
+                    $cinemaStmt = $db->prepare("SELECT id, name FROM cinemas WHERE manager_id = :uid LIMIT 1");
+                    $cinemaStmt->execute([':uid' => $user['id']]);
+                    $cinemaRow = $cinemaStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($cinemaRow) {
+                        $cinemaId   = (int)$cinemaRow['id'];
+                        $cinemaName = $cinemaRow['name'];
+                    }
+                } catch (Exception $ignore) {}
+            }
+
+            // Generate JWT token (include cinema_id for Manager)
+            $jwtPayload = [
+                'user_id'  => $user['id'],
+                'email'    => $user['email'],
+                'role_id'  => $user['role_id'],
+                'role'     => $roleName,
+                'exp'      => time() + Config::$jwt_expiration,
+            ];
+            if ($cinemaId !== null) {
+                $jwtPayload['cinema_id'] = $cinemaId;
+            }
+            $token = JWT::encode($jwtPayload, Config::$jwt_secret);
             
             // Lấy thông tin profile
             $profile = $this->userProfileModel->getByUserId($user['id']);
@@ -291,13 +311,15 @@ class AuthController {
                 'message' => 'Đăng nhập thành công',
                 'token' => $token,
                 'user' => [
-                    'id' => $user['id'],
-                    'email' => $user['email'],
-                    'role_id' => $user['role_id'],
-                    'role' => $roleName,
-                    'full_name' => $profile['full_name'] ?? '',
-                    'avatar' => $profile['avatar'] ?? null,
-                    'current_points' => $user['current_points']
+                    'id'             => $user['id'],
+                    'email'          => $user['email'],
+                    'role_id'        => $user['role_id'],
+                    'role'           => $roleName,
+                    'full_name'      => $profile['full_name'] ?? '',
+                    'avatar'         => $profile['avatar'] ?? null,
+                    'current_points' => $user['current_points'],
+                    'cinema_id'      => $cinemaId,
+                    'cinema_name'    => $cinemaName,
                 ]
             ]);
             

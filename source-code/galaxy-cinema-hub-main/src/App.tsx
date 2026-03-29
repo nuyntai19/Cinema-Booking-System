@@ -42,6 +42,9 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminSeatManagement from "./pages/admin/AdminSeatManagement";
 import ManagerLayout from "./components/manager/ManagerLayout";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
+import ManagerShowtimes from "./pages/manager/ManagerShowtimes";
+import ManagerStaff from "./pages/manager/ManagerStaff";
+import ManagerReports from "./pages/manager/ManagerReports";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
@@ -146,18 +149,9 @@ const App = () => (
                 {/* Manager Routes */}
                 <Route path="/manager" element={<ManagerLayout />}>
                   <Route index element={<ManagerDashboard />} />
-                  <Route path="movies" element={<AdminMovies />} />
-                  <Route path="cinemas" element={<AdminCinemas />} />
-                  <Route path="scheduler" element={<AdminScheduler />} />
-                  <Route path="concessions" element={<AdminConcessions />} />
-                  <Route path="promotions" element={<AdminPromotions />} />
-                  <Route path="transactions" element={<AdminTransactions />} />
-                  <Route path="reviews" element={<AdminReviews />} />
-                  <Route
-                    path="notifications"
-                    element={<AdminNotifications />}
-                  />
-                  <Route path="staff" element={<AdminUsers />} />
+                  <Route path="showtimes" element={<ManagerShowtimes />} />
+                  <Route path="staff" element={<ManagerStaff />} />
+                  <Route path="reports" element={<ManagerReports />} />
                 </Route>
 
                 {/* Staff Routes */}

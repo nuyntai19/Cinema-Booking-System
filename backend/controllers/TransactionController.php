@@ -245,8 +245,8 @@ class TransactionController extends BaseController
                         $appUrl = rtrim($appUrl, '/');
                     }
 
-                    $returnUrl = $appUrl . '/api/transactions/vnpay/verify';
-                    $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($appUrl . '/api/transactions/vnpay/ipn');
+                    $returnUrl = $appUrl . '/index.php/api/transactions/vnpay/verify';
+                    $notifyUrl = getenv('VNPAY_NOTIFY_URL') ?: ($appUrl . '/index.php/api/transactions/vnpay/ipn');
 
                     $bankCode = ($gateway === 'Visa') ? 'INTCARD' : '';
                     $payUrl = PaymentService::createVNPayPayment(

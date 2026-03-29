@@ -476,3 +476,14 @@ SET GLOBAL event_scheduler = ON;
 CREATE INDEX idx_movies_showing ON movies(status, release_date);
 CREATE INDEX idx_showtimes_datetime ON showtimes(start_time, end_time);
 CREATE INDEX idx_bookings_user_date ON bookings(user_id, created_at DESC);
+
+-- ============================================
+-- CINEMA MANAGER MODULE - 2026-03-29
+-- Ghi chú:
+--   cinemas.manager_id (INT NULL FK -> users) đã tồn tại từ schema gốc
+--   Manager được nhận dạng bằng role_id = 4 (Manager)
+--   Cinema được tìm theo: SELECT * FROM cinemas WHERE manager_id = :user_id
+--   JWT payload khi login sẽ có thêm cinema_id (nếu user là Manager)
+-- Migration thêm: /database/migrations/add_manager_module.sql
+-- ============================================
+

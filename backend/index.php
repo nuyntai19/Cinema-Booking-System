@@ -330,5 +330,34 @@ $router->get('/api/admin/transactions/export-details', 'AdminController@getTrans
 $router->get('/api/config', 'ConfigController@index');
 $router->put('/api/config', 'ConfigController@update'); // Admin
 
+// ============================================
+// MANAGER ROUTES (Cinema-scoped)
+// ============================================
+// Dashboard
+$router->get('/api/manager/dashboard/stats', 'ManagerController@getDashboardStats');
+$router->get('/api/manager/dashboard/revenue', 'ManagerController@getDashboardRevenue');
+$router->get('/api/manager/dashboard/upcoming-shows', 'ManagerController@getUpcomingShows');
+// Cinema info
+$router->get('/api/manager/cinema/info', 'ManagerController@getCinemaInfo');
+$router->get('/api/manager/cinema/halls', 'ManagerController@getCinemaHalls');
+// Movies (for scheduling)
+$router->get('/api/manager/movies/available', 'ManagerController@getAvailableMovies');
+// Showtimes
+$router->get('/api/manager/showtimes', 'ManagerController@getShowtimes');
+$router->post('/api/manager/showtimes', 'ManagerController@createShowtime');
+$router->put('/api/manager/showtimes/:id', 'ManagerController@updateShowtime');
+$router->delete('/api/manager/showtimes/:id', 'ManagerController@deleteShowtime');
+// Staff
+$router->get('/api/manager/staff', 'ManagerController@getStaff');
+$router->post('/api/manager/staff', 'ManagerController@createStaff');
+$router->post('/api/manager/staff/import', 'ManagerController@importStaff');
+$router->put('/api/manager/staff/:id', 'ManagerController@updateStaff');
+$router->patch('/api/manager/staff/:id/toggle-status', 'ManagerController@toggleStaffStatus');
+// Reports
+$router->get('/api/manager/reports/revenue', 'ManagerController@getRevenueReport');
+$router->get('/api/manager/reports/occupancy', 'ManagerController@getOccupancyReport');
+$router->get('/api/manager/reports/export', 'ManagerController@exportReport');
+
 // Run router
 $router->run();
+

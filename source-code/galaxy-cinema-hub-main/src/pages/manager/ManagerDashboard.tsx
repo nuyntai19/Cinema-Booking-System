@@ -1,210 +1,404 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  TrendingUp,
-  Ticket,
-  Users,
-  DollarSign,
-  Film,
-  Clock,
+  DollarSign, Ticket, Clock, Users, TrendingUp, TrendingDown,
+  Film, RefreshCw, ArrowRight, ChevronRight
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
+import { apiCall, API_ENDPOINTS } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const ManagerDashboard: React.FC = () => {
-  const stats = [
-    {
-      title: "Doanh Thu Hôm Nay",
-      value: "8.450.000đ",
-      change: "+10%",
-      trend: "up",
-      icon: DollarSign,
-      color: "bg-green-500",
-    },
-    {
-      title: "Vé Đã Bán",
-      value: "186",
-      change: "+12%",
-      trend: "up",
-      icon: Ticket,
-      color: "bg-blue-500",
-    },
-    {
-      title: "Tỷ Lệ Lấp Đầy",
-      value: "72%",
-      change: "+5%",
-      trend: "up",
-      icon: Users,
-      color: "bg-purple-500",
-    },
-    {
-      title: "Suất Chiếu Hôm Nay",
-      value: "24",
-      change: "8 đang chiếu",
-      trend: "up",
-      icon: Clock,
-      color: "bg-orange-500",
-    },
-  ];
+interface DashboardStats {
+  cinema_id: number;
+  cinema_name: string;
+  today_revenue: number;
+  today_tickets: number;
+  today_shows: number;
+  occupancy_rate: number;
+  changes: { revenue: number };
+}
 
-  // Mock revenue data for last 7 days
-  const revenueData = [
-    { day: "T2", value: 6.5 },
-    { day: "T3", value: 5.2 },
-    { day: "T4", value: 7.1 },
-    { day: "T5", value: 6.8 },
-    { day: "T6", value: 9.2 },
-    { day: "T7", value: 12.4 },
-    { day: "CN", value: 8.5 },
-  ];
-  const maxRevenue = Math.max(...revenueData.map((d) => d.value));
+interface RevenueItem { date: string; day: string; revenue: number; }
+interface UpcomingShow {
+  id: number; movie_title: string; hall_name: string;
+  start_time: string; total_seats: number; sold_seats: number;
+}
 
-  const upcomingShows = [
-    { time: "14:00", movie: "Mai", hall: "Phòng 1", seats: "45/120" },
-    { time: "15:30", movie: "Kung Fu Panda 4", hall: "Phòng 2", seats: "38/100" },
-    { time: "17:00", movie: "Dune: Part Two", hall: "IMAX", seats: "67/150" },
-    { time: "19:30", movie: "Mai", hall: "Phòng 1", seats: "92/120" },
-    { time: "21:00", movie: "Đào, Phở và Piano", hall: "Phòng 2", seats: "51/100" },
-  ];
+// SVG Line Chart component
+const LineChart: React.FC<{ data: RevenueItem[]; height?: number }> = ({ data, height = 180 }) => {
+  if (!data.length) return null;
+  const W = 600; const H = height;
+  const PAD = { top: 20, right: 20, bottom: 32, left: 56 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const maxVal = Math.max(...data.map(d => d.revenue), 1);
+  const minVal = 0;
+  const pts = data.map((d, i) => ({
+    x: PAD.left + (i / Math.max(data.length - 1, 1)) * innerW,
+    y: PAD.top + innerH - ((d.revenue - minVal) / (maxVal - minVal)) * innerH,
+    revenue: d.revenue, day: d.day, date: d.date,
+  }));
+  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD = [
+    `M ${pts[0].x} ${PAD.top + innerH}`,
+    ...pts.map(p => `L ${p.x} ${p.y}`),
+    `L ${pts[pts.length - 1].x} ${PAD.top + innerH}`,
+    'Z'
+  ].join(' ');
+
+  // Y-axis ticks
+  const yTicks = 4;
+  const yLabels = Array.from({ length: yTicks + 1 }, (_, i) => {
+    const val = (maxVal / yTicks) * i;
+    return { val, y: PAD.top + innerH - (i / yTicks) * innerH };
+  });
+
+  const fmt = (v: number) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`;
 
   return (
-    <div className="p-6 space-y-6">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height }}>
+      <defs>
+        <linearGradient id="mgr-area-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f97316" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#f97316" stopOpacity="0.02" />
+        </linearGradient>
+        <linearGradient id="mgr-line-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#fbbf24" />
+        </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" />
+        </filter>
+      </defs>
+
+      {/* Grid lines */}
+      {yLabels.map(({ y }, i) => (
+        <line key={i} x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y}
+          stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+      ))}
+
+      {/* Y labels */}
+      {yLabels.map(({ val, y }, i) => (
+        <text key={i} x={PAD.left - 8} y={y + 4} textAnchor="end"
+          fill="rgba(255,255,255,0.35)" fontSize="10" fontFamily="sans-serif">
+          {fmt(val)}
+        </text>
+      ))}
+
+      {/* X labels */}
+      {pts.map((p, i) => (
+        <text key={i} x={p.x} y={H - 4} textAnchor="middle"
+          fill={i === pts.length - 1 ? "#f97316" : "rgba(255,255,255,0.4)"}
+          fontSize="10" fontFamily="sans-serif" fontWeight={i === pts.length - 1 ? "700" : "400"}>
+          {p.day}
+        </text>
+      ))}
+
+      {/* Area fill */}
+      <path d={areaD} fill="url(#mgr-area-grad)" />
+
+      {/* Line */}
+      <path d={pathD} fill="none" stroke="url(#mgr-line-grad)" strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Dots */}
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="5" fill="#0f0f18" stroke="url(#mgr-line-grad)" strokeWidth="2" />
+          {i === pts.length - 1 && (
+            <circle cx={p.x} cy={p.y} r="4" fill="#f97316" filter="url(#glow)" />
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+const ManagerDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [revenueData, setRevenueData] = useState<RevenueItem[]>([]);
+  const [upcomingShows, setUpcomingShows] = useState<UpcomingShow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [sRes, rRes, uRes] = await Promise.all([
+        apiCall<{ success: boolean; data: DashboardStats }>(API_ENDPOINTS.MANAGER_DASHBOARD_STATS),
+        apiCall<{ success: boolean; data: { items: RevenueItem[] } }>(API_ENDPOINTS.MANAGER_DASHBOARD_REVENUE),
+        apiCall<{ success: boolean; data: { upcoming_shows: UpcomingShow[] } }>(API_ENDPOINTS.MANAGER_DASHBOARD_UPCOMING),
+      ]);
+      if (sRes.success) setStats(sRes.data);
+      if (rRes.success) setRevenueData(rRes.data.items ?? []);
+      if (uRes.success) setUpcomingShows(uRes.data.upcoming_shows ?? []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  const kpiCards = stats ? [
+    {
+      label: "Doanh Thu Hôm Nay",
+      value: formatCurrency(stats.today_revenue),
+      sub: `${stats.changes.revenue >= 0 ? "+" : ""}${stats.changes.revenue}% so với hôm qua`,
+      trend: stats.changes.revenue >= 0,
+      icon: DollarSign,
+      gradient: "from-orange-500 to-amber-500",
+      glow: "shadow-orange-500/20",
+      bg: "from-orange-500/10 to-amber-500/5",
+      border: "border-orange-500/20",
+    },
+    {
+      label: "Vé Đã Bán",
+      value: `${stats.today_tickets} vé`,
+      sub: "Hôm nay",
+      trend: null,
+      icon: Ticket,
+      gradient: "from-blue-500 to-indigo-500",
+      glow: "shadow-blue-500/20",
+      bg: "from-blue-500/10 to-indigo-500/5",
+      border: "border-blue-500/20",
+    },
+    {
+      label: "Tỷ Lệ Lấp Đầy",
+      value: `${stats.occupancy_rate}%`,
+      sub: stats.occupancy_rate >= 70 ? "Xuất sắc 🎉" : stats.occupancy_rate >= 40 ? "Tốt 👍" : "Cần cải thiện",
+      trend: null,
+      icon: Users,
+      gradient: "from-purple-500 to-violet-500",
+      glow: "shadow-purple-500/20",
+      bg: "from-purple-500/10 to-violet-500/5",
+      border: "border-purple-500/20",
+    },
+    {
+      label: "Suất Chiếu Hôm Nay",
+      value: `${stats.today_shows} suất`,
+      sub: new Date().toLocaleDateString("vi-VN"),
+      trend: null,
+      icon: Clock,
+      gradient: "from-emerald-500 to-teal-500",
+      glow: "shadow-emerald-500/20",
+      bg: "from-emerald-500/10 to-teal-500/5",
+      border: "border-emerald-500/20",
+    },
+  ] : [];
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        {/* Skeleton KPI */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 h-72 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+          <div className="h-72 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-between">
+          <span className="text-sm">⚠️ {error}</span>
+          <button onClick={() => void fetchAll()} className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors">
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 lg:p-6 space-y-6">
+
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard Quản Lý</h1>
-        <p className="text-muted-foreground">Tổng quan hoạt động rạp của bạn</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold text-white">
+            Dashboard Quản Lý
+          </h1>
+          <p className="text-sm text-white/40 mt-0.5">
+            {stats?.cinema_name
+              ? `🎬 ${stats.cinema_name} · Hôm nay ${new Date().toLocaleDateString("vi-VN")}`
+              : "Tổng quan hoạt động rạp"}
+          </p>
+        </div>
+        <button
+          onClick={() => void fetchAll()}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-sm transition-all border border-white/10"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Làm mới</span>
+        </button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <div className={cn("p-2 rounded-lg", stat.color)}>
-                <stat.icon className="w-4 h-4 text-white" />
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiCards.map((card) => (
+          <div
+            key={card.label}
+            className={cn(
+              "relative overflow-hidden rounded-2xl border p-5 transition-all duration-300",
+              "bg-gradient-to-br hover:scale-[1.02] hover:shadow-xl",
+              card.bg, card.border, card.glow
+            )}
+          >
+            {/* Background decoration */}
+            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br opacity-10 blur-2xl" />
+
+            <div className="flex items-start justify-between mb-4">
+              <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg", card.gradient)}>
+                <card.icon className="w-5 h-5 text-white" />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <div className="flex items-center gap-1 text-xs mt-1">
-                {stat.trend === "up" ? (
-                  <TrendingUp className="w-3 h-3 text-green-500" />
-                ) : null}
-                <span
-                  className={cn(
-                    stat.trend === "up" ? "text-green-500" : "text-muted-foreground",
-                  )}
-                >
-                  {stat.change}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+              {card.trend !== null && (
+                <div className={cn("flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
+                  card.trend ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+                )}>
+                  {card.trend ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                </div>
+              )}
+            </div>
+            <p className="text-white/50 text-xs font-medium uppercase tracking-wide mb-1">{card.label}</p>
+            <p className="text-xl lg:text-2xl font-bold text-white leading-tight">{card.value}</p>
+            <p className="text-xs text-white/40 mt-1">{card.sub}</p>
+          </div>
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Doanh Thu Tuần (triệu đồng)</CardTitle>
-            <CardDescription>7 ngày gần nhất</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-end justify-between gap-2">
-              {revenueData.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex-1 flex flex-col items-center gap-2"
-                >
-                  <div className="text-xs font-semibold text-muted-foreground">
-                    {item.value}M
-                  </div>
-                  <div
-                    className="w-full bg-primary rounded-t transition-all hover:opacity-80"
-                    style={{
-                      height: `${(item.value / maxRevenue) * 180}px`,
-                    }}
-                  />
-                  <div className="text-sm font-medium text-muted-foreground">
-                    {item.day}
-                  </div>
-                </div>
-              ))}
+      {/* Chart + Upcoming */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Revenue Line Chart */}
+        <div className="lg:col-span-2 rounded-2xl border border-white/8 bg-white/3 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-white text-sm">Doanh Thu 7 Ngày Gần Nhất</h2>
+              <p className="text-xs text-white/40 mt-0.5">Đơn vị: VNĐ</p>
             </div>
-          </CardContent>
-        </Card>
+            {revenueData.length > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-white/40">Hôm nay</p>
+                <p className="text-sm font-bold text-orange-400">
+                  {formatCurrency(revenueData[revenueData.length - 1]?.revenue ?? 0)}
+                </p>
+              </div>
+            )}
+          </div>
+          {revenueData.length === 0 ? (
+            <div className="h-44 flex items-center justify-center text-white/30 text-sm">Chưa có dữ liệu doanh thu</div>
+          ) : (
+            <LineChart data={revenueData} height={180} />
+          )}
+        </div>
 
         {/* Upcoming Shows */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Suất Chiếu Sắp Tới</CardTitle>
-            <CardDescription>Hôm nay - {new Date().toLocaleDateString('vi-VN')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {upcomingShows.map((show, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-bold text-primary">
-                      {show.time}
+        <div className="rounded-2xl border border-white/8 bg-white/3 p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-white text-sm">Suất Chiếu Sắp Tới</h2>
+              <p className="text-xs text-white/40 mt-0.5">
+                {new Date().toLocaleDateString("vi-VN")}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/manager/showtimes")}
+              className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors"
+            >
+              Xem tất cả <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto max-h-56 pr-1">
+            {upcomingShows.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-white/30 text-sm py-8 gap-2">
+                <Film className="w-8 h-8 opacity-30" />
+                <p>Không có suất chiếu sắp tới</p>
+              </div>
+            ) : (
+              upcomingShows.map((show) => {
+                const occ = show.total_seats > 0 ? Math.round((show.sold_seats / show.total_seats) * 100) : 0;
+                const occColor = occ >= 70 ? "bg-emerald-500" : occ >= 40 ? "bg-amber-500" : "bg-red-500";
+                const occText = occ >= 70 ? "text-emerald-400" : occ >= 40 ? "text-amber-400" : "text-red-400";
+                return (
+                  <div key={show.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/4 hover:bg-white/7 transition-colors">
+                    <div className="shrink-0 text-center w-12">
+                      <div className="text-sm font-bold text-orange-400">
+                        {new Date(show.start_time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                      <div className="text-xs text-white/30">{show.hall_name}</div>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium">{show.movie}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {show.hall}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white truncate">{show.movie_title}</p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all", occColor)} style={{ width: `${occ}%` }} />
+                        </div>
+                        <span className={cn("text-xs font-bold shrink-0", occText)}>{occ}%</span>
                       </div>
                     </div>
                   </div>
-                  <Badge variant="outline">{show.seats}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Hành Động Nhanh</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button className="p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Film className="w-6 h-6 mx-auto mb-2 text-primary" />
-              <div className="text-sm font-medium">Thêm Suất Chiếu</div>
+      <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+        <h2 className="font-semibold text-white text-sm mb-4">Truy Cập Nhanh</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Thêm Suất Chiếu", icon: Film, path: "/manager/showtimes", color: "from-orange-500 to-amber-500", glow: "shadow-orange-500/20" },
+            { label: "Quản Lý Nhân Viên", icon: Users, path: "/manager/staff", color: "from-blue-500 to-indigo-500", glow: "shadow-blue-500/20" },
+            { label: "Xem Báo Cáo", icon: BarChart3, path: "/manager/reports", color: "from-purple-500 to-violet-500", glow: "shadow-purple-500/20" },
+            { label: "Lịch Chiếu", icon: Clock, path: "/manager/showtimes", color: "from-emerald-500 to-teal-500", glow: "shadow-emerald-500/20" },
+          ].map((action) => (
+            <button
+              key={action.label}
+              onClick={() => navigate(action.path)}
+              className={cn(
+                "group p-4 rounded-xl border border-white/8 hover:border-white/15",
+                "bg-white/3 hover:bg-white/6 transition-all duration-200",
+                "flex flex-col items-start gap-3 text-left hover:shadow-xl hover:scale-[1.02]",
+                action.glow
+              )}
+            >
+              <div className={cn("w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow", action.color)}>
+                <action.icon className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="flex items-center justify-between w-full">
+                <span className="text-sm font-medium text-white/80 group-hover:text-white transition-colors">{action.label}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all" />
+              </div>
             </button>
-            <button className="p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Users className="w-6 h-6 mx-auto mb-2 text-primary" />
-              <div className="text-sm font-medium">Quản Lý Nhân Viên</div>
-            </button>
-            <button className="p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Ticket className="w-6 h-6 mx-auto mb-2 text-primary" />
-              <div className="text-sm font-medium">Xem Báo Cáo</div>
-            </button>
-            <button className="p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <DollarSign className="w-6 h-6 mx-auto mb-2 text-primary" />
-              <div className="text-sm font-medium">Khuyến Mãi</div>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
+
+// Fix: BarChart3 import alias
+const BarChart3 = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" /><line x1="2" y1="20" x2="22" y2="20" />
+  </svg>
+);
 
 export default ManagerDashboard;
