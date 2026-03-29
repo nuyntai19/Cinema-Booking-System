@@ -18,6 +18,9 @@ import {
   Armchair,
   Popcorn,
   Ticket,
+  CalendarDays,
+  CalendarRange,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -209,6 +212,55 @@ const AdminTransactions: React.FC = () => {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportDateMode, setExportDateMode] = useState<"all" | "day" | "month" | "year" | "custom">("all");
+  const [exportDay, setExportDay] = useState(new Date().toISOString().slice(0, 10));
+  const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
+  const [exportYear, setExportYear] = useState(new Date().getFullYear());
+  const [exportCustomFrom, setExportCustomFrom] = useState("");
+  const [exportCustomTo, setExportCustomTo] = useState("");
+
+  const getExportDateRange = (): { from: string; to: string } | null => {
+    switch (exportDateMode) {
+      case "day":
+        return { from: exportDay, to: exportDay };
+      case "month": {
+        const firstDay = `${exportYear}-${String(exportMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(exportYear, exportMonth, 0).getDate();
+        return { from: firstDay, to: `${exportYear}-${String(exportMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}` };
+      }
+      case "year":
+        return { from: `${exportYear}-01-01`, to: `${exportYear}-12-31` };
+      case "custom":
+        if (exportCustomFrom && exportCustomTo) return { from: exportCustomFrom, to: exportCustomTo };
+        if (exportCustomFrom) return { from: exportCustomFrom, to: "2099-12-31" };
+        if (exportCustomTo) return { from: "2000-01-01", to: exportCustomTo };
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  const getExportDateLabel = (): string => {
+    switch (exportDateMode) {
+      case "day":
+        return new Date(exportDay).toLocaleDateString("vi-VN");
+      case "month":
+        return `Tháng ${exportMonth}/${exportYear}`;
+      case "year":
+        return `Năm ${exportYear}`;
+      case "custom": {
+        const parts: string[] = [];
+        if (exportCustomFrom) parts.push(new Date(exportCustomFrom).toLocaleDateString("vi-VN"));
+        if (exportCustomTo) parts.push(new Date(exportCustomTo).toLocaleDateString("vi-VN"));
+        return parts.join(" - ") || "Tất cả";
+      }
+      default:
+        return "Tất cả";
+    }
+  };
 
   // Stats view state
   const [showStats, setShowStats] = useState(false);
@@ -442,16 +494,25 @@ const AdminTransactions: React.FC = () => {
     return normalized.includes("cash") || normalized.includes("tiền mặt");
   };
 
-  const fetchTransactionsForExport = async (): Promise<TransactionItem[]> => {
+  const fetchTransactionsForExport = async (overrideDateRange?: { from: string; to: string } | null): Promise<TransactionItem[]> => {
     const params = buildQueryParams(1, 5000);
+    // Override date range for export if provided
+    if (overrideDateRange) {
+      params.set("date_from", overrideDateRange.from);
+      params.set("date_to", overrideDateRange.to);
+    }
     const res = await apiCall<ApiResponse<AdminTransactionsData>>(
       `${API_ENDPOINTS.ADMIN_TRANSACTIONS}?${params.toString()}`,
     );
     return res.data?.items || [];
   };
 
-  const fetchTransactionDetailsForExport = async (): Promise<any[]> => {
+  const fetchTransactionDetailsForExport = async (overrideDateRange?: { from: string; to: string } | null): Promise<any[]> => {
     const params = buildQueryParams(1, 5000);
+    if (overrideDateRange) {
+      params.set("date_from", overrideDateRange.from);
+      params.set("date_to", overrideDateRange.to);
+    }
     const res = await apiCall<{ success: boolean; data: { items: any[] } }>(
       `${API_ENDPOINTS.ADMIN_TRANSACTIONS}/export-details?${params.toString()}`,
     );
@@ -580,8 +641,14 @@ const AdminTransactions: React.FC = () => {
     if (exportingType) return;
 
     setExportingType("excel");
+    setExportDialogOpen(false);
     try {
-      const rows = await fetchTransactionsForExport();
+      const dateRange = getExportDateRange();
+      const rows = await fetchTransactionsForExport(dateRange);
+      if (rows.length === 0) {
+        setExportingType(null);
+        return;
+      }
       const detailRows = rows.map((transaction, index) => ({
         STT: index + 1,
         "Mã đặt vé": transaction.bookingCode,
@@ -603,6 +670,18 @@ const AdminTransactions: React.FC = () => {
       }));
 
       const workbook = XLSX.utils.book_new();
+
+      // Sheet tiêu đề với thông tin khoảng thời gian
+      const headerInfo = [
+        { "Thông tin": "Báo cáo giao dịch", "Giá trị": `Ngày xuất: ${new Date().toLocaleString("vi-VN")}` },
+        { "Thông tin": "Khoảng thời gian", "Giá trị": getExportDateLabel() },
+        { "Thông tin": "Tổng giao dịch", "Giá trị": `${rows.length} giao dịch` },
+        { "Thông tin": "Tổng doanh thu", "Giá trị": formatVND(rows.reduce((s, r) => s + Number(r.amount || 0), 0)) },
+      ];
+      const summarySheet = XLSX.utils.json_to_sheet(headerInfo);
+      summarySheet["!cols"] = [{ wch: 24 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "TomTat");
+
       const detailSheet = XLSX.utils.json_to_sheet(detailRows);
       detailSheet["!cols"] = [
         { wch: 6 },
@@ -622,7 +701,7 @@ const AdminTransactions: React.FC = () => {
       XLSX.utils.book_append_sheet(workbook, detailSheet, "GiaoDich");
 
       // Sheet 2: Chi tiết giao dịch (Vé + Bắp nước)
-      const detailsArray = await fetchTransactionDetailsForExport();
+      const detailsArray = await fetchTransactionDetailsForExport(dateRange);
       const itemDetailRows = detailsArray.map((item, index) => ({
         STT: index + 1,
         "Mã đặt vé": item.bookingCode,
@@ -652,7 +731,8 @@ const AdminTransactions: React.FC = () => {
       XLSX.utils.book_append_sheet(workbook, itemDetailSheet, "ChiTietGiaoDich");
 
       const exportDate = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `giao-dich-${exportDate}.xlsx`);
+      const fileSuffix = exportDateMode !== "all" ? `-${exportDateMode}-${getExportDateLabel().replace(/[\s\/]/g, "-")}` : "";
+      XLSX.writeFile(workbook, `giao-dich${fileSuffix}-${exportDate}.xlsx`);
     } finally {
       setExportingType(null);
     }
@@ -662,9 +742,12 @@ const AdminTransactions: React.FC = () => {
     if (exportingType) return;
 
     setExportingType("pdf");
+    setExportDialogOpen(false);
     try {
-      const rows = await fetchTransactionsForExport();
+      const dateRange = getExportDateRange();
+      const rows = await fetchTransactionsForExport(dateRange);
       if (rows.length === 0) {
+        setExportingType(null);
         return;
       }
 
@@ -937,9 +1020,10 @@ const AdminTransactions: React.FC = () => {
       }
 
       const exportDate = new Date().toISOString().slice(0, 10);
+      const exportDateLabel = getExportDateLabel();
       const docDefinition: TDocumentDefinitions = {
         info: {
-          title: `Báo cáo doanh thu ${exportDate}`,
+          title: `Báo cáo doanh thu ${exportDateLabel} - ${exportDate}`,
           subject: "Báo cáo doanh thu giao dịch",
         },
         pageMargins: [40, 50, 40, 60],
@@ -950,6 +1034,10 @@ const AdminTransactions: React.FC = () => {
         },
         content: [
           { text: "BÁO CÁO DOANH THU GIAO DỊCH", style: "header" },
+          {
+            text: `Khoảng thời gian: ${exportDateLabel}`,
+            style: "meta",
+          },
           {
             text: `Phạm vi: Tháng ${selectedMonth}/${selectedYear} • Tổng dữ liệu: ${formatNumber(totalTransactions)} giao dịch`,
             style: "meta",
@@ -1036,7 +1124,8 @@ const AdminTransactions: React.FC = () => {
         },
       };
 
-      pdfMake.createPdf(docDefinition).download(`bao-cao-doanh-thu-${exportDate}.pdf`);
+      const pdfSuffix = exportDateMode !== "all" ? `-${exportDateMode}-${exportDateLabel.replace(/[\s\/]/g, "-")}` : "";
+      pdfMake.createPdf(docDefinition).download(`bao-cao-doanh-thu${pdfSuffix}-${exportDate}.pdf`);
     } finally {
       setExportingType(null);
     }
@@ -1096,19 +1185,11 @@ const AdminTransactions: React.FC = () => {
           </Button>
           <Button
             className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={() => void exportTransactionsExcel()}
-            disabled={isLoading || exportingType !== null || transactions.length === 0}
+            onClick={() => setExportDialogOpen(true)}
+            disabled={isLoading || exportingType !== null}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            {exportingType === "excel" ? "Đang xuất Excel..." : "Xuất Excel"}
-          </Button>
-          <Button
-            className="gap-2"
-            onClick={() => void exportRevenueReportPdf()}
-            disabled={isLoading || exportingType !== null || transactions.length === 0}
-          >
-            <FileText className="w-4 h-4" />
-            {exportingType === "pdf" ? "Đang xuất PDF..." : "Xuất Báo Cáo"}
+            <Download className="w-4 h-4" />
+            {exportingType ? "Đang xuất..." : "Xuất File"}
           </Button>
         </div>
       </div>
@@ -1931,6 +2012,154 @@ const AdminTransactions: React.FC = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== EXPORT DIALOG ===================== */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Download className="w-5 h-5 text-emerald-500" />
+              Xuất File Giao Dịch
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* Date mode selector */}
+            <div className="space-y-3">
+              <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Khoảng thời gian</label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { mode: "all" as const, label: "Tất cả", icon: CalendarRange },
+                  { mode: "day" as const, label: "Ngày", icon: CalendarDays },
+                  { mode: "month" as const, label: "Tháng", icon: Calendar },
+                  { mode: "year" as const, label: "Năm", icon: Calendar },
+                  { mode: "custom" as const, label: "Tuỳ chọn", icon: CalendarRange },
+                ].map(({ mode, label, icon: Icon }) => (
+                  <button
+                    key={mode}
+                    onClick={() => setExportDateMode(mode)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-xs font-medium ${
+                      exportDateMode === mode
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                        : "border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date inputs based on mode */}
+            {exportDateMode === "day" && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium w-20 shrink-0">Chọn ngày:</label>
+                <Input
+                  type="date"
+                  value={exportDay}
+                  onChange={(e) => setExportDay(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+            )}
+
+            {exportDateMode === "month" && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium w-20 shrink-0">Tháng/Năm:</label>
+                <div className="flex gap-2 flex-1">
+                  <Select value={String(exportMonth)} onValueChange={(v) => setExportMonth(Number(v))}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <SelectItem key={m} value={String(m)}>Tháng {m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={String(exportYear)} onValueChange={(v) => setExportYear(Number(v))}>
+                    <SelectTrigger className="w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {exportDateMode === "year" && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium w-20 shrink-0">Năm:</label>
+                <Select value={String(exportYear)} onValueChange={(v) => setExportYear(Number(v))}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {exportDateMode === "custom" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium w-20 shrink-0">Từ ngày:</label>
+                  <Input
+                    type="date"
+                    value={exportCustomFrom}
+                    onChange={(e) => setExportCustomFrom(e.target.value)}
+                    className="flex-1"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium w-20 shrink-0">Đến ngày:</label>
+                  <Input
+                    type="date"
+                    value={exportCustomTo}
+                    onChange={(e) => setExportCustomTo(e.target.value)}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Selected range summary */}
+            <div className="rounded-lg bg-muted/50 border p-3 text-sm">
+              <span className="text-muted-foreground">Sẽ xuất dữ liệu: </span>
+              <span className="font-semibold text-foreground">{getExportDateLabel()}</span>
+            </div>
+
+            {/* Export buttons */}
+            <Separator />
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => void exportTransactionsExcel()}
+                disabled={exportingType !== null}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                {exportingType === "excel" ? "Đang xuất..." : "Xuất Excel"}
+              </Button>
+              <Button
+                className="flex-1 gap-2"
+                onClick={() => void exportRevenueReportPdf()}
+                disabled={exportingType !== null}
+              >
+                <FileText className="w-4 h-4" />
+                {exportingType === "pdf" ? "Đang xuất..." : "Xuất Báo Cáo PDF"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

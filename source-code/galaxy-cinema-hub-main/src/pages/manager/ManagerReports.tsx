@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download, RefreshCw, TrendingUp, Users2, BarChart2,
-  Calendar, DollarSign, Percent, FileSpreadsheet, FileText
+  Calendar, DollarSign, Percent, FileSpreadsheet, FileText,
+  CalendarDays
 } from "lucide-react";
 import { apiCall, API_ENDPOINTS } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -101,7 +102,13 @@ const RevenueLineChart: React.FC<{ data: RevenueRow[]; height?: number }> = ({ d
 
 const PERIODS = [
   { label: "7 ngày", value: 7 },
-  { label: "14 ngày", value: 14 },
+  { label: "15 ngày", value: 15 },
+  { label: "30 ngày", value: 30 },
+];
+
+const EXPORT_PERIODS = [
+  { label: "7 ngày", value: 7 },
+  { label: "15 ngày", value: 15 },
   { label: "30 ngày", value: 30 },
 ];
 
@@ -112,6 +119,8 @@ const ManagerReports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [exportingType, setExportingType] = useState<"excel" | "pdf" | null>(null);
   const [cinemaName, setCinemaName] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState(7);
 
   const fmtCurrency = (v: number) =>
     new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
@@ -137,10 +146,11 @@ const ManagerReports: React.FC = () => {
   const toPercent = (part: number, total: number) =>
     total > 0 ? `${((part / total) * 100).toFixed(1)}%` : "0%";
 
-  const computeDateRange = useCallback(() => {
+  const computeDateRange = useCallback((customPeriod?: number) => {
+    const p = customPeriod ?? period;
     const to = new Date();
     const from = new Date();
-    from.setDate(from.getDate() - period + 1);
+    from.setDate(from.getDate() - p + 1);
     return {
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
@@ -173,16 +183,20 @@ const ManagerReports: React.FC = () => {
 
   // ── Fetch transactions for export ──
 
-  const fetchTransactionsForExport = async (): Promise<TransactionItem[]> => {
+  const fetchTransactionsForExport = async (customPeriod?: number): Promise<TransactionItem[]> => {
+    const p = customPeriod ?? exportPeriod;
+    const { from, to } = computeDateRange(p);
     const res = await apiCall<{ success: boolean; data: { items: TransactionItem[] } }>(
-      `${API_ENDPOINTS.MANAGER_TRANSACTIONS}?limit=5000`
+      `${API_ENDPOINTS.MANAGER_TRANSACTIONS}?limit=5000&date_from=${from}&date_to=${to}`
     );
     return res.data?.items || [];
   };
 
-  const fetchTransactionDetailsForExport = async (): Promise<any[]> => {
+  const fetchTransactionDetailsForExport = async (customPeriod?: number): Promise<any[]> => {
+    const p = customPeriod ?? exportPeriod;
+    const { from, to } = computeDateRange(p);
     const res = await apiCall<{ success: boolean; data: { items: any[] } }>(
-      API_ENDPOINTS.MANAGER_TRANSACTIONS_EXPORT_DETAILS
+      `${API_ENDPOINTS.MANAGER_TRANSACTIONS_EXPORT_DETAILS}?date_from=${from}&date_to=${to}`
     );
     return res.data?.items || [];
   };
@@ -192,10 +206,11 @@ const ManagerReports: React.FC = () => {
   const exportTransactionsExcel = async () => {
     if (exportingType) return;
     setExportingType("excel");
+    setExportDialogOpen(false);
     try {
-      const rows = await fetchTransactionsForExport();
+      const rows = await fetchTransactionsForExport(exportPeriod);
       if (rows.length === 0) {
-        toast({ title: "Không có dữ liệu", description: "Không có giao dịch nào để xuất", variant: "destructive" });
+        toast({ title: "Không có dữ liệu", description: `Không có giao dịch nào trong ${exportPeriod} ngày qua`, variant: "destructive" });
         return;
       }
 
@@ -216,6 +231,20 @@ const ManagerReports: React.FC = () => {
       }));
 
       const workbook = XLSX.utils.book_new();
+
+      // Sheet tóm tắt
+      const { from, to } = computeDateRange(exportPeriod);
+      const headerInfo = [
+        { "Thông tin": "Báo cáo giao dịch", "Giá trị": `${cinemaName || "Manager"}` },
+        { "Thông tin": "Ngày xuất", "Giá trị": new Date().toLocaleString("vi-VN") },
+        { "Thông tin": "Khoảng thời gian", "Giá trị": `${exportPeriod} ngày gần nhất (${from} → ${to})` },
+        { "Thông tin": "Tổng giao dịch", "Giá trị": `${rows.length} giao dịch` },
+        { "Thông tin": "Tổng doanh thu", "Giá trị": formatVND(rows.reduce((s, r) => s + Number(r.amount || 0), 0)) },
+      ];
+      const summarySheet = XLSX.utils.json_to_sheet(headerInfo);
+      summarySheet["!cols"] = [{ wch: 24 }, { wch: 48 }];
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "TomTat");
+
       const detailSheet = XLSX.utils.json_to_sheet(detailRows);
       detailSheet["!cols"] = [
         { wch: 6 }, { wch: 20 }, { wch: 22 }, { wch: 28 }, { wch: 32 },
@@ -225,7 +254,7 @@ const ManagerReports: React.FC = () => {
       XLSX.utils.book_append_sheet(workbook, detailSheet, "GiaoDich");
 
       // Sheet 2: Chi tiết (Vé + Bắp nước)
-      const detailsArray = await fetchTransactionDetailsForExport();
+      const detailsArray = await fetchTransactionDetailsForExport(exportPeriod);
       const itemDetailRows = detailsArray.map((item, i) => ({
         STT: i + 1,
         "Mã đặt vé": item.bookingCode,
@@ -246,8 +275,8 @@ const ManagerReports: React.FC = () => {
       XLSX.utils.book_append_sheet(workbook, itemDetailSheet, "ChiTietGiaoDich");
 
       const exportDate = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `giao-dich-${cinemaName || "manager"}-${exportDate}.xlsx`);
-      toast({ title: "✅ Xuất thành công", description: "File Excel đã được tải về" });
+      XLSX.writeFile(workbook, `giao-dich-${cinemaName || "manager"}-${exportPeriod}ngay-${exportDate}.xlsx`);
+      toast({ title: "✅ Xuất thành công", description: `File Excel ${exportPeriod} ngày đã được tải về` });
     } catch (e: unknown) {
       toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xuất Excel thất bại", variant: "destructive" });
     } finally { setExportingType(null); }
@@ -258,10 +287,11 @@ const ManagerReports: React.FC = () => {
   const exportRevenueReportPdf = async () => {
     if (exportingType) return;
     setExportingType("pdf");
+    setExportDialogOpen(false);
     try {
-      const rows = await fetchTransactionsForExport();
+      const rows = await fetchTransactionsForExport(exportPeriod);
       if (rows.length === 0) {
-        toast({ title: "Không có dữ liệu", description: "Không có giao dịch nào để xuất báo cáo", variant: "destructive" });
+        toast({ title: "Không có dữ liệu", description: `Không có giao dịch nào trong ${exportPeriod} ngày qua`, variant: "destructive" });
         return;
       }
 
@@ -376,13 +406,15 @@ const ManagerReports: React.FC = () => {
       };
 
       const exportDate = new Date().toISOString().slice(0, 10);
+      const { from: exportFrom, to: exportTo } = computeDateRange(exportPeriod);
       const docDefinition: TDocumentDefinitions = {
-        info: { title: `Báo cáo doanh thu ${cinemaName} ${exportDate}` },
+        info: { title: `Báo cáo doanh thu ${cinemaName} - ${exportPeriod} ngày - ${exportDate}` },
         pageMargins: [40, 50, 40, 60],
         defaultStyle: { font: "Roboto", fontSize: 11, color: "#0f172a" },
         content: [
           { text: "BÁO CÁO DOANH THU GIAO DỊCH", style: "header" },
           { text: `Rạp: ${cinemaName}`, style: "meta" },
+          { text: `Khoảng thời gian: ${exportPeriod} ngày gần nhất (${exportFrom} → ${exportTo})`, style: "meta" },
           { text: `Phạm vi: Tháng ${currentMonth}/${currentYear} • Tổng dữ liệu: ${formatNumber(totalTransactions)} giao dịch`, style: "meta" },
           { text: `Ngày xuất: ${new Date().toLocaleString("vi-VN")}`, style: "meta", margin: [0, 0, 0, 20] },
           ...metricRows,
@@ -409,8 +441,8 @@ const ManagerReports: React.FC = () => {
         },
       };
 
-      pdfMake.createPdf(docDefinition).download(`bao-cao-${cinemaName || "manager"}-${exportDate}.pdf`);
-      toast({ title: "✅ Xuất thành công", description: "File PDF báo cáo đã được tải về" });
+      pdfMake.createPdf(docDefinition).download(`bao-cao-${cinemaName || "manager"}-${exportPeriod}ngay-${exportDate}.pdf`);
+      toast({ title: "✅ Xuất thành công", description: `File PDF báo cáo ${exportPeriod} ngày đã được tải về` });
     } catch (e: unknown) {
       toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xuất báo cáo thất bại", variant: "destructive" });
     } finally { setExportingType(null); }
@@ -438,6 +470,7 @@ const ManagerReports: React.FC = () => {
   ];
 
   return (
+    <>
     <div className="p-4 lg:p-6 space-y-5">
 
       {/* Header */}
@@ -454,20 +487,12 @@ const ManagerReports: React.FC = () => {
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
           </button>
           <button
-            onClick={() => void exportTransactionsExcel()}
+            onClick={() => setExportDialogOpen(true)}
             disabled={exportingType !== null}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02]"
           >
-            {exportingType === "excel" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            {exportingType === "excel" ? "Đang xuất..." : "Xuất Excel"}
-          </button>
-          <button
-            onClick={() => void exportRevenueReportPdf()}
-            disabled={exportingType !== null}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20 hover:scale-[1.02]"
-          >
-            {exportingType === "pdf" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-            {exportingType === "pdf" ? "Đang xuất..." : "Xuất Báo Cáo"}
+            {exportingType ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exportingType ? "Đang xuất..." : "Xuất File"}
           </button>
         </div>
       </div>
@@ -569,6 +594,77 @@ const ManagerReports: React.FC = () => {
         )}
       </div>
     </div>
+
+    {/* ── Export Dialog ── */}
+    {exportDialogOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-5 animate-in fade-in zoom-in-95">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Download className="w-5 h-5 text-emerald-500" />
+              Xuất File Báo Cáo
+            </h3>
+            <button
+              onClick={() => setExportDialogOpen(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Period selector */}
+          <div className="space-y-3">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Chọn khoảng thời gian</label>
+            <div className="grid grid-cols-3 gap-3">
+              {EXPORT_PERIODS.map((ep) => (
+                <button
+                  key={ep.value}
+                  onClick={() => setExportPeriod(ep.value)}
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all font-medium",
+                    exportPeriod === ep.value
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <CalendarDays className="w-5 h-5" />
+                  <span className="text-sm">{ep.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Selected range info */}
+          <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-sm">
+            <span className="text-gray-500">Sẽ xuất dữ liệu: </span>
+            <span className="font-semibold text-gray-800">
+              {exportPeriod} ngày gần nhất ({computeDateRange(exportPeriod).from} → {computeDateRange(exportPeriod).to})
+            </span>
+          </div>
+
+          {/* Action buttons */}
+          <div className="border-t border-gray-200 pt-4 flex gap-3">
+            <button
+              onClick={() => void exportTransactionsExcel()}
+              disabled={exportingType !== null}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
+            >
+              {exportingType === "excel" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              {exportingType === "excel" ? "Đang xuất..." : "Xuất Excel"}
+            </button>
+            <button
+              onClick={() => void exportRevenueReportPdf()}
+              disabled={exportingType !== null}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
+            >
+              {exportingType === "pdf" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              {exportingType === "pdf" ? "Đang xuất..." : "Xuất Báo Cáo PDF"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

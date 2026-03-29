@@ -1,7 +1,7 @@
 {
-    "time": "2026-03-29 21:20:49",
-    "raw_request_uri": "\/test_db.php",
-    "parsed_uri": "\/test_db.php",
+    "time": "2026-03-30 01:47:06",
+    "raw_request_uri": "\/uploads\/posters\/MAI.jpg",
+    "parsed_uri": "\/uploads\/posters\/MAI.jpg",
     "method": "GET",
     "routes": [
         {
