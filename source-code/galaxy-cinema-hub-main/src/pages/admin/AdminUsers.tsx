@@ -71,6 +71,7 @@ interface User {
   current_points: number;
   created_at: string;
   avatar?: string | null;
+  cinema_id?: number | null;
 }
 
 interface Pagination {
@@ -99,6 +100,7 @@ const AdminUsers: React.FC = () => {
     total_pages: 0,
   });
   const [roles, setRoles] = useState<Array<{ id: number; name: string }>>([]);
+  const [cinemas, setCinemas] = useState<Array<{ id: number; name: string; manager_id?: number | null; manager_name?: string | null }>>([]);
 
   // Fetch users from API
   const fetchUsers = React.useCallback(async () => {
@@ -182,10 +184,24 @@ const AdminUsers: React.FC = () => {
     }
   }, []);
 
+  // Fetch cinemas for dropdown
+  const fetchCinemas = React.useCallback(async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.CINEMAS);
+      const data = await response.json();
+      if (data.success) {
+        setCinemas(data.data.cinemas || []);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching cinemas:", error);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchUsers();
     fetchRoles();
+    fetchCinemas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -208,6 +224,7 @@ const AdminUsers: React.FC = () => {
     dob: "",
     role_id: 2, // Member default
     password: "",
+    cinema_id: "",
   });
 
   // Statistics
@@ -226,6 +243,7 @@ const AdminUsers: React.FC = () => {
       dob: user.dob || "",
       role_id: user.role_id,
       password: "",
+      cinema_id: user.cinema_id ? user.cinema_id.toString() : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -244,6 +262,8 @@ const AdminUsers: React.FC = () => {
         },
         body: JSON.stringify({
           role_id: formData.role_id,
+          ...(formData.cinema_id ? { cinema_id: formData.cinema_id } : {}),
+          ...(formData.password ? { password: formData.password } : {})
         }),
       });
 
@@ -296,10 +316,13 @@ const AdminUsers: React.FC = () => {
 
   // Create user via API
   const handleCreateUser = async () => {
-    if (!formData.email || !formData.full_name || !formData.password) {
+    const selectedRoleName = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase();
+    const isStaffOrManager = selectedRoleName === 'staff' || selectedRoleName === 'manager';
+
+    if (!formData.email || !formData.full_name || !formData.password || (isStaffOrManager && !formData.cinema_id)) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+        description: "Vui lòng điền đầy đủ thông tin bắt buộc, bao gồm cả rạp chiếu nếu là nhân viên.",
         variant: "destructive",
       });
       return;
@@ -332,6 +355,7 @@ const AdminUsers: React.FC = () => {
           dob: "",
           role_id: 2,
           password: "",
+          cinema_id: "",
         });
         fetchUsers(); // Reload
       } else {
@@ -665,7 +689,12 @@ const AdminUsers: React.FC = () => {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>{getRoleBadge(user.role_name)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getRoleBadge(user.role_name)}
+                        {user.cinema_id && <span className="text-xs text-muted-foreground">Rạp #{user.cinema_id}</span>}
+                      </div>
+                    </TableCell>
                     <TableCell>{getMembershipBadge(user.rank_name)}</TableCell>
                     <TableCell className="font-medium">
                       {user.current_points?.toLocaleString("vi-VN") || 0} điểm
@@ -773,11 +802,24 @@ const AdminUsers: React.FC = () => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="edit-password">Mật Khẩu Mới</Label>
+              <Input
+                id="edit-password"
+                type="password"
+                placeholder="Để trống nếu không đổi (tối thiểu 6 ký tự)"
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="edit-role">Vai Trò</Label>
               <Select
                 value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role_id: parseInt(value) })
+                  setFormData({ ...formData, role_id: parseInt(value), cinema_id: "" })
                 }
               >
                 <SelectTrigger id="edit-role">
@@ -794,6 +836,39 @@ const AdminUsers: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {(roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'staff' || roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager') && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-cinema">Chi nhánh Rạp *</Label>
+                <Select
+                  value={formData.cinema_id.toString()}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, cinema_id: value })
+                  }
+                >
+                  <SelectTrigger id="edit-cinema">
+                    <SelectValue placeholder="Chọn rạp..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cinemas.map((cinema) => {
+                      const isManagerRole = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager';
+                      const isAlreadyAssigned = !!(isManagerRole && cinema.manager_id && cinema.manager_id !== selectedUser?.id);
+                      
+                      return (
+                        <SelectItem 
+                          key={cinema.id} 
+                          value={cinema.id.toString()}
+                          disabled={isAlreadyAssigned}
+                        >
+                          {cinema.name}
+                          {isAlreadyAssigned ? ` (Đã gán quản lý khác)` : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -886,7 +961,7 @@ const AdminUsers: React.FC = () => {
               <Select
                 value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role_id: parseInt(value) })
+                  setFormData({ ...formData, role_id: parseInt(value), cinema_id: "" })
                 }
               >
                 <SelectTrigger id="create-role">
@@ -903,6 +978,39 @@ const AdminUsers: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {(roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'staff' || roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager') && (
+              <div className="space-y-2">
+                <Label htmlFor="create-cinema">Chi nhánh Rạp *</Label>
+                <Select
+                  value={formData.cinema_id.toString()}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, cinema_id: value })
+                  }
+                >
+                  <SelectTrigger id="create-cinema">
+                    <SelectValue placeholder="Chọn rạp..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cinemas.map((cinema) => {
+                      const isManagerRole = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager';
+                      const isAlreadyAssigned = !!(isManagerRole && cinema.manager_id);
+                      
+                      return (
+                        <SelectItem 
+                          key={cinema.id} 
+                          value={cinema.id.toString()}
+                          disabled={isAlreadyAssigned}
+                        >
+                          {cinema.name}
+                          {isAlreadyAssigned ? ` (Đã gán quản lý khác)` : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

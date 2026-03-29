@@ -165,6 +165,20 @@ CREATE TABLE cinemas (
     INDEX idx_manager (manager_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Bảng Liên Kết Nhân Viên ↔ Rạp
+-- Manager được gán qua cinemas.manager_id (1 manager/rạp)
+-- Staff (role_id=3) được gán qua bảng này (nhiều staff/rạp)
+CREATE TABLE cinema_staff (
+    cinema_id  INT NOT NULL,
+    user_id    INT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (cinema_id, user_id),
+    CONSTRAINT fk_cs_cinema FOREIGN KEY (cinema_id) REFERENCES cinemas(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cs_user   FOREIGN KEY (user_id)   REFERENCES users(id)   ON DELETE CASCADE,
+    INDEX idx_cs_cinema (cinema_id),
+    INDEX idx_cs_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Bảng Phòng Chiếu
 CREATE TABLE cinema_halls (
     id INT AUTO_INCREMENT PRIMARY KEY,

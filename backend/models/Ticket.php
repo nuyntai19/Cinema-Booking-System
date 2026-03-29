@@ -134,7 +134,39 @@ class Ticket
      */
     public function getScanBundleByBookingId($bookingId)
     {
-        $stmt = $this->db->prepare("\n            SELECT \n                t.*,\n                s.`number` AS `seat_number`,\n                s.row_code AS `row_number`,\n                st.name AS seat_type_name,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                m.title AS movie_title,\n                m.age_rating,\n                h.name AS room_name,\n                c.name AS cinema_name,\n                c.address AS cinema_address,\n                b.booking_code,\n                b.user_id,\n                u.email AS user_email,\n                up.full_name AS user_full_name,\n                up.phone AS user_phone,\n                up.avatar AS user_avatar\n            FROM tickets t\n            JOIN seats s ON t.seat_id = s.id\n            JOIN seat_types st ON s.seat_type_id = st.id\n            JOIN bookings b ON t.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN cinema_halls h ON sh.cinema_hall_id = h.id\n            JOIN cinemas c ON h.cinema_id = c.id\n            LEFT JOIN users u ON b.user_id = u.id\n            LEFT JOIN user_profiles up ON u.id = up.user_id\n            WHERE t.booking_id = ?\n            ORDER BY t.id ASC\n        ");
+        $stmt = $this->db->prepare("
+            SELECT 
+                t.*,
+                s.`number` AS `seat_number`,
+                s.row_code AS `row_number`,
+                st.name AS seat_type_name,
+                sh.start_time AS showtime_start,
+                sh.end_time AS showtime_end,
+                m.title AS movie_title,
+                m.age_rating,
+                h.name AS room_name,
+                c.id AS cinema_id,
+                c.name AS cinema_name,
+                c.address AS cinema_address,
+                b.booking_code,
+                b.user_id,
+                u.email AS user_email,
+                up.full_name AS user_full_name,
+                up.phone AS user_phone,
+                up.avatar AS user_avatar
+            FROM tickets t
+            JOIN seats s ON t.seat_id = s.id
+            JOIN seat_types st ON s.seat_type_id = st.id
+            JOIN bookings b ON t.booking_id = b.id
+            JOIN showtimes sh ON b.showtime_id = sh.id
+            JOIN movies m ON sh.movie_id = m.id
+            JOIN cinema_halls h ON sh.cinema_hall_id = h.id
+            JOIN cinemas c ON h.cinema_id = c.id
+            LEFT JOIN users u ON b.user_id = u.id
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE t.booking_id = ?
+            ORDER BY t.id ASC
+        ");
 
         $stmt->execute([$bookingId]);
         return $stmt->fetchAll();
@@ -355,7 +387,13 @@ class Ticket
             $params[] = $dateTo;
         }
 
-        $sql = "\n            SELECT\n                tsh.id,\n                tsh.booking_id,\n                tsh.ticket_code_input,\n                tsh.scanned_by_user_id,\n                tsh.scan_result,\n                tsh.note,\n                tsh.scanned_at,\n                b.booking_code,\n                m.title AS movie_title,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                su.email AS scanned_by_email\n            FROM ticket_scan_history tsh\n            JOIN bookings b ON tsh.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            LEFT JOIN users su ON tsh.scanned_by_user_id = su.id\n        ";
+        $cinemaId = isset($filters['cinema_id']) ? (int)$filters['cinema_id'] : null;
+        if ($cinemaId) {
+            $where[] = 'c.id = ?';
+            $params[] = $cinemaId;
+        }
+
+        $sql = "\n            SELECT\n                tsh.id,\n                tsh.booking_id,\n                tsh.ticket_code_input,\n                tsh.scanned_by_user_id,\n                tsh.scan_result,\n                tsh.note,\n                tsh.scanned_at,\n                b.booking_code,\n                m.title AS movie_title,\n                sh.start_time AS showtime_start,\n                sh.end_time AS showtime_end,\n                su.email AS scanned_by_email\n            FROM ticket_scan_history tsh\n            JOIN bookings b ON tsh.booking_id = b.id\n            JOIN showtimes sh ON b.showtime_id = sh.id\n            JOIN movies m ON sh.movie_id = m.id\n            JOIN cinema_halls ch ON sh.cinema_hall_id = ch.id\n            JOIN cinemas c ON ch.cinema_id = c.id\n            LEFT JOIN users su ON tsh.scanned_by_user_id = su.id\n        ";
 
         if (!empty($where)) {
             $sql .= ' WHERE ' . implode(' AND ', $where);

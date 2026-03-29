@@ -609,8 +609,8 @@ class ShowtimeController
             $weight = isset($prioritySet[$movieId]) ? max(1, (int) $priorityWeight) : 1;
             $count = (int) ($dailyMovieCounts[$movieId] ?? 0);
 
-            // Score cang nho cang duoc uu tien: count/weight
-            $score = $count / $weight;
+            // Score cang nho cang duoc uu tien: tinh them 1 de score phan anh dung "next slot"
+            $score = ($count + 1) / $weight;
 
             // Giam tinh trang cung 1 khung gio tat ca phong deu chieu cung 1 phim
             $sameSlotCount = (int) ($sameSlotMovieCounts[$movieId] ?? 0);

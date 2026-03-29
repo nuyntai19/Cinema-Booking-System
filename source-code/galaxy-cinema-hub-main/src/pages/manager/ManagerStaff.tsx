@@ -13,10 +13,12 @@ interface StaffMember {
   id: number; email: string; status: "Active" | "Banned";
   created_at: string; full_name: string; phone: string; avatar: string | null;
   joined_cinema_at?: string;
+  dob?: string | null;
+  cinema_id?: number | null;
 }
-interface StaffFormData { email: string; password: string; full_name: string; phone: string; }
+interface StaffFormData { email: string; password: string; full_name: string; phone: string; dob?: string; cinema_id?: string; }
 
-const EMPTY_FORM: StaffFormData = { email: "", password: "", full_name: "", phone: "" };
+const EMPTY_FORM: StaffFormData = { email: "", password: "", full_name: "", phone: "", dob: "", cinema_id: "" };
 
 const getInitials = (name: string, email: string) => {
   const src = name || email || "?";
@@ -46,6 +48,7 @@ const ManagerStaff: React.FC = () => {
   const [form, setForm] = useState<StaffFormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [toggleConfirm, setToggleConfirm] = useState<StaffMember | null>(null);
+  const [cinemas, setCinemas] = useState<Array<{ id: number; name: string }>>([]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,17 +114,37 @@ const ManagerStaff: React.FC = () => {
     }
   }, [search, statusFilter, page, toast]);
 
+  const fetchCinemas = useCallback(async () => {
+    try {
+      const res = await apiCall<{ success: boolean; data: { cinemas: Array<{ id: number; name: string }> } }>(API_ENDPOINTS.CINEMAS);
+      if (res.success) {
+        setCinemas(res.data.cinemas || []);
+      }
+    } catch (e: unknown) {
+      console.error(e);
+    }
+  }, []);
+
   useEffect(() => {
     const t = setTimeout(() => { void fetchStaff(); }, 300);
     return () => clearTimeout(t);
   }, [fetchStaff]);
 
+  useEffect(() => {
+    void fetchCinemas();
+  }, [fetchCinemas]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSubmitting(true);
     try {
       if (editingId) {
+        let payload: any = { full_name: form.full_name, phone: form.phone };
+        if (form.dob) payload.dob = form.dob;
+        if (form.cinema_id) payload.cinema_id = form.cinema_id;
+        if (form.password) payload.password = form.password;
+        
         await apiCall(API_ENDPOINTS.MANAGER_STAFF_DETAIL(editingId), {
-          method: "PUT", body: JSON.stringify({ full_name: form.full_name, phone: form.phone }),
+          method: "PUT", body: JSON.stringify(payload),
         });
         toast({ title: "✅ Thành công", description: "Cập nhật nhân viên thành công" });
       } else {
@@ -150,7 +173,10 @@ const ManagerStaff: React.FC = () => {
   };
 
   const handleEdit = (member: StaffMember) => {
-    setForm({ email: member.email, password: "", full_name: member.full_name || "", phone: member.phone || "" });
+    setForm({ 
+      email: member.email, password: "", full_name: member.full_name || "", 
+      phone: member.phone || "", dob: member.dob || "", cinema_id: member.cinema_id?.toString() || "" 
+    });
     setEditingId(member.id); setShowForm(true);
   };
 
@@ -163,8 +189,8 @@ const ManagerStaff: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-white">Quản Lý Nhân Viên</h1>
-          <p className="text-sm text-white/40 mt-0.5">Quản lý tài khoản nhân viên của rạp</p>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-800">Quản Lý Nhân Viên</h1>
+          <p className="text-sm text-gray-800/40 mt-0.5">Quản lý tài khoản nhân viên của rạp</p>
         </div>
         <div className="flex items-center gap-3">
           <input
@@ -176,7 +202,7 @@ const ManagerStaff: React.FC = () => {
           />
           <label
             htmlFor="excel-upload"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white font-medium text-sm hover:bg-white/10 transition-all cursor-pointer shadow-lg"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 font-medium text-sm hover:bg-gray-100 transition-all cursor-pointer shadow-lg"
           >
             <Upload className="w-4 h-4" /> Nhập Excel
           </label>
@@ -192,32 +218,32 @@ const ManagerStaff: React.FC = () => {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Tổng nhân viên", value: total, color: "text-white" },
+          { label: "Tổng nhân viên", value: total, color: "text-gray-800" },
           { label: "Đang hoạt động", value: activeCount, color: "text-emerald-400" },
           { label: "Vô hiệu hóa", value: bannedCount, color: "text-red-400" },
         ].map(s => (
-          <div key={s.label} className="p-4 rounded-2xl border border-white/8 bg-white/3 text-center">
+          <div key={s.label} className="p-4 rounded-2xl border border-gray-200 bg-white text-center">
             <p className={cn("text-2xl font-bold", s.color)}>{s.value}</p>
-            <p className="text-xs text-white/40 mt-0.5">{s.label}</p>
+            <p className="text-xs text-gray-800/40 mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center p-4 rounded-2xl border border-white/8 bg-white/3">
+      <div className="flex flex-wrap gap-3 items-center p-4 rounded-2xl border border-gray-200 bg-white">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800/30" />
           <input
             placeholder="Tìm theo tên, email, SĐT..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-orange-500/50 transition-colors"
+            className="w-full h-9 pl-9 pr-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm placeholder:text-gray-800/30 focus:outline-none focus:border-orange-500/50 transition-colors"
           />
         </div>
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
-          className="h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-orange-500/50 transition-colors [&>option]:bg-[#1a1a2e]"
+          className="h-9 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm focus:outline-none focus:border-orange-500/50 transition-colors [&>option]:bg-white"
         >
           <option value="">Tất cả trạng thái</option>
           <option value="Active">Đang hoạt động</option>
@@ -225,34 +251,34 @@ const ManagerStaff: React.FC = () => {
         </select>
         {(search || statusFilter) && (
           <button onClick={() => { setSearch(""); setStatusFilter(""); }}
-            className="px-3 h-9 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/8 transition-colors">
+            className="px-3 h-9 rounded-xl text-xs text-gray-800/50 hover:text-gray-800 hover:bg-gray-50 transition-colors">
             Xóa lọc
           </button>
         )}
       </div>
 
       {/* Staff List */}
-      <div className="rounded-2xl border border-white/8 bg-white/3">
-        <div className="flex items-center justify-between p-4 border-b border-white/8">
+      <div className="rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <User className="w-4 h-4 text-orange-400" />
-            <span className="text-sm font-semibold text-white">Danh Sách Nhân Viên</span>
+            <span className="text-sm font-semibold text-gray-800">Danh Sách Nhân Viên</span>
             {!loading && (
               <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-xs font-medium">{total} người</span>
             )}
           </div>
-          {loading && <RefreshCw className="w-4 h-4 animate-spin text-white/30" />}
+          {loading && <RefreshCw className="w-4 h-4 animate-spin text-gray-800/30" />}
         </div>
 
         <div className="p-4">
           {loading ? (
             <div className="space-y-3">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-white/5 animate-pulse" />)}
+              {[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-white animate-pulse" />)}
             </div>
           ) : staff.length === 0 ? (
             <div className="py-16 text-center">
-              <User className="w-10 h-10 mx-auto mb-3 text-white/20" />
-              <p className="text-white/30 text-sm">Không tìm thấy nhân viên nào</p>
+              <User className="w-10 h-10 mx-auto mb-3 text-gray-800/20" />
+              <p className="text-gray-800/30 text-sm">Không tìm thấy nhân viên nào</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -262,8 +288,8 @@ const ManagerStaff: React.FC = () => {
                   className={cn(
                     "flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-3 group",
                     member.status === "Active"
-                      ? "border-white/6 bg-white/2 hover:bg-white/5 hover:border-white/12"
-                      : "border-white/4 bg-white/1 opacity-60 hover:opacity-80"
+                      ? "border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-200"
+                      : "border-gray-200 bg-gray-50 opacity-60 hover:opacity-80"
                   )}
                 >
                   <div className="flex items-center gap-4">
@@ -278,7 +304,7 @@ const ManagerStaff: React.FC = () => {
                     {/* Info */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-white">{member.full_name || "Chưa có tên"}</span>
+                        <span className="font-medium text-sm text-gray-800">{member.full_name || "Chưa có tên"}</span>
                         <span className={cn(
                           "px-1.5 py-0.5 rounded-full text-xs font-medium",
                           member.status === "Active"
@@ -289,11 +315,11 @@ const ManagerStaff: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <span className="text-xs text-white/40 flex items-center gap-1">
+                        <span className="text-xs text-gray-800/40 flex items-center gap-1">
                           <Mail className="w-3 h-3" />{member.email}
                         </span>
                         {member.phone && (
-                          <span className="text-xs text-white/40 flex items-center gap-1">
+                          <span className="text-xs text-gray-800/40 flex items-center gap-1">
                             <Phone className="w-3 h-3" />{member.phone}
                           </span>
                         )}
@@ -305,7 +331,7 @@ const ManagerStaff: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0 transition-opacity">
                     <button
                       onClick={() => handleEdit(member)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/80 hover:text-white hover:bg-white/20 transition-all border border-white/20"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-800/80 hover:text-gray-800 hover:bg-gray-100 transition-all border border-gray-200"
                     >
                       <Edit3 className="w-3 h-3" /> Sửa
                     </button>
@@ -332,18 +358,18 @@ const ManagerStaff: React.FC = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 pb-4 pt-2 border-t border-white/8">
-            <span className="text-xs text-white/40">Trang {page} / {totalPages}</span>
+          <div className="flex items-center justify-between px-4 pb-4 pt-2 border-t border-gray-200">
+            <span className="text-xs text-gray-800/40">Trang {page} / {totalPages}</span>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white disabled:opacity-30 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-800/50 hover:text-gray-800 disabled:opacity-30 transition-all"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white disabled:opacity-30 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-800/50 hover:text-gray-800 disabled:opacity-30 transition-all"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -355,64 +381,92 @@ const ManagerStaff: React.FC = () => {
       {/* Create/Edit Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1a1a2e] shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-white/10">
-              <h2 className="font-semibold text-white">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="font-semibold text-gray-800">
                 {editingId ? "Sửa Thông Tin Nhân Viên" : "Thêm Nhân Viên Mới"}
               </h2>
               <button onClick={() => setShowForm(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-800/50 hover:text-gray-800 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={e => void handleSubmit(e)} className="p-5 space-y-4">
               <div>
-                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Họ tên *</label>
+                <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">Họ tên *</label>
                 <input
                   placeholder="Nguyễn Văn A"
                   value={form.full_name}
                   onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
                   required
-                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                  className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm placeholder:text-gray-800/30 focus:outline-none focus:border-orange-500/50"
                 />
               </div>
               {!editingId && (
                 <div>
-                  <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Email *</label>
+                  <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">Email *</label>
                   <input
                     type="email" placeholder="nhanvien@galaxy.com"
                     value={form.email}
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                     required
-                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                    className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm placeholder:text-gray-800/30 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
               )}
               <div>
-                <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Số điện thoại *</label>
+                <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">Số điện thoại *</label>
                 <input
                   placeholder="0901234567"
                   value={form.phone}
                   onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                   required
-                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                  className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm placeholder:text-gray-800/30 focus:outline-none focus:border-orange-500/50"
                 />
               </div>
-              {!editingId && (
-                <div>
-                  <label className="text-xs font-medium text-white/60 mb-1.5 block uppercase tracking-wide">Mật khẩu *</label>
-                  <input
-                    type="password" placeholder="Tối thiểu 6 ký tự"
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    required minLength={6}
-                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
-                  />
-                </div>
+              {editingId && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">Ngày sinh</label>
+                    <input
+                      type="date"
+                      value={form.dob || ""}
+                      onChange={e => setForm(f => ({ ...f, dob: e.target.value }))}
+                      className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm focus:outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">Chuyển sang rạp khác</label>
+                    <select
+                      value={form.cinema_id || ""}
+                      onChange={e => setForm(f => ({ ...f, cinema_id: e.target.value }))}
+                      className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm focus:outline-none focus:border-orange-500/50 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231f2937%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.7em] bg-[right_1rem_center] bg-no-repeat appearance-none"
+                    >
+                      <option value="">-- Giữ nguyên rạp hiện tại --</option>
+                      {cinemas.map(c => (
+                        <option key={c.id} value={c.id.toString()}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
+              <div>
+                <label className="text-xs font-medium text-gray-800/60 mb-1.5 block uppercase tracking-wide">
+                  Mật khẩu {editingId ? "(Tùy chọn)" : "*"}
+                </label>
+                <input
+                  type="password"
+                  placeholder={editingId ? "Để trống nếu không muốn đổi" : "Tối thiểu 6 ký tự"}
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  required={!editingId}
+                  minLength={editingId && !form.password ? 0 : 6}
+                  className="w-full h-10 px-3 rounded-xl bg-white border border-gray-200 text-gray-800 text-sm placeholder:text-gray-800/30 focus:outline-none focus:border-orange-500/50"
+                />
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)}
-                  className="flex-1 h-10 rounded-xl border border-white/15 text-white/60 hover:text-white text-sm transition-all">
+                  className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-800/60 hover:text-gray-800 text-sm transition-all">
                   Hủy
                 </button>
                 <button type="submit" disabled={submitting}
@@ -428,7 +482,7 @@ const ManagerStaff: React.FC = () => {
       {/* Toggle Status Confirm */}
       {toggleConfirm && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1a1a2e] shadow-2xl p-6 text-center">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl p-6 text-center">
             <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border",
               toggleConfirm.status === "Active"
                 ? "bg-amber-500/10 border-amber-500/20"
@@ -439,13 +493,13 @@ const ManagerStaff: React.FC = () => {
                 : <ShieldCheck className="w-6 h-6 text-emerald-400" />
               }
             </div>
-            <h3 className="font-semibold text-white mb-1">
+            <h3 className="font-semibold text-gray-800 mb-1">
               {toggleConfirm.status === "Active" ? "Vô hiệu hóa tài khoản?" : "Kích hoạt tài khoản?"}
             </h3>
-            <p className="text-sm text-white/50 mb-5">{toggleConfirm.full_name || toggleConfirm.email}</p>
+            <p className="text-sm text-gray-800/50 mb-5">{toggleConfirm.full_name || toggleConfirm.email}</p>
             <div className="flex gap-3">
               <button onClick={() => setToggleConfirm(null)}
-                className="flex-1 h-10 rounded-xl border border-white/15 text-white/60 hover:text-white text-sm transition-all">
+                className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-800/60 hover:text-gray-800 text-sm transition-all">
                 Hủy
               </button>
               <button

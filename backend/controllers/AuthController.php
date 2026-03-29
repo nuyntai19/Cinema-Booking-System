@@ -275,13 +275,33 @@ class AuthController {
             ];
             $roleName = $roleMap[(int)$user['role_id']] ?? 'Guest';
 
-            // Nếu là Manager → lấy cinema_id được gán
+            // Lấy cinema_id cho Manager hoặc Staff
             $cinemaId = null;
             $cinemaName = null;
-            if ((int)$user['role_id'] === 4) {
+            $roleId = (int)$user['role_id'];
+            if ($roleId === 4) {
+                // Manager → lấy từ cinemas.manager_id
                 try {
                     $db = Database::getInstance()->getConnection();
                     $cinemaStmt = $db->prepare("SELECT id, name FROM cinemas WHERE manager_id = :uid LIMIT 1");
+                    $cinemaStmt->execute([':uid' => $user['id']]);
+                    $cinemaRow = $cinemaStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($cinemaRow) {
+                        $cinemaId   = (int)$cinemaRow['id'];
+                        $cinemaName = $cinemaRow['name'];
+                    }
+                } catch (Exception $ignore) {}
+            } elseif ($roleId === 3) {
+                // Staff → lấy từ cinema_staff
+                try {
+                    $db = Database::getInstance()->getConnection();
+                    $cinemaStmt = $db->prepare("
+                        SELECT c.id, c.name
+                        FROM cinema_staff cs
+                        JOIN cinemas c ON c.id = cs.cinema_id
+                        WHERE cs.user_id = :uid
+                        LIMIT 1
+                    ");
                     $cinemaStmt->execute([':uid' => $user['id']]);
                     $cinemaRow = $cinemaStmt->fetch(PDO::FETCH_ASSOC);
                     if ($cinemaRow) {
@@ -375,6 +395,41 @@ class AuthController {
             
             $profile = $this->userProfileModel->getByUserId($user['id']);
             
+            // Lấy cinema_id cho Staff/Manager
+            $cinemaId = null;
+            $cinemaName = null;
+            $roleId = (int)$user['role_id'];
+            if ($roleId === 4) {
+                try {
+                    $cinemaStmt = $this->userModel->findById($user['id']);
+                    $db2 = Database::getInstance()->getConnection();
+                    $stmt2 = $db2->prepare("SELECT id, name FROM cinemas WHERE manager_id = :uid LIMIT 1");
+                    $stmt2->execute([':uid' => $user['id']]);
+                    $row2 = $stmt2->fetch(PDO::FETCH_ASSOC);
+                    if ($row2) {
+                        $cinemaId = (int)$row2['id'];
+                        $cinemaName = $row2['name'];
+                    }
+                } catch (Exception $ignore) {}
+            } elseif ($roleId === 3) {
+                try {
+                    $db2 = Database::getInstance()->getConnection();
+                    $stmt2 = $db2->prepare("
+                        SELECT c.id, c.name
+                        FROM cinema_staff cs
+                        JOIN cinemas c ON c.id = cs.cinema_id
+                        WHERE cs.user_id = :uid
+                        LIMIT 1
+                    ");
+                    $stmt2->execute([':uid' => $user['id']]);
+                    $row2 = $stmt2->fetch(PDO::FETCH_ASSOC);
+                    if ($row2) {
+                        $cinemaId = (int)$row2['id'];
+                        $cinemaName = $row2['name'];
+                    }
+                } catch (Exception $ignore) {}
+            }
+
             return Response::success([
                 'user' => [
                     'id' => $user['id'],
@@ -385,7 +440,9 @@ class AuthController {
                     'dob' => $profile['dob'] ?? null,
                     'avatar' => $profile['avatar'] ?? null,
                     'current_points' => $user['current_points'],
-                    'membership_id' => $profile['membership_id'] ?? 1
+                    'membership_id' => $profile['membership_id'] ?? 1,
+                    'cinema_id' => $cinemaId,
+                    'cinema_name' => $cinemaName,
                 ]
             ]);
             

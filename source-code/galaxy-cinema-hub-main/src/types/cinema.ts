@@ -35,6 +35,8 @@ export interface User {
   membershipTier?: MembershipTier;
   loyaltyPoints?: number;
   totalSpent?: number;
+  cinema_id?: string;
+  cinema_name?: string;
 }
 
 export interface Movie {

@@ -31,6 +31,35 @@ class TicketController
     }
 
     /**
+     * Helper: Get cinema_id assigned to the current staff user
+     * Returns null if not a staff or not assigned
+     */
+    private function getStaffCinemaId()
+    {
+        $staffUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
+        if ($staffUserId <= 0) {
+            return null;
+        }
+
+        try {
+            require_once __DIR__ . '/../config/Database.php';
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare("
+                SELECT cs.cinema_id
+                FROM cinema_staff cs
+                WHERE cs.user_id = :uid
+                LIMIT 1
+            ");
+            $stmt->execute([':uid' => $staffUserId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $row ? (int)$row['cinema_id'] : null;
+        } catch (Exception $e) {
+            error_log('getStaffCinemaId error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Resolve scan bundle from ticket code or booking code
      */
     private function resolveScanBundleByCode($code)
@@ -139,6 +168,13 @@ class TicketController
     public function check()
     {
         try {
+            // Authenticate to get staff info
+            try {
+                AuthMiddleware::authenticate();
+            } catch (Exception $authEx) {
+                // Allow check without auth but cinema validation won't work
+            }
+
             $input = json_decode(file_get_contents('php://input'), true);
 
             if (!isset($input['code'])) {
@@ -153,6 +189,22 @@ class TicketController
             }
 
             $primaryTicket = $bundle[0];
+
+            // Kiểm tra rạp - Staff chỉ quét vé ở rạp mình
+            $staffCinemaId = $this->getStaffCinemaId();
+            $ticketCinemaId = isset($primaryTicket['cinema_id']) ? (int)$primaryTicket['cinema_id'] : null;
+            if ($staffCinemaId !== null && $ticketCinemaId !== null && $staffCinemaId !== $ticketCinemaId) {
+                $ticketCinemaName = $primaryTicket['cinema_name'] ?? 'rạp khác';
+                Response::error(
+                    "Vé này thuộc {$ticketCinemaName}. Bạn chỉ có thể quét vé tại rạp được phân công.",
+                    403,
+                    array_merge(
+                        ['ticket_cinema_id' => $ticketCinemaId, 'staff_cinema_id' => $staffCinemaId],
+                        $this->extractUserInfo($primaryTicket)
+                    )
+                );
+            }
+
             $statuses = array_values(array_unique(array_map(function ($item) {
                 return $item['status'] ?? '';
             }, $bundle)));
@@ -224,6 +276,23 @@ class TicketController
             }
 
             $primaryTicket = $bundle[0];
+
+            // Kiểm tra rạp - Staff chỉ duyệt vé ở rạp mình
+            $staffCinemaId = $this->getStaffCinemaId();
+            $ticketCinemaId = isset($primaryTicket['cinema_id']) ? (int)$primaryTicket['cinema_id'] : null;
+            if ($staffCinemaId !== null && $ticketCinemaId !== null && $staffCinemaId !== $ticketCinemaId) {
+                $ticketCinemaName = $primaryTicket['cinema_name'] ?? 'rạp khác';
+                Response::error(
+                    "Vé này thuộc {$ticketCinemaName}. Bạn chỉ có thể quét vé tại rạp được phân công.",
+                    403,
+                    [
+                        'ticket_cinema_id' => $ticketCinemaId,
+                        'staff_cinema_id' => $staffCinemaId,
+                        'user' => $this->extractUserInfo($primaryTicket),
+                    ]
+                );
+            }
+
             $statuses = array_values(array_unique(array_map(function ($item) {
                 return $item['status'] ?? '';
             }, $bundle)));
@@ -294,6 +363,8 @@ class TicketController
 
             $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 50;
             $offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
+            $cinemaId = $this->getStaffCinemaId();
+            
             $filters = [
                 'booking_code' => $_GET['booking_code'] ?? '',
                 'ticket_code_input' => $_GET['ticket_code_input'] ?? '',
@@ -301,6 +372,7 @@ class TicketController
                 'scan_result' => $_GET['scan_result'] ?? '',
                 'date_from' => $_GET['date_from'] ?? '',
                 'date_to' => $_GET['date_to'] ?? '',
+                'cinema_id' => $cinemaId,
             ];
 
             $rows = $this->ticketModel->getScanHistory($limit, $offset, $filters);

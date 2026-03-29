@@ -243,6 +243,19 @@ class UserController
                 return Response::error('Không thể tạo hồ sơ người dùng', 500);
             }
 
+            // Assign cinema if applicable
+            if (isset($data['cinema_id']) && isset($data['role_id'])) {
+                $role = $this->roleModel->getById($data['role_id']);
+                if ($role) {
+                    $roleName = strtolower($role['name']);
+                    if ($roleName === 'staff') {
+                        $this->userModel->assignStaffToCinema($userId, $data['cinema_id']);
+                    } else if ($roleName === 'manager') {
+                        $this->userModel->assignManagerToCinema($userId, $data['cinema_id']);
+                    }
+                }
+            }
+
             return Response::success([
                 'message' => 'Tạo người dùng thành công',
                 'user_id' => $userId
@@ -302,11 +315,34 @@ class UserController
                     $updateData['current_points'] = $data['current_points'];
                 }
 
+                if (isset($data['password']) && !empty($data['password'])) {
+                    if (strlen($data['password']) < 6) {
+                        return Response::error('Mật khẩu mới phải có ít nhất 6 ký tự', 400);
+                    }
+                    $passwordHash = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 10]);
+                    $updateData['password_hash'] = $passwordHash;
+                }
+
                 if (!empty($updateData)) {
                     $updated = $this->userModel->update($id, $updateData);
 
                     if (!$updated) {
                         return Response::error('Cập nhật thất bại', 500);
+                    }
+                }
+
+                // Handle Cinema Assignment if provided (Admin only update)
+                // We use $user['role_id'] if role isn't updated, or $data['role_id'] if it is.
+                if (isset($data['cinema_id'])) {
+                    $currentRoleId = $data['role_id'] ?? $user['role_id'];
+                    $role = $this->roleModel->getById($currentRoleId);
+                    if ($role) {
+                        $roleName = strtolower($role['name']);
+                        if ($roleName === 'staff') {
+                            $this->userModel->assignStaffToCinema($id, $data['cinema_id']);
+                        } else if ($roleName === 'manager') {
+                            $this->userModel->assignManagerToCinema($id, $data['cinema_id']);
+                        }
                     }
                 }
             }
@@ -459,8 +495,8 @@ class UserController
                 return Response::error('Chưa đăng nhập', 401);
             }
 
-            // Chỉ được update profile của mình
-            if ($currentUserId != $id) {
+            // Chỉ được update profile của mình (trừ khi là admin)
+            if (!$this->isAdmin() && $currentUserId != $id) {
                 return Response::error('Không có quyền truy cập', 403);
             }
 

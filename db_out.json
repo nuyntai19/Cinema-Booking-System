@@ -1,0 +1,37 @@
+[
+    {
+        "id": 8,
+        "email": "luonghuuc@gmail.com",
+        "password_hash": "$2y$10$Qc8wCw6lnNJodYDjmQfQPeFFg0pSw.ZaNB3UAYWY90XQwv8kmIikG",
+        "status": "Active",
+        "verify_123456": true
+    },
+    {
+        "id": 7,
+        "email": "tuantai1915@gmail.com",
+        "password_hash": "$2y$10$Llndj5hz\/ysBQ9nPCG6eLO.PyCRz\/YN7vSpH8VpW2VwIhW1teJ4iS",
+        "status": "Active",
+        "verify_123456": true
+    },
+    {
+        "id": 1,
+        "email": "admin@galaxy.vn",
+        "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "status": "Active",
+        "verify_123456": false
+    },
+    {
+        "id": 2,
+        "email": "manager@galaxy.vn",
+        "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "status": "Active",
+        "verify_123456": false
+    },
+    {
+        "id": 3,
+        "email": "staff@galaxy.vn",
+        "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "status": "Active",
+        "verify_123456": false
+    }
+]

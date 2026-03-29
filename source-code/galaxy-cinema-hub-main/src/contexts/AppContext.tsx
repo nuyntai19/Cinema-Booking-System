@@ -119,6 +119,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         loyaltyPoints: data.data.user.current_points || 0,
         phone: data.data.user.phone,
         dob: data.data.user.dob,
+        cinema_id: data.data.user.cinema_id ? String(data.data.user.cinema_id) : undefined,
+        cinema_name: data.data.user.cinema_name || undefined,
       };
 
       // Save token and user to localStorage
@@ -186,6 +188,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           loyaltyPoints: data.data.user.current_points || 0,
           phone: data.data.user.phone,
           dob: data.data.user.dob,
+          cinema_id: data.data.user.cinema_id ? String(data.data.user.cinema_id) : undefined,
+          cinema_name: data.data.user.cinema_name || undefined,
         };
 
         localStorage.setItem("user", JSON.stringify(userData));

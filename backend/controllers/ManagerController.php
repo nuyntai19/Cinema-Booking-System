@@ -562,8 +562,8 @@ class ManagerController extends BaseController
 
             $stmt = $this->db->prepare("
                 SELECT u.id, u.email, u.status, u.created_at,
-                       up.full_name, up.phone, up.avatar,
-                       cs.created_at AS joined_cinema_at
+                       up.full_name, up.phone, up.dob, up.avatar,
+                       cs.cinema_id, cs.created_at AS joined_cinema_at
                 FROM users u
                 INNER JOIN cinema_staff cs ON cs.user_id = u.id
                 LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -655,9 +655,18 @@ class ManagerController extends BaseController
                 Response::error('Số điện thoại không hợp lệ', 400);
             }
 
+            if (isset($input['password']) && !empty($input['password'])) {
+                if (strlen($input['password']) < 6) {
+                    Response::error('Mật khẩu mới phải có ít nhất 6 ký tự', 400);
+                }
+                $passwordHash = password_hash($input['password'], PASSWORD_BCRYPT, ['cost' => 10]);
+                $this->db->prepare("UPDATE users SET password_hash = :hash WHERE id = :id")
+                         ->execute([':hash' => $passwordHash, ':id' => $id]);
+            }
+
             $updates = [];
             $params  = [':uid' => $id];
-            foreach (['full_name','phone'] as $f) {
+            foreach (['full_name','phone','dob'] as $f) {
                 if (isset($input[$f])) {
                     $updates[]    = "$f = :$f";
                     $params[":$f"] = $input[$f];
@@ -667,6 +676,17 @@ class ManagerController extends BaseController
             if (!empty($updates)) {
                 $stmt = $this->db->prepare("UPDATE user_profiles SET " . implode(', ', $updates) . " WHERE user_id = :uid");
                 $stmt->execute($params);
+            }
+
+            if (isset($input['cinema_id']) && (int)$input['cinema_id'] !== $cinemaId) {
+                $newCinemaId = (int)$input['cinema_id'];
+                // Check if new cinema exists
+                $cinemaCheck = $this->db->prepare("SELECT id FROM cinemas WHERE id = :cid");
+                $cinemaCheck->execute([':cid' => $newCinemaId]);
+                if ($cinemaCheck->fetch()) {
+                    $this->db->prepare("UPDATE cinema_staff SET cinema_id = :new_cid WHERE user_id = :uid AND cinema_id = :old_cid")
+                             ->execute([':new_cid' => $newCinemaId, ':uid' => $id, ':old_cid' => $cinemaId]);
+                }
             }
             Response::success(['message' => 'Cập nhật nhân viên thành công']);
         } catch (\Exception $e) {
@@ -884,6 +904,222 @@ class ManagerController extends BaseController
             Response::success(['date' => $date, 'showtimes' => $items, 'hall_summary' => $hallSummary]);
         } catch (\Exception $e) {
             Response::serverError('Lỗi báo cáo lấp đầy: ' . $e->getMessage());
+        }
+    }
+
+    public function getTransactions(): void
+    {
+        $cinemaId = $this->requireManagerCinema();
+        try {
+            $q = trim((string)($_GET['q'] ?? ''));
+            $status = strtolower(trim((string)($_GET['status'] ?? '')));
+            $paymentMethod = trim((string)($_GET['payment_method'] ?? ''));
+            $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+            $dateTo = trim((string)($_GET['date_to'] ?? ''));
+            $limit = isset($_GET['limit']) ? max(1, min(5000, (int)$_GET['limit'])) : 5000;
+
+            $joins = " FROM bookings b
+                INNER JOIN showtimes s ON s.id = b.showtime_id
+                INNER JOIN movies m ON m.id = s.movie_id
+                INNER JOIN cinema_halls h ON h.id = s.cinema_hall_id
+                INNER JOIN cinemas c ON c.id = h.cinema_id
+                LEFT JOIN transactions t ON t.id = (
+                    SELECT t2.id FROM transactions t2
+                    WHERE t2.booking_id = b.id
+                    ORDER BY t2.created_at DESC, t2.id DESC LIMIT 1
+                )
+                LEFT JOIN users u ON u.id = b.user_id
+                LEFT JOIN user_profiles up ON up.user_id = u.id
+                LEFT JOIN pos_customers pc ON pc.id = b.guest_customer_id
+                LEFT JOIN (
+                    SELECT tk.booking_id, COUNT(*) AS seat_count
+                    FROM tickets tk GROUP BY tk.booking_id
+                ) tkc ON tkc.booking_id = b.id";
+
+            $statusExpr = "CASE
+                WHEN t.status = 'Success' THEN 'success'
+                WHEN t.status = 'Pending' THEN 'pending'
+                WHEN t.status = 'Failed' THEN 'failed'
+                WHEN b.status = 'Cancelled' THEN 'refunded'
+                ELSE 'pending' END";
+
+            $where = ["h.cinema_id = :cid"];
+            $params = [':cid' => $cinemaId];
+
+            if ($q !== '') {
+                $where[] = "(LOWER(COALESCE(t.transaction_code, '')) LIKE :q
+                    OR LOWER(COALESCE(up.full_name, pc.name, '')) LIKE :q
+                    OR LOWER(COALESCE(u.email, '')) LIKE :q
+                    OR LOWER(COALESCE(m.title, '')) LIKE :q)";
+                $params[':q'] = '%' . mb_strtolower($q, 'UTF-8') . '%';
+            }
+            if (in_array($status, ['success','pending','failed','refunded'], true)) {
+                $where[] = "$statusExpr = :status";
+                $params[':status'] = $status;
+            }
+            if ($paymentMethod !== '') {
+                $where[] = "LOWER(COALESCE(t.payment_method, '')) = :pm";
+                $params[':pm'] = mb_strtolower($paymentMethod, 'UTF-8');
+            }
+            if ($dateFrom !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) >= :df";
+                $params[':df'] = $dateFrom;
+            }
+            if ($dateTo !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) <= :dt";
+                $params[':dt'] = $dateTo;
+            }
+
+            $whereSql = ' WHERE ' . implode(' AND ', $where);
+
+            $dataSql = "SELECT
+                    b.id,
+                    COALESCE(t.transaction_code, CONCAT('BK-', LPAD(b.id, 6, '0'))) AS booking_display_code,
+                    COALESCE(up.full_name, pc.name, CONCAT('User #', COALESCE(b.user_id, 'null'))) AS customer_name,
+                    COALESCE(u.email, CASE WHEN pc.phone IS NOT NULL THEN CONCAT(pc.phone, '@guest.local') ELSE '-' END) AS customer_email,
+                    m.title AS movie_title,
+                    c.name AS cinema_name,
+                    s.start_time,
+                    COALESCE(tkc.seat_count, 0) AS seat_count,
+                    COALESCE(t.amount, b.final_price, b.total_price, 0) AS amount,
+                    COALESCE(t.payment_method, 'Cash') AS payment_method,
+                    $statusExpr AS display_status,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . $whereSql . "
+                ORDER BY COALESCE(t.created_at, b.created_at) DESC, b.id DESC
+                LIMIT :lmt";
+
+            $stmt = $this->db->prepare($dataSql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':lmt', $limit, \PDO::PARAM_INT);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $items = array_map(function ($row) {
+                $startTime = !empty($row['start_time']) ? new \DateTime($row['start_time']) : null;
+                return [
+                    'id' => (string)$row['id'],
+                    'bookingCode' => $row['booking_display_code'],
+                    'customerName' => $row['customer_name'],
+                    'customerEmail' => $row['customer_email'],
+                    'movieTitle' => $row['movie_title'],
+                    'cinemaName' => $row['cinema_name'],
+                    'showDate' => $startTime ? $startTime->format('Y-m-d') : '',
+                    'showTime' => $startTime ? $startTime->format('H:i') : '-',
+                    'seatCount' => (int)$row['seat_count'],
+                    'amount' => (float)$row['amount'],
+                    'paymentMethod' => $row['payment_method'],
+                    'status' => $row['display_status'],
+                    'transactionDate' => $row['transaction_date'],
+                ];
+            }, $rows);
+
+            Response::success(['items' => $items]);
+        } catch (\Exception $e) {
+            Response::serverError('Lỗi tải giao dịch: ' . $e->getMessage());
+        }
+    }
+
+    public function getTransactionsExportDetails(): void
+    {
+        $cinemaId = $this->requireManagerCinema();
+        try {
+            $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+            $dateTo = trim((string)($_GET['date_to'] ?? ''));
+
+            $joins = " FROM bookings b
+                INNER JOIN showtimes s ON s.id = b.showtime_id
+                INNER JOIN movies m ON m.id = s.movie_id
+                INNER JOIN cinema_halls h ON h.id = s.cinema_hall_id
+                INNER JOIN cinemas c ON c.id = h.cinema_id
+                LEFT JOIN transactions t ON t.id = (
+                    SELECT t2.id FROM transactions t2
+                    WHERE t2.booking_id = b.id
+                    ORDER BY t2.created_at DESC, t2.id DESC LIMIT 1
+                )
+                LEFT JOIN users u ON u.id = b.user_id
+                LEFT JOIN user_profiles up ON up.user_id = u.id
+                LEFT JOIN pos_customers pc ON pc.id = b.guest_customer_id";
+
+            $where = ["h.cinema_id = :cid"];
+            $params = [':cid' => $cinemaId];
+
+            if ($dateFrom !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) >= :df";
+                $params[':df'] = $dateFrom;
+            }
+            if ($dateTo !== '') {
+                $where[] = "DATE(COALESCE(t.created_at, b.created_at)) <= :dt";
+                $params[':dt'] = $dateTo;
+            }
+
+            $whereSql = ' WHERE ' . implode(' AND ', $where);
+
+            // Ticket details
+            $ticketWhereSql = $whereSql;
+            $concessionWhereSql = $whereSql;
+            $finalParams = [];
+            foreach ($params as $key => $value) {
+                $cleanKey = ltrim($key, ':');
+                $tKey = ':t_' . $cleanKey;
+                $cKey = ':c_' . $cleanKey;
+                $finalParams[$tKey] = $value;
+                $finalParams[$cKey] = $value;
+                $ticketWhereSql = str_replace($key, $tKey, $ticketWhereSql);
+                $concessionWhereSql = str_replace($key, $cKey, $concessionWhereSql);
+            }
+
+            $ticketSql = "SELECT
+                    b.id AS booking_id, b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Vé' AS item_type,
+                    CONCAT('Ghế ', se.row_code, se.number, ' (', st.name, ')') AS item_name,
+                    COALESCE(tk.price, 0) AS unit_price, 1 AS quantity,
+                    COALESCE(tk.price, 0) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN tickets tk ON tk.booking_id = b.id
+                LEFT JOIN seats se ON se.id = tk.seat_id
+                LEFT JOIN seat_types st ON st.id = se.seat_type_id
+                " . $ticketWhereSql;
+
+            $concessionSql = "SELECT
+                    b.id AS booking_id, b.booking_code,
+                    COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                    'Bắp nước' AS item_type,
+                    con.name AS item_name,
+                    COALESCE(bc.price, 0) AS unit_price, bc.quantity AS quantity,
+                    (COALESCE(bc.price, 0) * bc.quantity) AS total_price,
+                    COALESCE(t.created_at, b.created_at) AS transaction_date
+                " . $joins . "
+                INNER JOIN booking_concessions bc ON bc.booking_id = b.id
+                LEFT JOIN concessions con ON con.id = bc.concession_id
+                " . $concessionWhereSql;
+
+            $finalSql = "($ticketSql) UNION ALL ($concessionSql) ORDER BY transaction_date DESC, booking_id DESC";
+            $stmtReal = $this->db->prepare($finalSql);
+            $stmtReal->execute($finalParams);
+            $rows = $stmtReal->fetchAll(\PDO::FETCH_ASSOC);
+
+            $items = array_map(function ($row) {
+                $transactionDate = !empty($row['transaction_date']) ? new \DateTime($row['transaction_date']) : null;
+                return [
+                    'bookingCode' => $row['booking_code'],
+                    'customerName' => $row['customer_name'],
+                    'itemType' => $row['item_type'],
+                    'itemName' => $row['item_name'],
+                    'unitPrice' => (float)$row['unit_price'],
+                    'quantity' => (int)$row['quantity'],
+                    'totalPrice' => (float)$row['total_price'],
+                    'transactionDate' => $transactionDate ? $transactionDate->format('Y-m-d H:i:s') : '-',
+                ];
+            }, $rows);
+
+            Response::success(['items' => $items]);
+        } catch (\Exception $e) {
+            Response::serverError('Lỗi tải chi tiết: ' . $e->getMessage());
         }
     }
 

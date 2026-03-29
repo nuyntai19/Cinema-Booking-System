@@ -50,6 +50,13 @@ interface Cinema {
   features: string[];
   status: "active" | "maintenance" | "closed";
   manager: string;
+  manager_id: number | null;
+}
+
+interface ManagerUser {
+  id: number;
+  email: string;
+  full_name: string;
 }
 
 interface BackendCinema {
@@ -64,6 +71,7 @@ interface BackendCinema {
   hotline?: string;
   status?: string;
   manager_name?: string;
+  manager_id?: number | null;
   total_halls?: number;
   total_seats?: number;
   halls?: { id: number; name: string; total_seats: number }[];
@@ -93,6 +101,27 @@ const AdminCinemas: React.FC = () => {
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchCategory, setSearchCategory] = useState<"name" | "address" | "manager">("name");
+  const [managers, setManagers] = useState<ManagerUser[]>([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
+
+  const fetchManagers = async () => {
+    setLoadingManagers(true);
+    try {
+      const res = await apiCall<{ success: boolean; data: { users: { id: number; email: string; full_name: string; role_name?: string }[] } }>(
+        `${API_ENDPOINTS.USERS}?limit=100&role_id=4`
+      );
+      const list = (res.data?.users || []).map(u => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.full_name || u.email,
+      }));
+      setManagers(list);
+    } catch {
+      // fallback: silent
+    } finally {
+      setLoadingManagers(false);
+    }
+  };
 
   // Hall Management State
   const [isHallsDialogOpen, setIsHallsDialogOpen] = useState(false);
@@ -120,6 +149,7 @@ const AdminCinemas: React.FC = () => {
         features: c.halls?.map((h) => h.name) || [],
         status: (c.status as "active" | "maintenance" | "closed") || "active",
         manager: c.manager_name || "Chưa gán",
+        manager_id: c.manager_id || null,
       }));
       setCinemas(mapped);
     } catch (error) {
@@ -136,6 +166,7 @@ const AdminCinemas: React.FC = () => {
 
   useEffect(() => {
     fetchCinemas();
+    fetchManagers();
   }, []);
 
   const [formData, setFormData] = useState({
@@ -144,7 +175,7 @@ const AdminCinemas: React.FC = () => {
     district: "",
     city: "Thành phố Hồ Chí Minh",
     hotline: "",
-    manager: "",
+    manager_id: "" as string,
     lat: null as number | null,
     lng: null as number | null,
   });
@@ -206,6 +237,7 @@ const AdminCinemas: React.FC = () => {
           hotline: formData.hotline,
           lat: formData.lat,
           lng: formData.lng,
+          manager_id: formData.manager_id && formData.manager_id !== "none" ? Number(formData.manager_id) : null,
         }),
       });
       toast({
@@ -213,7 +245,7 @@ const AdminCinemas: React.FC = () => {
         description: `Đã thêm rạp ${formData.name}`,
       });
       setIsAddDialogOpen(false);
-      setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "", lat: null, lng: null });
+      setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager_id: "", lat: null, lng: null });
       // Refresh the list
       await fetchCinemas();
     } catch (error) {
@@ -233,7 +265,7 @@ const AdminCinemas: React.FC = () => {
       district: cinema.district,
       city: cinema.city || "Thành phố Hồ Chí Minh",
       hotline: cinema.hotline,
-      manager: cinema.manager,
+      manager_id: cinema.manager_id ? String(cinema.manager_id) : "",
       lat: cinema.lat,
       lng: cinema.lng,
     });
@@ -257,6 +289,7 @@ const AdminCinemas: React.FC = () => {
             hotline: formData.hotline,
             lat: formData.lat,
             lng: formData.lng,
+            manager_id: formData.manager_id && formData.manager_id !== "none" ? Number(formData.manager_id) : null,
           }),
         });
         toast({
@@ -264,7 +297,7 @@ const AdminCinemas: React.FC = () => {
           description: `Đã cập nhật rạp ${formData.name}`,
         });
         setIsEditDialogOpen(false);
-        setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager: "", lat: null, lng: null });
+        setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager_id: "", lat: null, lng: null });
         // Re-fetch from server to ensure UI shows the actual saved data
         await fetchCinemas();
       } catch (error) {
@@ -364,6 +397,8 @@ const AdminCinemas: React.FC = () => {
     );
   };
 
+  const assignedManagerIds = cinemas.map(c => c.manager_id).filter((id): id is number => id !== null);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -458,14 +493,26 @@ const AdminCinemas: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="manager">Quản lý</Label>
-                <Input
-                  id="manager"
-                  value={formData.manager}
-                  onChange={(e) =>
-                    setFormData({ ...formData, manager: e.target.value })
-                  }
-                  placeholder="Tên quản lý rạp"
-                />
+                <Select
+                  value={formData.manager_id}
+                  onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
+                >
+                  <SelectTrigger id="manager">
+                    <SelectValue placeholder={loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Chưa gán quản lý --</SelectItem>
+                    {managers.map((m) => {
+                      const isAssigned = assignedManagerIds.includes(m.id);
+                      return (
+                        <SelectItem key={m.id} value={String(m.id)} disabled={isAssigned}>
+                          {m.full_name} {isAssigned && "(Đã gán rạp khác)"}
+                          <span className="text-xs text-muted-foreground ml-1">({m.email})</span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="col-span-2 pt-2">
                 <LocationPickerMap 
@@ -741,14 +788,26 @@ const AdminCinemas: React.FC = () => {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-manager">Quản lý</Label>
-              <Input
-                id="edit-manager"
-                value={formData.manager}
-                onChange={(e) =>
-                  setFormData({ ...formData, manager: e.target.value })
-                }
-                placeholder="Nguyễn Văn A"
-              />
+              <Select
+                value={formData.manager_id}
+                onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
+              >
+                <SelectTrigger id="edit-manager">
+                  <SelectValue placeholder={loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- Chưa gán quản lý --</SelectItem>
+                  {managers.map((m) => {
+                    const isAssigned = assignedManagerIds.includes(m.id) && m.id !== selectedCinema?.manager_id;
+                    return (
+                      <SelectItem key={m.id} value={String(m.id)} disabled={isAssigned}>
+                        {m.full_name} {isAssigned && "(Đã gán rạp khác)"}
+                        <span className="text-xs text-muted-foreground ml-1">({m.email})</span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2 col-span-2 pt-2">
               <LocationPickerMap 

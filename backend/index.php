@@ -357,6 +357,9 @@ $router->patch('/api/manager/staff/:id/toggle-status', 'ManagerController@toggle
 $router->get('/api/manager/reports/revenue', 'ManagerController@getRevenueReport');
 $router->get('/api/manager/reports/occupancy', 'ManagerController@getOccupancyReport');
 $router->get('/api/manager/reports/export', 'ManagerController@exportReport');
+// Transactions (for Excel/PDF export)
+$router->get('/api/manager/transactions', 'ManagerController@getTransactions');
+$router->get('/api/manager/transactions/export-details', 'ManagerController@getTransactionsExportDetails');
 
 // Run router
 $router->run();

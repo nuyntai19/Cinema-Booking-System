@@ -126,11 +126,13 @@ class User {
         try {
             $offset = ($page - 1) * $limit;
             
-            $query = "SELECT u.*, up.full_name, up.phone, r.name as role_name, m.rank_name
+            $query = "SELECT u.*, up.full_name, up.phone, up.dob, r.name as role_name, m.rank_name, COALESCE(cs.cinema_id, c.id) as cinema_id
                       FROM {$this->table} u 
                       LEFT JOIN user_profiles up ON u.id = up.user_id 
                       LEFT JOIN roles r ON u.role_id = r.id
                       LEFT JOIN memberships m ON up.membership_id = m.id
+                      LEFT JOIN cinema_staff cs ON cs.user_id = u.id
+                      LEFT JOIN cinemas c ON c.manager_id = u.id
                       WHERE 1=1";
             
             $params = [];
@@ -272,5 +274,53 @@ class User {
      */
     public function verifyPassword($password, $hash) {
         return password_verify($password, $hash);
+    }
+    
+    /**
+     * Gán Staff vào rạp
+     */
+    public function assignStaffToCinema($userId, $cinemaId) {
+        try {
+            // Delete existing assignment if any
+            $deleteQuery = "DELETE FROM cinema_staff WHERE user_id = :user_id";
+            $deleteStmt = $this->db->prepare($deleteQuery);
+            $deleteStmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            $deleteStmt->execute();
+            
+            // Insert new assignment
+            $query = "INSERT INTO cinema_staff (cinema_id, user_id, created_at) VALUES (:cinema_id, :user_id, NOW())";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':cinema_id', $cinemaId, PDO::PARAM_INT);
+            $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("User AssignStaffToCinema Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Gán Manager vào rạp
+     */
+    public function assignManagerToCinema($userId, $cinemaId) {
+        try {
+            // Remove them from any other cinema first
+            $removeQuery = "UPDATE cinemas SET manager_id = NULL WHERE manager_id = :user_id";
+            $removeStmt = $this->db->prepare($removeQuery);
+            $removeStmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            $removeStmt->execute();
+            
+            // Assign to new cinema
+            $query = "UPDATE cinemas SET manager_id = :user_id WHERE id = :cinema_id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->bindParam(':cinema_id', $cinemaId, PDO::PARAM_INT);
+            
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("User AssignManagerToCinema Error: " . $e->getMessage());
+            return false;
+        }
     }
 }

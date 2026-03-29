@@ -258,6 +258,11 @@ const StaffPOS: React.FC = () => {
         params.append("date", selectedDate);
         params.append("limit", "200");
 
+        // Staff chỉ xem suất chiếu của rạp mình
+        if (user?.cinema_id) {
+          params.append("cinema_id", user.cinema_id);
+        }
+
         const response = await apiCall<{
           success: boolean;
           data: { showtimes: ApiShowtime[] };
@@ -278,7 +283,7 @@ const StaffPOS: React.FC = () => {
     };
 
     void fetchShowtimes();
-  }, [selectedDate, toast]);
+  }, [selectedDate, toast, user?.cinema_id]);
 
   // Load concessions on mount
   useEffect(() => {
@@ -901,6 +906,12 @@ const StaffPOS: React.FC = () => {
               <Clock className="w-5 h-5" />
               Suất Chiếu Theo Ngày
             </CardTitle>
+            {user?.cinema_name && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                <MapPin className="w-3.5 h-3.5" />
+                Rạp: <span className="font-medium text-foreground">{user.cinema_name}</span>
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2 mb-4">

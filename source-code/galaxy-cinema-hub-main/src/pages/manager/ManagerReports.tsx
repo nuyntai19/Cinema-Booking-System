@@ -1,73 +1,58 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download, RefreshCw, TrendingUp, Users2, BarChart2,
-  Calendar, DollarSign, Percent
+  Calendar, DollarSign, Percent, FileSpreadsheet, FileText
 } from "lucide-react";
 import { apiCall, API_ENDPOINTS } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import * as XLSX from "xlsx";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+import type { TDocumentDefinitions, Content, TableCell as PdfTableCell } from "pdfmake/interfaces";
 
-interface RevenueRow { date: string; day: string; revenue: number; tickets: number; }
-interface OccupancyRow {
-  hall_id: number; hall_name: string; total_capacity: number;
-  shows: number; sold: number; occupancy_rate: number;
-}
-
-// SVG Bar Chart for hall comparison
-const BarChart: React.FC<{ data: OccupancyRow[] }> = ({ data }) => {
-  if (!data.length) return null;
-  const W = 500; const H = 200;
-  const PAD = { top: 16, right: 16, bottom: 40, left: 48 };
-  const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
-  const max = 100; // occupancy %
-  const barW = Math.min(60, (innerW / data.length) * 0.6);
-  const gap = innerW / data.length;
-
-  const occColor = (v: number) => v >= 70 ? "#10b981" : v >= 40 ? "#f59e0b" : "#ef4444";
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
-      {/* Grid lines */}
-      {[0, 25, 50, 75, 100].map(tick => {
-        const y = PAD.top + innerH - (tick / max) * innerH;
-        return (
-          <g key={tick}>
-            <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-            <text x={PAD.left - 8} y={y + 4} textAnchor="end" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="sans-serif">{tick}%</text>
-          </g>
-        );
-      })}
-
-      {/* Bars */}
-      {data.map((row, i) => {
-        const x = PAD.left + gap * i + (gap - barW) / 2;
-        const barH = (row.occupancy_rate / max) * innerH;
-        const y = PAD.top + innerH - barH;
-        const color = occColor(row.occupancy_rate);
-        return (
-          <g key={row.hall_id}>
-            {/* Bar background */}
-            <rect x={x} y={PAD.top} width={barW} height={innerH} fill="rgba(255,255,255,0.03)" rx="4" />
-            {/* Bar fill */}
-            <rect x={x} y={y} width={barW} height={barH} fill={color} rx="4" opacity="0.85" />
-            <rect x={x} y={y} width={barW} height={Math.min(barH, 8)} fill={color} rx="4" opacity="1" />
-            {/* Value label */}
-            <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill={color} fontSize="11" fontFamily="sans-serif" fontWeight="700">
-              {row.occupancy_rate}%
-            </text>
-            {/* Hall name */}
-            <text x={x + barW / 2} y={H - PAD.bottom + 16} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="10" fontFamily="sans-serif">
-              {row.hall_name.length > 10 ? row.hall_name.slice(0, 10) + "…" : row.hall_name}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+let pdfFontsInitialized = false;
+const ensurePdfMakeReady = () => {
+  if (pdfFontsInitialized) return;
+  const fontsData = pdfFonts as { vfs?: Record<string, string>; pdfMake?: { vfs?: Record<string, string> } };
+  const vfs = fontsData.vfs ?? fontsData.pdfMake?.vfs;
+  if (vfs) {
+    if (typeof pdfMake.addVirtualFileSystem === "function") {
+      pdfMake.addVirtualFileSystem(vfs);
+    } else {
+      (pdfMake as typeof pdfMake & { vfs?: Record<string, string> }).vfs = vfs;
+    }
+  }
+  pdfMake.setFonts({
+    Roboto: {
+      normal: "Roboto-Regular.ttf",
+      bold: "Roboto-Medium.ttf",
+      italics: "Roboto-Italic.ttf",
+      bolditalics: "Roboto-MediumItalic.ttf",
+    },
+  });
+  pdfFontsInitialized = true;
 };
 
-// SVG Line chart for revenue (reusable)
+interface TransactionItem {
+  id: string;
+  bookingCode: string;
+  customerName: string;
+  customerEmail: string;
+  movieTitle: string;
+  cinemaName: string;
+  showDate: string;
+  showTime: string;
+  seatCount: number;
+  amount: number;
+  paymentMethod: string;
+  status: "success" | "pending" | "failed" | "refunded";
+  transactionDate: string;
+}
+
+interface RevenueRow { label: string; revenue: number; booking_count: number; }
+
+// SVG Line chart for revenue
 const RevenueLineChart: React.FC<{ data: RevenueRow[]; height?: number }> = ({ data, height = 200 }) => {
   if (!data.length) return null;
   const W = 600; const H = height;
@@ -96,17 +81,19 @@ const RevenueLineChart: React.FC<{ data: RevenueRow[]; height?: number }> = ({ d
           <stop offset="0%" stopColor="#f97316" /><stop offset="100%" stopColor="#fbbf24" />
         </linearGradient>
       </defs>
-      {ticks.map(({ y }, i) => <line key={i} x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />)}
+      {ticks.map(({ y }, i) => <line key={i} x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth="1" />)}
       {ticks.map(({ val, y }, i) => (
-        <text key={i} x={PAD.left - 8} y={y + 4} textAnchor="end" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="sans-serif">{fmt(val)}</text>
+        <text key={i} x={PAD.left - 8} y={y + 4} textAnchor="end" fill="rgba(0,0,0,0.4)" fontSize="10" fontFamily="sans-serif">{fmt(val)}</text>
       ))}
       {pts.map((p, i) => (
-        <text key={i} x={p.x} y={H - 4} textAnchor="middle" fill={i === pts.length - 1 ? "#f97316" : "rgba(255,255,255,0.35)"} fontSize="9" fontFamily="sans-serif">{p.day}</text>
+        <text key={i} x={p.x} y={H - 4} textAnchor="middle" fill={i === pts.length - 1 ? "#f97316" : "rgba(0,0,0,0.4)"} fontSize="9" fontFamily="sans-serif">
+          {new Date(p.label).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+        </text>
       ))}
       <path d={areaD} fill="url(#rv-area)" />
       <path d={pathD} fill="none" stroke="url(#rv-line)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {pts.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 5 : 3.5} fill="#0f0f18" stroke="url(#rv-line)" strokeWidth="2" />
+        <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 5 : 3.5} fill="#fff" stroke="url(#rv-line)" strokeWidth="2" />
       ))}
     </svg>
   );
@@ -122,59 +109,314 @@ const ManagerReports: React.FC = () => {
   const { toast } = useToast();
   const [period, setPeriod] = useState(7);
   const [revenueData, setRevenueData] = useState<RevenueRow[]>([]);
-  const [occupancyData, setOccupancyData] = useState<OccupancyRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-
-  const totalRevenue = revenueData.reduce((s, r) => s + r.revenue, 0);
-  const totalTickets = revenueData.reduce((s, r) => s + r.tickets, 0);
-  const avgOccupancy = occupancyData.length
-    ? Math.round(occupancyData.reduce((s, r) => s + r.occupancy_rate, 0) / occupancyData.length)
-    : 0;
-  const totalShows = occupancyData.reduce((s, r) => s + r.shows, 0);
+  const [exportingType, setExportingType] = useState<"excel" | "pdf" | null>(null);
+  const [cinemaName, setCinemaName] = useState("");
 
   const fmtCurrency = (v: number) =>
     new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
 
+  const formatVND = (v: number): string =>
+    `${Math.round(Number(v) || 0).toLocaleString("vi-VN")}đ`;
+
+  const formatNumber = (v: number) => Math.round(Number(v) || 0).toLocaleString("vi-VN");
+
+  const formatDateTime = (dateStr: string) => new Date(dateStr).toLocaleString("vi-VN");
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString("vi-VN");
+
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = { success: "Thành công", pending: "Đang xử lý", failed: "Thất bại", refunded: "Đã hoàn tiền" };
+    return labels[status] || status;
+  };
+
+  const isCashMethod = (method?: string) => {
+    const normalized = String(method || "").toLowerCase().trim();
+    return normalized.includes("cash") || normalized.includes("tiền mặt");
+  };
+
+  const toPercent = (part: number, total: number) =>
+    total > 0 ? `${((part / total) * 100).toFixed(1)}%` : "0%";
+
+  const computeDateRange = useCallback(() => {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - period + 1);
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+    };
+  }, [period]);
+
+  const totalRevenue = revenueData.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+  const totalBookings = revenueData.reduce((s, r) => s + (Number(r.booking_count) || 0), 0);
+
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
-      const [rvRes, ocRes] = await Promise.all([
-        apiCall<{ success: boolean; data: { items: RevenueRow[] } }>(
-          `${API_ENDPOINTS.MANAGER_REPORT_REVENUE}?period=${period}`
+      const { from, to } = computeDateRange();
+      const [rvRes, cinemaRes] = await Promise.all([
+        apiCall<{ success: boolean; data: { total_revenue: number; items: RevenueRow[] } }>(
+          `${API_ENDPOINTS.MANAGER_REPORT_REVENUE}?from=${from}&to=${to}&group_by=day`
         ),
-        apiCall<{ success: boolean; data: { halls: OccupancyRow[] } }>(
-          `${API_ENDPOINTS.MANAGER_REPORT_OCCUPANCY}?period=${period}`
+        apiCall<{ success: boolean; data: { cinema: { id: number; name: string } } }>(
+          API_ENDPOINTS.MANAGER_CINEMA_INFO
         ),
       ]);
       if (rvRes.success) setRevenueData(rvRes.data.items ?? []);
-      if (ocRes.success) setOccupancyData(ocRes.data.halls ?? []);
+      if (cinemaRes.success) setCinemaName(cinemaRes.data.cinema?.name ?? "");
     } catch (e: unknown) {
       toast({ title: "Lỗi", description: e instanceof Error ? e.message : "Không thể tải báo cáo", variant: "destructive" });
     } finally { setLoading(false); }
-  }, [period, toast]);
+  }, [period, toast, computeDateRange]);
 
   useEffect(() => { void fetchReports(); }, [fetchReports]);
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch(`${API_ENDPOINTS.MANAGER_REPORT_EXPORT}?period=${period}&type=revenue`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) throw new Error("Xuất báo cáo thất bại");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `report_${period}days_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "✅ Xuất thành công", description: "File CSV đã được tải về" });
-    } catch (e: unknown) {
-      toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xuất thất bại", variant: "destructive" });
-    } finally { setExporting(false); }
+  // ── Fetch transactions for export ──
+
+  const fetchTransactionsForExport = async (): Promise<TransactionItem[]> => {
+    const res = await apiCall<{ success: boolean; data: { items: TransactionItem[] } }>(
+      `${API_ENDPOINTS.MANAGER_TRANSACTIONS}?limit=5000`
+    );
+    return res.data?.items || [];
   };
+
+  const fetchTransactionDetailsForExport = async (): Promise<any[]> => {
+    const res = await apiCall<{ success: boolean; data: { items: any[] } }>(
+      API_ENDPOINTS.MANAGER_TRANSACTIONS_EXPORT_DETAILS
+    );
+    return res.data?.items || [];
+  };
+
+  // ── Export Excel (2 sheets: GiaoDich + ChiTietGiaoDich) ──
+
+  const exportTransactionsExcel = async () => {
+    if (exportingType) return;
+    setExportingType("excel");
+    try {
+      const rows = await fetchTransactionsForExport();
+      if (rows.length === 0) {
+        toast({ title: "Không có dữ liệu", description: "Không có giao dịch nào để xuất", variant: "destructive" });
+        return;
+      }
+
+      const detailRows = rows.map((t, i) => ({
+        STT: i + 1,
+        "Mã đặt vé": t.bookingCode,
+        "Khách hàng": t.customerName,
+        Email: t.customerEmail,
+        Phim: t.movieTitle,
+        Rạp: t.cinemaName,
+        "Ngày chiếu": t.showDate ? formatDate(t.showDate) : "-",
+        "Giờ chiếu": t.showTime || "-",
+        "Số ghế": t.seatCount,
+        "Số tiền": formatVND(Number(t.amount || 0)),
+        "Phương thức TT": t.paymentMethod,
+        "Trạng thái": getStatusLabel(t.status),
+        "Thời gian giao dịch": t.transactionDate ? formatDateTime(t.transactionDate) : "-",
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      const detailSheet = XLSX.utils.json_to_sheet(detailRows);
+      detailSheet["!cols"] = [
+        { wch: 6 }, { wch: 20 }, { wch: 22 }, { wch: 28 }, { wch: 32 },
+        { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
+        { wch: 14 }, { wch: 16 }, { wch: 24 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, detailSheet, "GiaoDich");
+
+      // Sheet 2: Chi tiết (Vé + Bắp nước)
+      const detailsArray = await fetchTransactionDetailsForExport();
+      const itemDetailRows = detailsArray.map((item, i) => ({
+        STT: i + 1,
+        "Mã đặt vé": item.bookingCode,
+        "Khách hàng": item.customerName,
+        Loại: item.itemType,
+        "Sản phẩm": item.itemName,
+        "Đơn giá": formatVND(Number(item.unitPrice || 0)),
+        "Số lượng": item.quantity,
+        "Thành tiền": formatVND(Number(item.totalPrice || 0)),
+        "Thời gian giao dịch": item.transactionDate && item.transactionDate !== "-" ? formatDateTime(item.transactionDate) : "-",
+      }));
+
+      const itemDetailSheet = XLSX.utils.json_to_sheet(itemDetailRows);
+      itemDetailSheet["!cols"] = [
+        { wch: 6 }, { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 26 },
+        { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 22 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, itemDetailSheet, "ChiTietGiaoDich");
+
+      const exportDate = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `giao-dich-${cinemaName || "manager"}-${exportDate}.xlsx`);
+      toast({ title: "✅ Xuất thành công", description: "File Excel đã được tải về" });
+    } catch (e: unknown) {
+      toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xuất Excel thất bại", variant: "destructive" });
+    } finally { setExportingType(null); }
+  };
+
+  // ── Export PDF Report ──
+
+  const exportRevenueReportPdf = async () => {
+    if (exportingType) return;
+    setExportingType("pdf");
+    try {
+      const rows = await fetchTransactionsForExport();
+      if (rows.length === 0) {
+        toast({ title: "Không có dữ liệu", description: "Không có giao dịch nào để xuất báo cáo", variant: "destructive" });
+        return;
+      }
+
+      ensurePdfMakeReady();
+
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+
+      const monthRows = rows.filter((row) => {
+        if (!row.transactionDate) return false;
+        const d = new Date(row.transactionDate);
+        return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
+      });
+
+      const totalTransactions = rows.length;
+      const totalRevenueAmount = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      const monthRevenue = monthRows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      const monthTickets = monthRows.reduce((sum, r) => sum + Number(r.seatCount || 0), 0);
+      const avgOrderValue = totalTransactions ? totalRevenueAmount / totalTransactions : 0;
+
+      const cashCount = monthRows.filter((r) => isCashMethod(r.paymentMethod)).length;
+      const transferCount = Math.max(monthRows.length - cashCount, 0);
+
+      const movieMap = new Map<string, { tickets: number; revenue: number }>();
+      rows.forEach((r) => {
+        const key = r.movieTitle || "(Không rõ phim)";
+        const cur = movieMap.get(key) || { tickets: 0, revenue: 0 };
+        cur.tickets += Number(r.seatCount || 0);
+        cur.revenue += Number(r.amount || 0);
+        movieMap.set(key, cur);
+      });
+
+      const topMovies = Array.from(movieMap.entries())
+        .map(([movie, stats]) => ({ movie, ...stats }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
+
+      const statusCounters = {
+        success: rows.filter((r) => r.status === "success").length,
+        pending: rows.filter((r) => r.status === "pending").length,
+        failed: rows.filter((r) => r.status === "failed").length,
+        refunded: rows.filter((r) => r.status === "refunded").length,
+      };
+
+      const buildMetricCard = (label: string, value: string, hint?: string, fillColor = "#eef2ff") => {
+        const stack: Content[] = [
+          { text: label.toUpperCase(), style: "metricLabel" },
+          { text: value, style: "metricValue" },
+        ];
+        if (hint) stack.push({ text: hint, style: "metricHint" });
+        return {
+          table: { widths: ["*"], body: [[{ stack, border: [false, false, false, false], fillColor }]] },
+          layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 14, paddingRight: () => 14, paddingTop: () => 12, paddingBottom: () => 12 },
+        };
+      };
+
+      const paymentTableBody: PdfTableCell[][] = [
+        [{ text: "Hình thức", style: "tableHeader" }, { text: "Số giao dịch", style: "tableHeader", alignment: "right" }, { text: "Tỷ lệ", style: "tableHeader", alignment: "right" }],
+        [{ text: "Tiền mặt", style: "tableCell" }, { text: formatNumber(cashCount), style: "tableCell", alignment: "right" }, { text: toPercent(cashCount, monthRows.length), style: "tableCell", alignment: "right" }],
+        [{ text: "Chuyển khoản", style: "tableCell" }, { text: formatNumber(transferCount), style: "tableCell", alignment: "right" }, { text: toPercent(transferCount, monthRows.length), style: "tableCell", alignment: "right" }],
+      ] as unknown as PdfTableCell[][];
+
+      const statusTableBody: PdfTableCell[][] = [
+        [{ text: "Trạng thái", style: "tableHeader" }, { text: "Số lượng", style: "tableHeader", alignment: "right" }, { text: "Tỷ lệ", style: "tableHeader", alignment: "right" }],
+        ...Object.entries(statusCounters).map(([key, value]) => [
+          { text: getStatusLabel(key), style: "tableCell" },
+          { text: formatNumber(value), style: "tableCell", alignment: "right" },
+          { text: toPercent(value, totalTransactions), style: "tableCell", alignment: "right" },
+        ]),
+      ] as unknown as PdfTableCell[][];
+
+      const movieTableBody: PdfTableCell[][] = [
+        [{ text: "Hạng", style: "tableHeader", alignment: "center" }, { text: "Phim", style: "tableHeader" }, { text: "Vé bán", style: "tableHeader", alignment: "right" }, { text: "Doanh thu", style: "tableHeader", alignment: "right" }],
+        ...topMovies.map((item, index) => [
+          { text: `#${index + 1}`, style: "tableCell", alignment: "center" },
+          { text: item.movie, style: "tableCell" },
+          { text: formatNumber(item.tickets), style: "tableCell", alignment: "right" },
+          { text: formatVND(item.revenue), style: "tableCell", alignment: "right" },
+        ]),
+      ] as unknown as PdfTableCell[][];
+
+      if (topMovies.length === 0) {
+        movieTableBody.push([{ text: "Chưa có dữ liệu", colSpan: 4, alignment: "center", style: "tableCellMuted" }, {}, {}, {}]);
+      }
+
+      const highlightItems = [
+        topMovies.length > 0 ? `${topMovies[0].movie} dẫn đầu với ${formatNumber(topMovies[0].tickets)} vé (${formatVND(topMovies[0].revenue)}).` : "Chưa ghi nhận phim bán chạy.",
+        `Tỷ trọng thanh toán: ${toPercent(cashCount, monthRows.length)} tiền mặt • ${toPercent(transferCount, monthRows.length)} chuyển khoản.`,
+        `Giá trị trung bình mỗi giao dịch: ${formatVND(avgOrderValue)}.`,
+        `Rạp: ${cinemaName}`,
+      ];
+
+      const metricBlocks = [
+        buildMetricCard("Tổng doanh thu", formatVND(totalRevenueAmount), `${formatNumber(totalTransactions)} giao dịch`, "#eef2ff"),
+        buildMetricCard(`Doanh thu tháng ${currentMonth}`, formatVND(monthRevenue), `${formatNumber(monthRows.length)} giao dịch trong tháng`, "#ecfdf5"),
+        buildMetricCard("Giá trị TB/giao dịch", formatVND(avgOrderValue), "Trên toàn bộ dữ liệu", "#fff7ed"),
+        buildMetricCard("Số vé tháng", formatNumber(monthTickets), `${formatNumber(movieMap.size)} phim đang được thống kê`, "#fdf2f8"),
+      ];
+
+      const metricRows: Content[] = [];
+      for (let i = 0; i < metricBlocks.length; i += 2) {
+        metricRows.push({ columns: metricBlocks.slice(i, i + 2), columnGap: 14, margin: [0, i === 0 ? 16 : 8, 0, 0] } as unknown as Content);
+      }
+
+      const tableLayout = {
+        fillColor: (rowIndex: number) => (rowIndex === 0 ? "#0f172a" : rowIndex % 2 === 0 ? "#ffffff" : "#f9fafb"),
+        hLineWidth: (rowIndex: number) => (rowIndex === 0 ? 0 : 0.5),
+        vLineWidth: () => 0,
+        hLineColor: () => "#e5e7eb",
+        paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 6, paddingBottom: () => 6,
+      };
+
+      const exportDate = new Date().toISOString().slice(0, 10);
+      const docDefinition: TDocumentDefinitions = {
+        info: { title: `Báo cáo doanh thu ${cinemaName} ${exportDate}` },
+        pageMargins: [40, 50, 40, 60],
+        defaultStyle: { font: "Roboto", fontSize: 11, color: "#0f172a" },
+        content: [
+          { text: "BÁO CÁO DOANH THU GIAO DỊCH", style: "header" },
+          { text: `Rạp: ${cinemaName}`, style: "meta" },
+          { text: `Phạm vi: Tháng ${currentMonth}/${currentYear} • Tổng dữ liệu: ${formatNumber(totalTransactions)} giao dịch`, style: "meta" },
+          { text: `Ngày xuất: ${new Date().toLocaleString("vi-VN")}`, style: "meta", margin: [0, 0, 0, 20] },
+          ...metricRows,
+          { text: "Chi tiết thanh toán", style: "sectionTitle" },
+          { table: { widths: ["*", "auto", "auto"], body: paymentTableBody }, layout: tableLayout },
+          { text: "Tình trạng giao dịch", style: "sectionTitle" },
+          { table: { widths: ["*", "auto", "auto"], body: statusTableBody }, layout: tableLayout },
+          { text: "Top 10 phim bán chạy", style: "sectionTitle" },
+          { table: { widths: ["auto", "*", "auto", "auto"], body: movieTableBody }, layout: tableLayout },
+          { text: "Điểm nhấn nổi bật", style: "sectionTitle" },
+          { ul: highlightItems, style: "bulletList" },
+        ],
+        styles: {
+          header: { fontSize: 20, bold: true, alignment: "center", color: "#111827" },
+          meta: { fontSize: 11, color: "#4b5563", alignment: "center" },
+          sectionTitle: { fontSize: 14, bold: true, color: "#111827", margin: [0, 24, 0, 10] },
+          metricLabel: { fontSize: 10, color: "#6b7280" },
+          metricValue: { fontSize: 18, bold: true, color: "#111827", margin: [0, 4, 0, 2] },
+          metricHint: { fontSize: 10, color: "#4b5563" },
+          tableHeader: { color: "#ffffff", bold: true },
+          tableCell: { fontSize: 11, color: "#0f172a" },
+          tableCellMuted: { fontSize: 11, color: "#6b7280" },
+          bulletList: { margin: [0, 4, 0, 0] },
+        },
+      };
+
+      pdfMake.createPdf(docDefinition).download(`bao-cao-${cinemaName || "manager"}-${exportDate}.pdf`);
+      toast({ title: "✅ Xuất thành công", description: "File PDF báo cáo đã được tải về" });
+    } catch (e: unknown) {
+      toast({ title: "❌ Lỗi", description: e instanceof Error ? e.message : "Xuất báo cáo thất bại", variant: "destructive" });
+    } finally { setExportingType(null); }
+  };
+
+  // ── Summary cards ──
 
   const summaryCards = [
     {
@@ -182,15 +424,15 @@ const ManagerReports: React.FC = () => {
       icon: DollarSign, color: "from-orange-500 to-amber-500", bg: "from-orange-500/10 to-amber-500/5", border: "border-orange-500/20",
     },
     {
-      label: `Tổng Vé Bán (${period}N)`, value: `${totalTickets.toLocaleString()} vé`,
+      label: `Tổng Booking (${period}N)`, value: `${totalBookings.toLocaleString()} đơn`,
       icon: Users2, color: "from-blue-500 to-indigo-500", bg: "from-blue-500/10 to-indigo-500/5", border: "border-blue-500/20",
     },
     {
-      label: "Tỷ Lệ Lấp Đầy TB", value: `${avgOccupancy}%`,
+      label: "TB / Ngày", value: fmtCurrency(Math.round(totalRevenue / Math.max(period, 1))),
       icon: Percent, color: "from-purple-500 to-violet-500", bg: "from-purple-500/10 to-violet-500/5", border: "border-purple-500/20",
     },
     {
-      label: `Tổng Suất Chiếu (${period}N)`, value: `${totalShows.toLocaleString()} suất`,
+      label: "Rạp", value: cinemaName || "—",
       icon: BarChart2, color: "from-emerald-500 to-teal-500", bg: "from-emerald-500/10 to-teal-500/5", border: "border-emerald-500/20",
     },
   ];
@@ -201,41 +443,46 @@ const ManagerReports: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-white">Báo Cáo & Thống Kê</h1>
-          <p className="text-sm text-white/40 mt-0.5">Phân tích doanh thu và hiệu suất rạp</p>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-800">Báo Cáo & Thống Kê</h1>
+          <p className="text-sm text-gray-800/40 mt-0.5">Phân tích doanh thu và hiệu suất rạp</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => void fetchReports()}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all border border-white/8"
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white hover:bg-gray-100 text-gray-800/50 hover:text-gray-800 transition-all border border-gray-200"
           >
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
           </button>
           <button
-            onClick={() => void handleExport()}
-            disabled={exporting}
+            onClick={() => void exportTransactionsExcel()}
+            disabled={exportingType !== null}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02]"
+          >
+            {exportingType === "excel" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            {exportingType === "excel" ? "Đang xuất..." : "Xuất Excel"}
+          </button>
+          <button
+            onClick={() => void exportRevenueReportPdf()}
+            disabled={exportingType !== null}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20 hover:scale-[1.02]"
           >
-            {exporting
-              ? <RefreshCw className="w-4 h-4 animate-spin" />
-              : <Download className="w-4 h-4" />
-            }
-            Xuất CSV
+            {exportingType === "pdf" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            {exportingType === "pdf" ? "Đang xuất..." : "Xuất Báo Cáo"}
           </button>
         </div>
       </div>
 
       {/* Period selector */}
       <div className="flex items-center gap-3">
-        <Calendar className="w-4 h-4 text-white/40" />
-        <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+        <Calendar className="w-4 h-4 text-gray-800/40" />
+        <div className="flex gap-1 p-1 bg-white rounded-xl border border-gray-200">
           {PERIODS.map(p => (
             <button
               key={p.value}
               onClick={() => setPeriod(p.value)}
               className={cn(
                 "px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
-                period === p.value ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-white/50 hover:text-white"
+                period === p.value ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-gray-500 hover:text-gray-800"
               )}
             >
               {p.label}
@@ -247,143 +494,80 @@ const ManagerReports: React.FC = () => {
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {loading
-          ? [...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-2xl bg-white/5 animate-pulse border border-white/5" />)
+          ? [...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-2xl bg-white animate-pulse border border-gray-200" />)
           : summaryCards.map(card => (
             <div key={card.label} className={cn("p-5 rounded-2xl border bg-gradient-to-br hover:scale-[1.02] transition-all", card.bg, card.border)}>
               <div className={cn("w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg mb-3", card.color)}>
                 <card.icon className="w-4.5 h-4.5 text-white" />
               </div>
-              <p className="text-xs text-white/50 uppercase tracking-wide mb-1">{card.label}</p>
-              <p className="text-xl font-bold text-white">{card.value}</p>
+              <p className="text-xs text-gray-800/50 uppercase tracking-wide mb-1">{card.label}</p>
+              <p className="text-xl font-bold text-gray-800 truncate">{card.value}</p>
             </div>
           ))
         }
       </div>
 
       {/* Revenue Chart */}
-      <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-orange-400" />
               Xu Hướng Doanh Thu
             </h2>
-            <p className="text-xs text-white/40 mt-0.5">{period} ngày gần nhất</p>
+            <p className="text-xs text-gray-800/40 mt-0.5">{period} ngày gần nhất</p>
           </div>
           {!loading && revenueData.length > 0 && (
             <div className="text-right">
-              <p className="text-xs text-white/40">Trung bình / ngày</p>
-              <p className="text-sm font-bold text-orange-400">{fmtCurrency(Math.round(totalRevenue / period))}</p>
+              <p className="text-xs text-gray-800/40">Trung bình / ngày</p>
+              <p className="text-sm font-bold text-orange-400">{fmtCurrency(Math.round(totalRevenue / Math.max(period, 1)))}</p>
             </div>
           )}
         </div>
         {loading ? (
-          <div className="h-48 rounded-xl bg-white/5 animate-pulse" />
+          <div className="h-48 rounded-xl bg-gray-50 animate-pulse" />
         ) : revenueData.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-white/30 text-sm">Chưa có dữ liệu doanh thu</div>
+          <div className="h-48 flex items-center justify-center text-gray-800/30 text-sm">Chưa có dữ liệu doanh thu</div>
         ) : (
           <RevenueLineChart data={revenueData} height={200} />
         )}
       </div>
 
-      {/* Two panels: Hall comparison + Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* Occupancy bar chart */}
-        <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-          <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-purple-400" />
-            Tỷ Lệ Lấp Đầy Theo Phòng
-          </h2>
-          <p className="text-xs text-white/40 mb-4">{period} ngày gần nhất</p>
-          {loading ? (
-            <div className="h-48 rounded-xl bg-white/5 animate-pulse" />
-          ) : occupancyData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-white/30 text-sm">Chưa có dữ liệu</div>
-          ) : (
-            <BarChart data={occupancyData} />
-          )}
-        </div>
-
-        {/* Revenue table */}
-        <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-          <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-orange-400" />
-            Chi Tiết Theo Ngày
-          </h2>
-          <p className="text-xs text-white/40 mb-4">{period} ngày gần nhất</p>
-          {loading ? (
-            <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-9 rounded-lg bg-white/5 animate-pulse" />)}</div>
-          ) : revenueData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-white/30 text-sm">Chưa có dữ liệu</div>
-          ) : (
-            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-              {[...revenueData].reverse().map((row, i) => {
-                const ratio = totalRevenue > 0 ? row.revenue / totalRevenue : 0;
-                return (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/4 transition-colors">
-                    <div className="w-16 text-xs text-white/40 shrink-0">{row.day}</div>
-                    <div className="flex-1">
-                      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500" style={{ width: `${ratio * 100}%` }} />
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs font-medium text-white">{fmtCurrency(row.revenue)}</div>
-                      <div className="text-xs text-white/30">{row.tickets} vé</div>
+      {/* Revenue table by day */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-orange-400" />
+          Chi Tiết Theo Ngày
+        </h2>
+        <p className="text-xs text-gray-800/40 mb-4">{period} ngày gần nhất</p>
+        {loading ? (
+          <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-9 rounded-lg bg-gray-50 animate-pulse" />)}</div>
+        ) : revenueData.length === 0 ? (
+          <div className="h-32 flex items-center justify-center text-gray-800/30 text-sm">Chưa có dữ liệu</div>
+        ) : (
+          <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+            {[...revenueData].reverse().map((row, i) => {
+              const ratio = totalRevenue > 0 ? (Number(row.revenue) || 0) / totalRevenue : 0;
+              return (
+                <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="w-20 text-xs text-gray-800/50 shrink-0">
+                    {new Date(row.label).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                  </div>
+                  <div className="flex-1">
+                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500" style={{ width: `${ratio * 100}%` }} />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Hall details table */}
-      {!loading && occupancyData.length > 0 && (
-        <div className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-          <div className="p-4 border-b border-white/8">
-            <h2 className="text-sm font-semibold text-white">Chi Tiết Theo Phòng Chiếu</h2>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-medium text-gray-800">{fmtCurrency(Number(row.revenue) || 0)}</div>
+                    <div className="text-xs text-gray-800/30">{row.booking_count} đơn</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-white/40 uppercase tracking-wide">
-                <th className="text-left px-4 py-3">Phòng</th>
-                <th className="text-center px-4 py-3 hidden sm:table-cell">Suất chiếu</th>
-                <th className="text-center px-4 py-3 hidden md:table-cell">Sức chứa</th>
-                <th className="text-center px-4 py-3">Đã bán</th>
-                <th className="text-right px-4 py-3">Lấp đầy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {occupancyData.map((row, i) => {
-                const occ = row.occupancy_rate;
-                const color = occ >= 70 ? "text-emerald-400" : occ >= 40 ? "text-amber-400" : "text-red-400";
-                const barColor = occ >= 70 ? "bg-emerald-500" : occ >= 40 ? "bg-amber-500" : "bg-red-500";
-                return (
-                  <tr key={row.hall_id} className={cn("border-t border-white/5 hover:bg-white/3 transition-colors", i % 2 === 0 && "bg-white/1")}>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-white text-sm">{row.hall_name}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-white/50 hidden sm:table-cell">{row.shows}</td>
-                    <td className="px-4 py-3 text-center text-white/50 hidden md:table-cell">{row.total_capacity.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-center text-white/70">{row.sold.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden hidden sm:block">
-                          <div className={cn("h-full rounded-full", barColor)} style={{ width: `${occ}%` }} />
-                        </div>
-                        <span className={cn("font-bold text-sm", color)}>{occ}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

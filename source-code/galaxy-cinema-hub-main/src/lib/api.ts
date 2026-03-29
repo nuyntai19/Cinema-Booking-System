@@ -151,6 +151,8 @@ export const API_ENDPOINTS = {
   MANAGER_REPORT_REVENUE: `${API_BASE_URL}/api/manager/reports/revenue`,
   MANAGER_REPORT_OCCUPANCY: `${API_BASE_URL}/api/manager/reports/occupancy`,
   MANAGER_REPORT_EXPORT: `${API_BASE_URL}/api/manager/reports/export`,
+  MANAGER_TRANSACTIONS: `${API_BASE_URL}/api/manager/transactions`,
+  MANAGER_TRANSACTIONS_EXPORT_DETAILS: `${API_BASE_URL}/api/manager/transactions/export-details`,
 };
 
 // Helper function for API calls

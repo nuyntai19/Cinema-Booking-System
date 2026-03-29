@@ -74,13 +74,13 @@ const LineChart: React.FC<{ data: RevenueItem[]; height?: number }> = ({ data, h
       {/* Grid lines */}
       {yLabels.map(({ y }, i) => (
         <line key={i} x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y}
-          stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+          stroke="rgba(0,0,0,0.07)" strokeWidth="1" />
       ))}
 
       {/* Y labels */}
       {yLabels.map(({ val, y }, i) => (
         <text key={i} x={PAD.left - 8} y={y + 4} textAnchor="end"
-          fill="rgba(255,255,255,0.35)" fontSize="10" fontFamily="sans-serif">
+          fill="rgba(0,0,0,0.35)" fontSize="10" fontFamily="sans-serif">
           {fmt(val)}
         </text>
       ))}
@@ -88,7 +88,7 @@ const LineChart: React.FC<{ data: RevenueItem[]; height?: number }> = ({ data, h
       {/* X labels */}
       {pts.map((p, i) => (
         <text key={i} x={p.x} y={H - 4} textAnchor="middle"
-          fill={i === pts.length - 1 ? "#f97316" : "rgba(255,255,255,0.4)"}
+          fill={i === pts.length - 1 ? "#f97316" : "rgba(0,0,0,0.4)"}
           fontSize="10" fontFamily="sans-serif" fontWeight={i === pts.length - 1 ? "700" : "400"}>
           {p.day}
         </text>
@@ -104,7 +104,7 @@ const LineChart: React.FC<{ data: RevenueItem[]; height?: number }> = ({ data, h
       {/* Dots */}
       {pts.map((p, i) => (
         <g key={i}>
-          <circle cx={p.x} cy={p.y} r="5" fill="#0f0f18" stroke="url(#mgr-line-grad)" strokeWidth="2" />
+          <circle cx={p.x} cy={p.y} r="5" fill="#ffffff" stroke="url(#mgr-line-grad)" strokeWidth="2" />
           {i === pts.length - 1 && (
             <circle cx={p.x} cy={p.y} r="4" fill="#f97316" filter="url(#glow)" />
           )}
@@ -198,12 +198,12 @@ const ManagerDashboard: React.FC = () => {
         {/* Skeleton KPI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+            <div key={i} className="h-32 rounded-2xl bg-gray-100 animate-pulse border border-gray-200" />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 h-72 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
-          <div className="h-72 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+          <div className="lg:col-span-2 h-72 rounded-2xl bg-gray-100 animate-pulse border border-gray-200" />
+          <div className="h-72 rounded-2xl bg-gray-100 animate-pulse border border-gray-200" />
         </div>
       </div>
     );
@@ -212,9 +212,9 @@ const ManagerDashboard: React.FC = () => {
   if (error) {
     return (
       <div className="p-6">
-        <div className="p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-red-50 border border-red-200 text-red-500 flex items-center justify-between">
           <span className="text-sm">⚠️ {error}</span>
-          <button onClick={() => void fetchAll()} className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors">
+          <button onClick={() => void fetchAll()} className="text-xs px-3 py-1.5 bg-red-100 hover:bg-red-200 rounded-lg transition-colors">
             Thử lại
           </button>
         </div>
@@ -228,10 +228,10 @@ const ManagerDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-white">
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
             Dashboard Quản Lý
           </h1>
-          <p className="text-sm text-white/40 mt-0.5">
+          <p className="text-sm text-gray-400 mt-0.5">
             {stats?.cinema_name
               ? `🎬 ${stats.cinema_name} · Hôm nay ${new Date().toLocaleDateString("vi-VN")}`
               : "Tổng quan hoạt động rạp"}
@@ -239,7 +239,7 @@ const ManagerDashboard: React.FC = () => {
         </div>
         <button
           onClick={() => void fetchAll()}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-sm transition-all border border-white/10"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white hover:bg-gray-100 text-gray-500 hover:text-gray-800 text-sm transition-all border border-gray-200 shadow-sm"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Làm mới</span>
@@ -253,28 +253,25 @@ const ManagerDashboard: React.FC = () => {
             key={card.label}
             className={cn(
               "relative overflow-hidden rounded-2xl border p-5 transition-all duration-300",
-              "bg-gradient-to-br hover:scale-[1.02] hover:shadow-xl",
-              card.bg, card.border, card.glow
+              "bg-white hover:scale-[1.02] hover:shadow-lg",
+              card.border, card.glow
             )}
           >
-            {/* Background decoration */}
-            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br opacity-10 blur-2xl" />
-
             <div className="flex items-start justify-between mb-4">
-              <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg", card.gradient)}>
+              <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-md", card.gradient)}>
                 <card.icon className="w-5 h-5 text-white" />
               </div>
               {card.trend !== null && (
                 <div className={cn("flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
-                  card.trend ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+                  card.trend ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
                 )}>
                   {card.trend ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 </div>
               )}
             </div>
-            <p className="text-white/50 text-xs font-medium uppercase tracking-wide mb-1">{card.label}</p>
-            <p className="text-xl lg:text-2xl font-bold text-white leading-tight">{card.value}</p>
-            <p className="text-xs text-white/40 mt-1">{card.sub}</p>
+            <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">{card.label}</p>
+            <p className="text-xl lg:text-2xl font-bold text-gray-800 leading-tight">{card.value}</p>
+            <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
           </div>
         ))}
       </div>
@@ -283,40 +280,40 @@ const ManagerDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Revenue Line Chart */}
-        <div className="lg:col-span-2 rounded-2xl border border-white/8 bg-white/3 p-5">
+        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-white text-sm">Doanh Thu 7 Ngày Gần Nhất</h2>
-              <p className="text-xs text-white/40 mt-0.5">Đơn vị: VNĐ</p>
+              <h2 className="font-semibold text-gray-800 text-sm">Doanh Thu 7 Ngày Gần Nhất</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Đơn vị: VNĐ</p>
             </div>
             {revenueData.length > 0 && (
               <div className="text-right">
-                <p className="text-xs text-white/40">Hôm nay</p>
-                <p className="text-sm font-bold text-orange-400">
+                <p className="text-xs text-gray-400">Hôm nay</p>
+                <p className="text-sm font-bold text-orange-500">
                   {formatCurrency(revenueData[revenueData.length - 1]?.revenue ?? 0)}
                 </p>
               </div>
             )}
           </div>
           {revenueData.length === 0 ? (
-            <div className="h-44 flex items-center justify-center text-white/30 text-sm">Chưa có dữ liệu doanh thu</div>
+            <div className="h-44 flex items-center justify-center text-gray-300 text-sm">Chưa có dữ liệu doanh thu</div>
           ) : (
             <LineChart data={revenueData} height={180} />
           )}
         </div>
 
         {/* Upcoming Shows */}
-        <div className="rounded-2xl border border-white/8 bg-white/3 p-5 flex flex-col">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-white text-sm">Suất Chiếu Sắp Tới</h2>
-              <p className="text-xs text-white/40 mt-0.5">
+              <h2 className="font-semibold text-gray-800 text-sm">Suất Chiếu Sắp Tới</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
                 {new Date().toLocaleDateString("vi-VN")}
               </p>
             </div>
             <button
               onClick={() => navigate("/manager/showtimes")}
-              className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors"
+              className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1 transition-colors"
             >
               Xem tất cả <ChevronRight className="w-3 h-3" />
             </button>
@@ -324,27 +321,27 @@ const ManagerDashboard: React.FC = () => {
 
           <div className="flex-1 space-y-2 overflow-y-auto max-h-56 pr-1">
             {upcomingShows.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-white/30 text-sm py-8 gap-2">
+              <div className="h-full flex flex-col items-center justify-center text-gray-300 text-sm py-8 gap-2">
                 <Film className="w-8 h-8 opacity-30" />
                 <p>Không có suất chiếu sắp tới</p>
               </div>
             ) : (
               upcomingShows.map((show) => {
                 const occ = show.total_seats > 0 ? Math.round((show.sold_seats / show.total_seats) * 100) : 0;
-                const occColor = occ >= 70 ? "bg-emerald-500" : occ >= 40 ? "bg-amber-500" : "bg-red-500";
-                const occText = occ >= 70 ? "text-emerald-400" : occ >= 40 ? "text-amber-400" : "text-red-400";
+                const occColor = occ >= 70 ? "bg-emerald-500" : occ >= 40 ? "bg-amber-400" : "bg-red-400";
+                const occText = occ >= 70 ? "text-emerald-600" : occ >= 40 ? "text-amber-600" : "text-red-500";
                 return (
-                  <div key={show.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/4 hover:bg-white/7 transition-colors">
+                  <div key={show.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
                     <div className="shrink-0 text-center w-12">
-                      <div className="text-sm font-bold text-orange-400">
+                      <div className="text-sm font-bold text-orange-500">
                         {new Date(show.start_time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
                       </div>
-                      <div className="text-xs text-white/30">{show.hall_name}</div>
+                      <div className="text-xs text-gray-400">{show.hall_name}</div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-white truncate">{show.movie_title}</p>
+                      <p className="text-xs font-medium text-gray-700 truncate">{show.movie_title}</p>
                       <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
                           <div className={cn("h-full rounded-full transition-all", occColor)} style={{ width: `${occ}%` }} />
                         </div>
                         <span className={cn("text-xs font-bold shrink-0", occText)}>{occ}%</span>
@@ -359,31 +356,26 @@ const ManagerDashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-        <h2 className="font-semibold text-white text-sm mb-4">Truy Cập Nhanh</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="font-semibold text-gray-800 text-sm mb-4">Truy Cập Nhanh</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Thêm Suất Chiếu", icon: Film, path: "/manager/showtimes", color: "from-orange-500 to-amber-500", glow: "shadow-orange-500/20" },
-            { label: "Quản Lý Nhân Viên", icon: Users, path: "/manager/staff", color: "from-blue-500 to-indigo-500", glow: "shadow-blue-500/20" },
-            { label: "Xem Báo Cáo", icon: BarChart3, path: "/manager/reports", color: "from-purple-500 to-violet-500", glow: "shadow-purple-500/20" },
-            { label: "Lịch Chiếu", icon: Clock, path: "/manager/showtimes", color: "from-emerald-500 to-teal-500", glow: "shadow-emerald-500/20" },
+            { label: "Thêm Suất Chiếu",   icon: Film,     path: "/manager/showtimes", color: "from-orange-500 to-amber-500" },
+            { label: "Quản Lý Nhân Viên", icon: Users,    path: "/manager/staff",     color: "from-blue-500 to-indigo-500" },
+            { label: "Xem Báo Cáo",       icon: BarChart3, path: "/manager/reports",  color: "from-purple-500 to-violet-500" },
+            { label: "Lịch Chiếu",        icon: Clock,    path: "/manager/showtimes", color: "from-emerald-500 to-teal-500" },
           ].map((action) => (
             <button
               key={action.label}
               onClick={() => navigate(action.path)}
-              className={cn(
-                "group p-4 rounded-xl border border-white/8 hover:border-white/15",
-                "bg-white/3 hover:bg-white/6 transition-all duration-200",
-                "flex flex-col items-start gap-3 text-left hover:shadow-xl hover:scale-[1.02]",
-                action.glow
-              )}
+              className="group p-4 rounded-xl border border-gray-200 hover:border-gray-300 bg-gray-50 hover:bg-white transition-all duration-200 flex flex-col items-start gap-3 text-left hover:shadow-md hover:scale-[1.02]"
             >
-              <div className={cn("w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow", action.color)}>
-                <action.icon className="w-4.5 h-4.5 text-white" />
+              <div className={cn("w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-md", action.color)}>
+                <action.icon className="w-4 h-4 text-white" />
               </div>
               <div className="flex items-center justify-between w-full">
-                <span className="text-sm font-medium text-white/80 group-hover:text-white transition-colors">{action.label}</span>
-                <ArrowRight className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all" />
+                <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">{action.label}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all" />
               </div>
             </button>
           ))}

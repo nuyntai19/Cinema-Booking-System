@@ -1,7 +1,7 @@
 {
-    "time": "2026-03-29 15:24:20",
-    "raw_request_uri": "\/uploads\/posters\/MAI.jpg",
-    "parsed_uri": "\/uploads\/posters\/MAI.jpg",
+    "time": "2026-03-29 21:20:49",
+    "raw_request_uri": "\/test_db.php",
+    "parsed_uri": "\/test_db.php",
     "method": "GET",
     "routes": [
         {
@@ -1353,6 +1353,22 @@
             "method": "GET",
             "path": "\/api\/manager\/reports\/export",
             "pattern": "#^\/api\/manager\/reports\/export$#",
+            "matches_method": true,
+            "matches_uri": false
+        },
+        {
+            "index": 169,
+            "method": "GET",
+            "path": "\/api\/manager\/transactions",
+            "pattern": "#^\/api\/manager\/transactions$#",
+            "matches_method": true,
+            "matches_uri": false
+        },
+        {
+            "index": 170,
+            "method": "GET",
+            "path": "\/api\/manager\/transactions\/export-details",
+            "pattern": "#^\/api\/manager\/transactions\/export-details$#",
             "matches_method": true,
             "matches_uri": false
         }

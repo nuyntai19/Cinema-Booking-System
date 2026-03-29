@@ -320,6 +320,10 @@ class Booking {
             $where[] = 'DATE(b.created_at) <= :date_to';
             $params[':date_to'] = $filters['date_to'];
         }
+        if (!empty($filters['cinema_id'])) {
+            $where[] = 'c.id = :cinema_id';
+            $params[':cinema_id'] = (int)$filters['cinema_id'];
+        }
 
         $whereSql = 'WHERE ' . implode(' AND ', $where);
 
@@ -410,6 +414,10 @@ class Booking {
             $where[] = 'DATE(b.created_at) <= :date_to';
             $params[':date_to'] = $filters['date_to'];
         }
+        if (!empty($filters['cinema_id'])) {
+            $where[] = 'c.id = :cinema_id';
+            $params[':cinema_id'] = (int)$filters['cinema_id'];
+        }
 
         $whereSql = 'WHERE ' . implode(' AND ', $where);
 
@@ -419,6 +427,8 @@ class Booking {
              JOIN pos_customers pc ON b.guest_customer_id = pc.id
              JOIN showtimes s ON b.showtime_id = s.id
              JOIN movies m ON s.movie_id = m.id
+             JOIN cinema_halls h ON s.cinema_hall_id = h.id
+             JOIN cinemas c ON h.cinema_id = c.id
              LEFT JOIN (
                 SELECT t1.booking_id, t1.status
                 FROM transactions t1

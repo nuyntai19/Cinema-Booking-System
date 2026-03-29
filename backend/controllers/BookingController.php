@@ -147,12 +147,27 @@ class BookingController extends BaseController {
         Response::paginated($bookings, $total, $page, $limit);
     }
 
+    private function getStaffCinemaId() {
+        $staffUserId = (int)($_REQUEST['auth_user_id'] ?? 0);
+        if ($staffUserId <= 0) return null;
+        
+        $stmt = $this->db->prepare("SELECT cinema_id FROM cinema_staff WHERE user_id = :uid LIMIT 1");
+        $stmt->execute([':uid' => $staffUserId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? (int)$row['cinema_id'] : null;
+    }
+
     public function getPosPaymentHistory() {
         AuthMiddleware::authenticate();
 
         $authRole = $_REQUEST['auth_user_role'] ?? null;
         if (!in_array($authRole, ['Admin', 'Manager', 'Staff'], true)) {
             Response::forbidden('Insufficient permissions');
+        }
+        
+        $cinemaId = null;
+        if ($authRole === 'Staff' || $authRole === 'Manager') {
+            $cinemaId = $this->getStaffCinemaId();
         }
 
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -166,6 +181,7 @@ class BookingController extends BaseController {
             'payment_status' => $_GET['payment_status'] ?? null,
             'date_from' => $_GET['date_from'] ?? null,
             'date_to' => $_GET['date_to'] ?? null,
+            'cinema_id' => $cinemaId,
         ];
 
         list($items, $total) = $this->bookingService->getPosPaymentHistory($filters, $page, $limit);

@@ -12,7 +12,7 @@ class CorsMiddleware
         header("Access-Control-Allow-Origin: $origin");
 
         // Allow common HTTP methods
-        header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+        header("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS");
 
         // Allow common headers
         header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
