@@ -258,6 +258,7 @@ export const getImageUrl = (path: string | null | undefined): string => {
   // Remove leading slash to prevent double slashes (e.g. http://localhost:8000//uploads...)
   const cleanPath = path.startsWith("/") ? path.substring(1) : path;
   
-  // Relative path - prepend API base URL
-  return `${API_BASE_URL}/${cleanPath}`;
+  // Relative path - prepend API base URL (remove /index.php if present)
+  const baseUrl = API_BASE_URL.replace(/\/index\.php$/, "");
+  return `${baseUrl}/${cleanPath}`;
 };
