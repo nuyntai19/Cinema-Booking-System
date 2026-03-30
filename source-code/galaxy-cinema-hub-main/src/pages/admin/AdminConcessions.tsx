@@ -113,7 +113,6 @@ const AdminConcessions: React.FC = () => {
     name: "",
     category: "combo" as string,
     price: 0,
-    image_url: "",
     is_available: true,
   });
 
@@ -122,7 +121,6 @@ const AdminConcessions: React.FC = () => {
       name: "",
       category: "combo",
       price: 0,
-      image_url: "",
       is_available: true,
     });
     setImageFile(null);
@@ -195,46 +193,6 @@ const AdminConcessions: React.FC = () => {
     }
   };
 
-  const uploadConcessionImageFromUrl = async (
-    imageUrl: string,
-    concessionId: number,
-  ): Promise<string | null> => {
-    try {
-      setUploadingImage(true);
-
-      const response = await fetch(
-        API_ENDPOINTS.CONCESSION_UPLOAD_IMAGE_FROM_URL(concessionId),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ image_url: imageUrl }),
-        },
-      );
-
-      const result = await response.json();
-      if (result.success && result.data?.image_url) {
-        return result.data.image_url;
-      }
-
-      throw new Error(result.message || "Upload ảnh từ URL thất bại");
-    } catch (error) {
-      toast({
-        title: "Lỗi upload URL",
-        description:
-          error instanceof Error ? error.message : "Không thể upload ảnh từ URL",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value.trim());
-
   // Statistics
   const totalItems = concessions.length;
   const availableItems = concessions.filter((c) => c.is_available).length;
@@ -258,7 +216,6 @@ const AdminConcessions: React.FC = () => {
       name: item.name,
       category: item.category || "combo",
       price: item.price,
-      image_url: item.image_url || "",
       is_available: item.is_available,
     });
     setImageFile(null);
@@ -270,29 +227,15 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
-      let imageUrl = formData.image_url || null;
 
+      // Upload image (file only)
       if (imageFile) {
-        const uploadedImageUrl = await uploadConcessionImage(
-          imageFile,
-          selectedItem.id,
-        );
-        if (uploadedImageUrl) {
-          imageUrl = uploadedImageUrl;
-        }
-      } else if (imageUrl && isHttpUrl(imageUrl)) {
-        const uploadedImageUrl = await uploadConcessionImageFromUrl(
-          imageUrl,
-          selectedItem.id,
-        );
-        if (uploadedImageUrl) {
-          imageUrl = uploadedImageUrl;
-        }
+        await uploadConcessionImage(imageFile, selectedItem.id);
       }
 
       await apiCall(API_ENDPOINTS.CONCESSIONS + `/${selectedItem.id}`, {
         method: "PUT",
-        body: JSON.stringify({ ...formData, image_url: imageUrl }),
+        body: JSON.stringify(formData),
       });
 
       toast({
@@ -331,33 +274,17 @@ const AdminConcessions: React.FC = () => {
 
     try {
       setLoading(true);
-      const shouldUploadUrl = !imageFile && isHttpUrl(formData.image_url || "");
       const createResponse = await apiCall<{
         success: boolean;
         data?: { id?: number };
       }>(API_ENDPOINTS.CONCESSIONS, {
         method: "POST",
-        body: JSON.stringify({
-          ...formData,
-          image_url: shouldUploadUrl ? null : formData.image_url || null,
-        }),
+        body: JSON.stringify(formData),
       });
 
       const createdConcessionId = Number(createResponse?.data?.id || 0);
       if (imageFile && createdConcessionId > 0) {
-        const uploadedImageUrl = await uploadConcessionImage(
-          imageFile,
-          createdConcessionId,
-        );
-
-        if (uploadedImageUrl) {
-          await apiCall(API_ENDPOINTS.CONCESSIONS + `/${createdConcessionId}`, {
-            method: "PUT",
-            body: JSON.stringify({ image_url: uploadedImageUrl }),
-          });
-        }
-      } else if (shouldUploadUrl && createdConcessionId > 0) {
-        await uploadConcessionImageFromUrl(formData.image_url, createdConcessionId);
+        await uploadConcessionImage(imageFile, createdConcessionId);
       }
 
       toast({
@@ -437,10 +364,9 @@ const AdminConcessions: React.FC = () => {
         name: row["Tên sản phẩm"] || "",
         price: row["Giá (VNĐ)"] || 0,
         category: row["Danh mục (Combo/Drink/Snack)"] === "Combo" ? "combo" : row["Danh mục (Combo/Drink/Snack)"] === "Drink" ? "drink" : "snack",
-        image_url: row["Link Ảnh sản phẩm (URL)"] || "",
       }));
 
-      const response = await apiCall<{success: boolean, data: {message: string, success_count: number, errors: string[]}}>(
+      const response = await apiCall<{ success: boolean, data: { message: string, success_count: number, errors: string[] } }>(
         `${API_ENDPOINTS.CONCESSIONS}/import`,
         {
           method: "POST",
@@ -712,23 +638,11 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-image_url">URL Hình Ảnh</Label>
-              <Input
-                id="edit-image_url"
-                value={formData.image_url}
-                onChange={(e) =>
-                  setFormData({ ...formData, image_url: e.target.value })
-                }
-                placeholder="https://..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Preview ảnh hiện tại</Label>
-              {formData.image_url && !imageFile && (
+              <Label>Ảnh hiện tại</Label>
+              {selectedItem?.image_url && !imageFile && (
                 <div className="relative w-fit">
                   <img
-                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
+                    src={getImageUrl(selectedItem.image_url) || IMAGE_FALLBACK_TEMPLATE}
                     alt="Preview"
                     className="w-24 h-36 object-cover rounded border"
                     onError={(e) => {
@@ -736,13 +650,6 @@ const AdminConcessions: React.FC = () => {
                       e.currentTarget.onerror = null;
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, image_url: "" })}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
                 </div>
               )}
               {imageFile && (
@@ -873,39 +780,7 @@ const AdminConcessions: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-image_url">URL Hình Ảnh</Label>
-              <Input
-                id="create-image_url"
-                value={formData.image_url}
-                onChange={(e) =>
-                  setFormData({ ...formData, image_url: e.target.value })
-                }
-                placeholder="https://..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Preview ảnh</Label>
-              {formData.image_url && !imageFile && (
-                <div className="relative w-fit">
-                  <img
-                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
-                    alt="Preview"
-                    className="w-24 h-36 object-cover rounded border"
-                    onError={(e) => {
-                      e.currentTarget.src = IMAGE_FALLBACK_TEMPLATE;
-                      e.currentTarget.onerror = null;
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, image_url: "" })}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
+              <Label>Ảnh đã chọn</Label>
               {imageFile && (
                 <div className="flex items-center gap-2 p-2 bg-muted rounded">
                   <Upload className="w-4 h-4" />

@@ -53,5 +53,21 @@ services:
     command: php /app/scripts/test_api.php
     restart: "no"
 
+  frontend:
+    image: node:20-bullseye-slim
+    container_name: galaxy_cinema_frontend
+    working_dir: /app
+    volumes:
+      - ./source-code/galaxy-cinema-hub-main:/app
+      - /app/node_modules
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_API_URL: "http://localhost:8000"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 8080"
+
 volumes:
   mysql_data:

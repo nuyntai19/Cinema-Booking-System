@@ -89,8 +89,6 @@ export const API_ENDPOINTS = {
   CONCESSIONS: `${API_BASE_URL}/api/concessions`,
   CONCESSION_UPLOAD_IMAGE: (id: number) =>
     `${API_BASE_URL}/api/concessions/${id}/upload-image`,
-  CONCESSION_UPLOAD_IMAGE_FROM_URL: (id: number) =>
-    `${API_BASE_URL}/api/concessions/${id}/upload-image-from-url`,
 
   // Reviews
   MOVIE_REVIEWS_LIST: (movieId: number) =>
@@ -256,10 +254,10 @@ export const getImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Already full URL
   }
-  
+
   // Remove leading slash to prevent double slashes (e.g. http://localhost:8000//uploads...)
   const cleanPath = path.startsWith("/") ? path.substring(1) : path;
-  
+
   // Relative path - prepend API base URL (remove /index.php if present)
   const baseUrl = API_BASE_URL.replace(/\/index\.php$/, "");
   return `${baseUrl}/${cleanPath}`;

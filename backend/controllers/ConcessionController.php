@@ -54,7 +54,7 @@ class ConcessionController
     /**
      * Tạo concession mới (Manager)
      * POST /api/concessions
-     * Body: { "name": "Combo 1", "price": 89000, "category": "Combo", "image_url": "..." }
+     * Body: { "name": "Combo 1", "price": 89000, "category": "Combo" }
      */
     public function create()
     {
@@ -81,7 +81,6 @@ class ConcessionController
                 'name' => trim($input['name']),
                 'price' => floatval($input['price']),
                 'category' => $input['category'] ?? null,
-                'image_url' => $input['image_url'] ?? null,
                 'is_available' => isset($input['is_available']) ? (bool)$input['is_available'] : true
             ];
 
@@ -101,7 +100,7 @@ class ConcessionController
     /**
      * Nhập nhiều concession từ Excel (Manager)
      * POST /api/concessions/import
-     * Body: [{ "name": "Combo 1", "price": 89000, "category": "Combo", "image_url": "..." }]
+     * Body: [{ "name": "Combo 1", "price": 89000, "category": "Combo" }]
      */
     public function import()
     {
@@ -131,7 +130,6 @@ class ConcessionController
                         'name' => trim($item['name']),
                         'price' => floatval($item['price']),
                         'category' => $item['category'] ?? null,
-                        'image_url' => $item['image_url'] ?? null,
                         'is_available' => isset($item['is_available']) ? (bool)$item['is_available'] : true
                     ];
 
@@ -152,7 +150,6 @@ class ConcessionController
                 'success_count' => $successCount,
                 'errors' => $errors
             ], 200);
-
         } catch (Exception $e) {
             Response::serverError('Lỗi khi import danh sách: ' . $e->getMessage());
         }
@@ -201,10 +198,6 @@ class ConcessionController
 
             if (isset($input['category'])) {
                 $data['category'] = $input['category'];
-            }
-
-            if (isset($input['image_url'])) {
-                $data['image_url'] = $input['image_url'];
             }
 
             if (isset($input['is_available'])) {
@@ -337,45 +330,6 @@ class ConcessionController
     }
 
     /**
-     * Upload concession image from external URL
-     * POST /api/concessions/:id/upload-image-from-url
-     * Body: { "image_url": "https://..." }
+     * (Removed) Upload concession image from external URL
      */
-    public function uploadImageFromUrl($id)
-    {
-        try {
-            $concession = $this->concessionModel->getById($id);
-            if (!$concession) {
-                Response::notFound('Không tìm thấy sản phẩm');
-            }
-
-            $input = json_decode(file_get_contents('php://input'), true);
-            $sourceUrl = trim((string)($input['image_url'] ?? ''));
-
-            if ($sourceUrl === '') {
-                Response::error('Thiếu image_url', 400);
-            }
-
-            $cloudinaryUrl = CloudinaryUploader::uploadImageFromUrl(
-                $sourceUrl,
-                'concession_' . $id . '_' . time(),
-                'concessions/images'
-            );
-
-            // If Cloudinary is not enabled/configured, keep original URL as fallback.
-            $imageUrl = $cloudinaryUrl ?: $sourceUrl;
-
-            $updated = $this->concessionModel->update($id, ['image_url' => $imageUrl]);
-            if (!$updated) {
-                Response::serverError('Không thể cập nhật ảnh sản phẩm');
-            }
-
-            Response::success([
-                'concession_id' => (int)$id,
-                'image_url' => $imageUrl,
-            ], 'Upload ảnh từ URL thành công');
-        } catch (Exception $e) {
-            Response::serverError('Lỗi upload ảnh từ URL: ' . $e->getMessage());
-        }
-    }
 }
