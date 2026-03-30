@@ -182,6 +182,13 @@ interface AdminTransactionsData {
   summary: SummaryData;
 }
 
+interface CustomerStat {
+  email: string;
+  name: string;
+  revenue: number;
+  orders: TransactionItem[];
+}
+
 const AdminTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -293,6 +300,11 @@ const AdminTransactions: React.FC = () => {
   const [yearRevenueData, setYearRevenueData] = useState<
     Array<{ year: number; revenue: number }>
   >([]);
+
+  const [customerStats, setCustomerStats] = useState<CustomerStat[]>([]);
+  const [customerSort, setCustomerSort] = useState<"desc" | "asc">("desc");
+  const [selectedCustomerOrders, setSelectedCustomerOrders] = useState<TransactionItem[] | null>(null);
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
 
   const pieChartData = useMemo(
     () => [
@@ -569,6 +581,26 @@ const AdminTransactions: React.FC = () => {
 
       setMovieData(movies);
       setMoviePage(1);
+
+      // Top 5 Customers
+      const customerMap = new Map<string, CustomerStat>();
+      filteredRows.forEach((row) => {
+        const key = row.customerEmail && row.customerEmail !== "-" && row.customerEmail !== "guest" && row.customerEmail !== "Khách vãng lai" 
+                    ? row.customerEmail 
+                    : row.customerName || "Khách vãng lai";
+        
+        if (!customerMap.has(key)) {
+          customerMap.set(key, { email: row.customerEmail || "", name: row.customerName || "Khách Vãng Lai", revenue: 0, orders: [] });
+        }
+        const curr = customerMap.get(key)!;
+        curr.revenue += Number(row.amount || 0);
+        curr.orders.push(row);
+      });
+
+      const topCustomers = Array.from(customerMap.values())
+        .sort((a,b) => b.revenue - a.revenue)
+        .slice(0, 5);
+      setCustomerStats(topCustomers);
 
       // Payment share for pie chart
       const total = filteredRows.length;
@@ -1571,6 +1603,61 @@ const AdminTransactions: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Top 5 Customers Card */}
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <CardTitle>Top 5 Khách Hàng</CardTitle>
+                    <Select
+                      value={customerSort}
+                      onValueChange={(val: "desc" | "asc") => setCustomerSort(val)}
+                    >
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Sắp xếp" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="desc">Tổng tiền giảm dần</SelectItem>
+                        <SelectItem value="asc">Tổng tiền tăng dần</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Khách Hàng</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-center">Số Đơn Hàng</TableHead>
+                        <TableHead className="text-right">Tổng Mua</TableHead>
+                        <TableHead className="text-center">Đơn Hàng</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customerStats.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Không có dữ liệu khách hàng</TableCell>
+                        </TableRow>
+                      ) : (
+                        [...customerStats].sort((a,b) => customerSort === "desc" ? b.revenue - a.revenue : a.revenue - b.revenue).map((c, i) => (
+                           <TableRow key={i}>
+                             <TableCell className="font-medium">{c.name}</TableCell>
+                             <TableCell className="text-muted-foreground text-sm">{c.email}</TableCell>
+                             <TableCell className="text-center">{c.orders.length}</TableCell>
+                             <TableCell className="text-right font-bold text-primary">{c.revenue.toLocaleString("vi-VN")}đ</TableCell>
+                             <TableCell className="text-center">
+                               <Button variant="outline" size="sm" onClick={() => { setSelectedCustomerOrders(c.orders); setCustomerDialogOpen(true); }}>
+                                 Xem {c.orders.length} Đơn
+                               </Button>
+                             </TableCell>
+                           </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </>
           )}
         </div>
@@ -2159,6 +2246,51 @@ const AdminTransactions: React.FC = () => {
                 {exportingType === "pdf" ? "Đang xuất..." : "Xuất Báo Cáo PDF"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== CUSTOMER ORDERS DIALOG ===================== */}
+      <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto w-full">
+          <DialogHeader>
+            <DialogTitle>Chi Tiết Đơn Hàng Của Khách</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-md border mt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã Đặt Vé</TableHead>
+                  <TableHead>Phim</TableHead>
+                  <TableHead>Thời Gian</TableHead>
+                  <TableHead className="text-right">Số Tiền</TableHead>
+                  <TableHead className="text-center">Thao Tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedCustomerOrders?.map((ord) => (
+                  <TableRow key={ord.id}>
+                    <TableCell className="font-mono">{ord.bookingCode}</TableCell>
+                    <TableCell>{ord.movieTitle}</TableCell>
+                    <TableCell>
+                      {ord.transactionDate ? formatDateTime(ord.transactionDate) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-primary">{ord.amount.toLocaleString("vi-VN")}đ</TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                        onClick={() => openDetail(ord)}
+                      >
+                        <Eye className="w-3 h-3" />
+                        Chi tiết
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </DialogContent>
       </Dialog>
