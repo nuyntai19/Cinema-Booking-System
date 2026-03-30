@@ -508,6 +508,15 @@ class MovieController
                 return Response::error('Không tìm thấy phim', 404);
             }
 
+            // Kiểm tra có suất chiếu từ hôm nay trở đi không
+            $futureCount = $this->movieModel->countFutureShowtimes($id);
+            if ($futureCount > 0) {
+                return Response::error(
+                    "Không thể xóa phim này vì còn $futureCount suất chiếu từ hôm nay trở đi. Vui lòng hủy các suất chiếu trước.",
+                    400
+                );
+            }
+
             // Soft delete - set status to 'Deleted'
             $result = $this->movieModel->delete($id);
 

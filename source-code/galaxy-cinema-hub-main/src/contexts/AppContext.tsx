@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -15,6 +16,7 @@ import {
   UserRole,
 } from "@/types/cinema";
 import { API_ENDPOINTS } from "@/lib/api";
+import { systemConfig } from "@/data/mockData";
 
 interface AuthContextType {
   user: User | null;
@@ -47,6 +49,12 @@ interface BookingContextType {
   ) => void;
   getTotalAmount: () => number;
   clearBooking: () => void;
+  holdStartedAt: number | null;
+  holdPausedAt: number | null;
+  startHoldTimer: () => void;
+  stopHoldTimer: () => void;
+  pauseHoldTimer: () => void;
+  resumeHoldTimer: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -119,7 +127,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         loyaltyPoints: data.data.user.current_points || 0,
         phone: data.data.user.phone,
         dob: data.data.user.dob,
-        cinema_id: data.data.user.cinema_id ? String(data.data.user.cinema_id) : undefined,
+        cinema_id: data.data.user.cinema_id
+          ? String(data.data.user.cinema_id)
+          : undefined,
         cinema_name: data.data.user.cinema_name || undefined,
       };
 
@@ -188,7 +198,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           loyaltyPoints: data.data.user.current_points || 0,
           phone: data.data.user.phone,
           dob: data.data.user.dob,
-          cinema_id: data.data.user.cinema_id ? String(data.data.user.cinema_id) : undefined,
+          cinema_id: data.data.user.cinema_id
+            ? String(data.data.user.cinema_id)
+            : undefined,
           cinema_name: data.data.user.cinema_name || undefined,
         };
 
@@ -221,6 +233,33 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [concessions, setConcessions] = useState<ConcessionItem[]>([]);
   const [bookingsActive, setBookingsActive] = useState<Booking[]>([]);
+  const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
+  const [holdPausedAt, setHoldPausedAt] = useState<number | null>(null);
+
+  const startHoldTimer = useCallback(() => {
+    setHoldStartedAt((prev) => prev ?? Date.now());
+  }, []);
+
+  const stopHoldTimer = useCallback(() => {
+    setHoldStartedAt(null);
+    setHoldPausedAt(null);
+  }, []);
+
+  const pauseHoldTimer = useCallback(() => {
+    setHoldPausedAt((prev) => prev ?? Date.now());
+  }, []);
+
+  const resumeHoldTimer = useCallback(() => {
+    setHoldPausedAt((prev) => {
+      if (!prev) return null;
+      // Shift holdStartedAt forward by the paused duration so remaining time is preserved
+      const pausedDuration = Date.now() - prev;
+      setHoldStartedAt((started) =>
+        started ? started + pausedDuration : started,
+      );
+      return null;
+    });
+  }, []);
 
   const addSeat = useCallback((seat: Seat) => {
     setSelectedSeats((prev) => {
@@ -287,7 +326,94 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({
     setSelectedShowtime(null);
     setSelectedSeats([]);
     setConcessions([]);
+    setHoldStartedAt(null);
+    setHoldPausedAt(null);
   };
+
+  // Release held seats on tab close / F5 (beforeunload)
+  const selectedShowtimeRef = useRef(selectedShowtime);
+  selectedShowtimeRef.current = selectedShowtime;
+  const holdStartedAtRef = useRef(holdStartedAt);
+  holdStartedAtRef.current = holdStartedAt;
+
+  useEffect(() => {
+    const releaseOnUnload = () => {
+      const st = selectedShowtimeRef.current;
+      const started = holdStartedAtRef.current;
+      if (!st || !started) return;
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      if (!token) return;
+      fetch(API_ENDPOINTS.SHOWTIME_RELEASE_SEATS(parseInt(st.id)), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener("beforeunload", releaseOnUnload);
+    return () => window.removeEventListener("beforeunload", releaseOnUnload);
+  }, []);
+
+  // Auto-expire: release seats + clear booking when hold timer expires
+  useEffect(() => {
+    if (!holdStartedAt || holdPausedAt) return;
+    const durationMs = systemConfig.seatHoldDuration * 60 * 1000;
+    const remaining = durationMs - (Date.now() - holdStartedAt);
+    if (remaining <= 0) {
+      // Already expired
+      const st = selectedShowtimeRef.current;
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      if (st && token) {
+        fetch(API_ENDPOINTS.SHOWTIME_RELEASE_SEATS(parseInt(st.id)), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+          keepalive: true,
+        }).catch(() => {});
+      }
+      setSelectedMovie(null);
+      setSelectedCinema(null);
+      setSelectedShowtime(null);
+      setSelectedSeats([]);
+      setConcessions([]);
+      setHoldStartedAt(null);
+      window.location.href = "/";
+      return;
+    }
+    const timer = setTimeout(() => {
+      const st = selectedShowtimeRef.current;
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      if (st && token) {
+        fetch(API_ENDPOINTS.SHOWTIME_RELEASE_SEATS(parseInt(st.id)), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+          keepalive: true,
+        }).catch(() => {});
+      }
+      setSelectedMovie(null);
+      setSelectedCinema(null);
+      setSelectedShowtime(null);
+      setSelectedSeats([]);
+      setConcessions([]);
+      setHoldStartedAt(null);
+      window.location.href = "/";
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [holdStartedAt, holdPausedAt]);
 
   return (
     <BookingContext.Provider
@@ -307,6 +433,12 @@ export const BookingProvider: React.FC<{ children: ReactNode }> = ({
         clearBooking,
         bookingsActive,
         checkBookingActive,
+        holdStartedAt,
+        holdPausedAt,
+        startHoldTimer,
+        stopHoldTimer,
+        pauseHoldTimer,
+        resumeHoldTimer,
       }}
     >
       {children}

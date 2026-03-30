@@ -468,6 +468,26 @@ class ShowtimeController
             // Lấy tất cả ghế trong phòng
             $allSeats = $this->seatModel->getByHallId($hallId);
 
+            // Lấy danh sách ghế đang bị hold ở bảng seat_holds
+            require_once __DIR__ . '/../models/SeatHold.php';
+            $seatHoldModel = new SeatHold();
+            $heldSeats = $seatHoldModel->getHeldSeats($id);
+
+            // Xác định user hiện tại (nếu có JWT) - không bắt buộc đăng nhập
+            $currentUserId = null;
+            try {
+                $headers = getallheaders();
+                if (isset($headers['Authorization'])) {
+                    $authHeader = $headers['Authorization'];
+                    if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+                        $decoded = JWT::decode($matches[1], Config::$jwt_secret);
+                        $currentUserId = is_array($decoded) ? ($decoded['user_id'] ?? null) : ($decoded->user_id ?? null);
+                    }
+                }
+            } catch (Exception $e) {
+                // Không đăng nhập cũng không sao
+            }
+
             // Tính giá và status cho từng ghế
             $date = date('Y-m-d', strtotime($showtime['start_time']));
             $time = date('H:i:s', strtotime($showtime['start_time']));
@@ -478,6 +498,13 @@ class ShowtimeController
             $seatMap = [];
             foreach ($allSeats as $seat) {
                 $status = $this->seatModel->getSeatStatus($seat['id'], $id);
+                $finalStatus = ($seat['status'] !== 'Active') ? 'Maintenance' : $status;
+
+                // Đánh dấu ghế do chính user này giữ
+                $heldByMe = false;
+                if ($currentUserId && isset($heldSeats[$seat['id']]) && $heldSeats[$seat['id']] === (int)$currentUserId) {
+                    $heldByMe = true;
+                }
 
                 $seatMap[] = [
                     'id' => $seat['id'],
@@ -485,7 +512,8 @@ class ShowtimeController
                     'number' => $seat['number'],
                     'seat_type' => $seat['seat_type_name'],
                     'price_multiplier' => $seat['price_multiplier'],
-                    'status' => ($seat['status'] !== 'Active') ? 'Maintenance' : $status,
+                    'status' => $finalStatus,
+                    'held_by_me' => $heldByMe,
                     'calculated_price' => $this->pricingModel->applyToPrice(
                         $basePrice,
                         $date,
@@ -522,6 +550,91 @@ class ShowtimeController
         } catch (Exception $e) {
             error_log("ShowtimeController GetSeatMap Error: " . $e->getMessage());
             return Response::error('Lỗi khi lấy sơ đồ ghế', 500);
+        }
+    }
+
+    /**
+     * POST /api/showtimes/:id/hold-seats
+     * Giữ ghế realtime khi user click chọn ghế (trước khi tạo booking)
+     * Body: { seat_ids: [1, 2, 3] }
+     */
+    public function holdSeats($id)
+    {
+        try {
+            AuthMiddleware::authenticate();
+            $userId = $_REQUEST['auth_user_id'] ?? null;
+            if (!$userId) {
+                return Response::error('Unauthorized', 401);
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $seatIds = $data['seat_ids'] ?? [];
+            if (empty($seatIds)) {
+                return Response::error('seat_ids is required', 400);
+            }
+
+            $seatIds = array_map('intval', $seatIds);
+
+            require_once __DIR__ . '/../models/SeatHold.php';
+            $seatHoldModel = new SeatHold();
+
+            // Kiểm tra ghế đã SOLD chưa
+            foreach ($seatIds as $seatId) {
+                $status = $this->seatModel->getSeatStatus($seatId, $id);
+                if ($status === 'SOLD') {
+                    return Response::error('Ghế đã được bán, không thể giữ', 409);
+                }
+            }
+
+            $result = $seatHoldModel->holdSeats($id, $seatIds, (int)$userId);
+
+            if ($result['success']) {
+                return Response::success([
+                    'message' => 'Giữ ghế thành công',
+                    'held_seats' => $seatIds,
+                ]);
+            } else {
+                return Response::error('Một số ghế đã bị người khác giữ', 409, [
+                    'failed_seats' => $result['failed_seats'],
+                ]);
+            }
+        } catch (Exception $e) {
+            error_log("ShowtimeController holdSeats Error: " . $e->getMessage());
+            return Response::error('Lỗi khi giữ ghế', 500);
+        }
+    }
+
+    /**
+     * POST /api/showtimes/:id/release-seats
+     * Nhả ghế khi user bỏ chọn
+     * Body: { seat_ids: [1, 2, 3] } hoặc rỗng để nhả tất cả
+     */
+    public function releaseSeats($id)
+    {
+        try {
+            AuthMiddleware::authenticate();
+            $userId = $_REQUEST['auth_user_id'] ?? null;
+            if (!$userId) {
+                return Response::error('Unauthorized', 401);
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $seatIds = $data['seat_ids'] ?? [];
+
+            require_once __DIR__ . '/../models/SeatHold.php';
+            $seatHoldModel = new SeatHold();
+
+            if (empty($seatIds)) {
+                $seatHoldModel->releaseAllForUser($id, (int)$userId);
+            } else {
+                $seatIds = array_map('intval', $seatIds);
+                $seatHoldModel->releaseSeats($id, $seatIds, (int)$userId);
+            }
+
+            return Response::success(['message' => 'Nhả ghế thành công']);
+        } catch (Exception $e) {
+            error_log("ShowtimeController releaseSeats Error: " . $e->getMessage());
+            return Response::error('Lỗi khi nhả ghế', 500);
         }
     }
 

@@ -57,6 +57,10 @@ export const API_ENDPOINTS = {
   SHOWTIME_SEATS: (id: number) => `${API_BASE_URL}/api/showtimes/${id}/seats`,
   SHOWTIME_SEAT_MAP: (id: number) =>
     `${API_BASE_URL}/api/showtimes/${id}/seat-map`,
+  SHOWTIME_HOLD_SEATS: (id: number) =>
+    `${API_BASE_URL}/api/showtimes/${id}/hold-seats`,
+  SHOWTIME_RELEASE_SEATS: (id: number) =>
+    `${API_BASE_URL}/api/showtimes/${id}/release-seats`,
 
   // Bookings
   BOOKINGS: `${API_BASE_URL}/api/bookings`,
@@ -143,11 +147,14 @@ export const API_ENDPOINTS = {
   MANAGER_CINEMA_HALLS: `${API_BASE_URL}/api/manager/cinema/halls`,
   MANAGER_MOVIES_AVAILABLE: `${API_BASE_URL}/api/manager/movies/available`,
   MANAGER_SHOWTIMES: `${API_BASE_URL}/api/manager/showtimes`,
-  MANAGER_SHOWTIME: (id: number) => `${API_BASE_URL}/api/manager/showtimes/${id}`,
+  MANAGER_SHOWTIME: (id: number) =>
+    `${API_BASE_URL}/api/manager/showtimes/${id}`,
   MANAGER_STAFF: `${API_BASE_URL}/api/manager/staff`,
   MANAGER_STAFF_IMPORT: `${API_BASE_URL}/api/manager/staff/import`,
-  MANAGER_STAFF_DETAIL: (id: number) => `${API_BASE_URL}/api/manager/staff/${id}`,
-  MANAGER_STAFF_TOGGLE: (id: number) => `${API_BASE_URL}/api/manager/staff/${id}/toggle-status`,
+  MANAGER_STAFF_DETAIL: (id: number) =>
+    `${API_BASE_URL}/api/manager/staff/${id}`,
+  MANAGER_STAFF_TOGGLE: (id: number) =>
+    `${API_BASE_URL}/api/manager/staff/${id}/toggle-status`,
   MANAGER_REPORT_REVENUE: `${API_BASE_URL}/api/manager/reports/revenue`,
   MANAGER_REPORT_OCCUPANCY: `${API_BASE_URL}/api/manager/reports/occupancy`,
   MANAGER_REPORT_EXPORT: `${API_BASE_URL}/api/manager/reports/export`,
@@ -256,10 +263,10 @@ export const getImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Already full URL
   }
-  
+
   // Remove leading slash to prevent double slashes (e.g. http://localhost:8000//uploads...)
   const cleanPath = path.startsWith("/") ? path.substring(1) : path;
-  
+
   // Relative path - prepend API base URL (remove /index.php if present)
   const baseUrl = API_BASE_URL.replace(/\/index\.php$/, "");
   return `${baseUrl}/${cleanPath}`;

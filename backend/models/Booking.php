@@ -127,6 +127,15 @@ class Booking {
 
             $this->db->commit();
 
+            // Xóa seat_holds tạm khi đã tạo booking thật
+            try {
+                require_once __DIR__ . '/SeatHold.php';
+                $seatHoldModel = new SeatHold();
+                $seatHoldModel->releaseSeats($showtimeId, $seatIds, $userId ?: 0);
+            } catch (Exception $ex) {
+                error_log('Release seat_holds after booking: ' . $ex->getMessage());
+            }
+
             return [
                 'booking_id' => $bookingId,
                 'booking_code' => $bookingCode,
@@ -1186,5 +1195,85 @@ class Booking {
             $params[$key] = $value;
         }
         return [$placeholders, $params];
+    }
+
+    /**
+     * Tự động hết hạn các booking Pending quá thời gian cho phép.
+     * Chuyển booking -> Expired, tickets -> REFUNDED, transactions -> Failed.
+     * Trả về số booking đã xử lý.
+     *
+     * @param int $expireMinutes Số phút tối đa cho trạng thái Pending (mặc định 10)
+     * @return int
+     */
+    public function expireStaleBookings($expireMinutes = 10) {
+        $cutoff = date('Y-m-d H:i:s', time() - ($expireMinutes * 60));
+
+        // Tìm các booking Pending đã quá hạn
+        $stmt = $this->db->prepare(
+            "SELECT id FROM bookings
+             WHERE status = 'Pending'
+             AND created_at <= :cutoff"
+        );
+        $stmt->execute([':cutoff' => $cutoff]);
+        $staleIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($staleIds)) {
+            return 0;
+        }
+
+        $count = 0;
+        foreach ($staleIds as $bookingId) {
+            try {
+                $this->db->beginTransaction();
+
+                // Chuyển booking sang Expired
+                $update = $this->db->prepare(
+                    "UPDATE bookings SET status = 'Expired' WHERE id = :id AND status = 'Pending'"
+                );
+                $update->execute([':id' => $bookingId]);
+
+                if ($update->rowCount() === 0) {
+                    // Đã bị thay đổi bởi process khác
+                    $this->db->rollBack();
+                    continue;
+                }
+
+                // Chuyển tickets HOLDING -> REFUNDED
+                $ticketUpdate = $this->db->prepare(
+                    "UPDATE tickets SET status = 'REFUNDED', hold_expires_at = NULL
+                     WHERE booking_id = :booking_id AND status = 'HOLDING'"
+                );
+                $ticketUpdate->execute([':booking_id' => $bookingId]);
+
+                // Chuyển transaction Pending -> Failed
+                $txUpdate = $this->db->prepare(
+                    "UPDATE transactions SET status = 'Failed'
+                     WHERE booking_id = :booking_id AND status = 'Pending'"
+                );
+                $txUpdate->execute([':booking_id' => $bookingId]);
+
+                // Hoàn lại voucher nếu đã dùng
+                $voucherStmt = $this->db->prepare(
+                    "SELECT user_voucher_id FROM bookings WHERE id = :id"
+                );
+                $voucherStmt->execute([':id' => $bookingId]);
+                $row = $voucherStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($row['user_voucher_id'])) {
+                    $restoreVoucher = $this->db->prepare(
+                        "UPDATE user_vouchers SET status = 'ACTIVE', used_at = NULL
+                         WHERE id = :id AND status = 'USED'"
+                    );
+                    $restoreVoucher->execute([':id' => $row['user_voucher_id']]);
+                }
+
+                $this->db->commit();
+                $count++;
+            } catch (Exception $e) {
+                $this->db->rollBack();
+                error_log("expireStaleBookings error for booking #$bookingId: " . $e->getMessage());
+            }
+        }
+
+        return $count;
     }
 }
