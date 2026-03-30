@@ -13,20 +13,38 @@ const BookingSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // Guard: nếu đến từ URL callback (không có state) mà status != Success,
-  // redirect ngay về trang thất bại để tránh hiển thị trang thành công khi user bấm quay lại
   const urlStatus = searchParams.get("status");
   const hasUrlParams = !location.state && (searchParams.has("booking_id") || searchParams.has("status") || searchParams.has("transaction_code"));
   const isFailedCallback = hasUrlParams && urlStatus !== null && urlStatus !== "Success";
+  // Khi VNPay/Visa redirect về với status=Success và không có state (popup flow),
+  // đóng popup để main PaymentPage tự detect qua polling/Pusher
+  const gateway = searchParams.get("gateway");
+  const isGatewaySuccessCallback = hasUrlParams && urlStatus === "Success" && (gateway === "VNPay" || gateway === "Visa");
+
 
   useEffect(() => {
     if (isFailedCallback) {
       navigate("/booking/failed", { replace: true });
+      return;
     }
-  }, [isFailedCallback, navigate]);
+    if (isGatewaySuccessCallback) {
+      // Nếu đang chạy trong popup window (window.opener = main PaymentPage),
+      // đóng popup để main window tự detect qua polling/Pusher
+      if (window.opener && !window.opener.closed) {
+        window.close();
+        return;
+      }
+      // Nếu là main window (không có popup) — redirect sang trang vé
+      toast({
+        title: "Thanh toán thành công!",
+        description: "Vé đã được xác nhận. Bạn có thể xem vé trong mục Vé của tôi.",
+      });
+      navigate("/profile/my-tickets", { replace: true });
+    }
+  }, [isFailedCallback, isGatewaySuccessCallback, navigate, toast]);
 
   const [bookingData, setBookingData] = useState<any>(location.state || null);
-  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id") && !isFailedCallback);
+  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id") && !isFailedCallback && !isGatewaySuccessCallback);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {

@@ -100,6 +100,45 @@ class TransactionService
         ];
     }
 
+    /**
+     * Xác nhận thủ công giao dịch (dùng cho VietQR demo flow).
+     * Bỏ qua chữ ký cổng thanh toán — chỉ dùng trong môi trường sandbox/demo.
+     */
+    public function manualConfirmTransaction($transactionCode)
+    {
+        $transaction = $this->transactionModel->getByTransactionCode($transactionCode);
+        if (!$transaction) {
+            throw new Exception('Transaction not found', 404);
+        }
+
+        if ($transaction['status'] === 'Success') {
+            // Đã thành công rồi, trả về luôn
+            return [
+                'transaction_code' => $transaction['transaction_code'],
+                'booking_id' => (int) $transaction['booking_id'],
+                'status' => 'Success',
+                'gateway' => $transaction['payment_method'] ?? 'VNPay',
+            ];
+        }
+
+        $this->transactionModel->updateStatus($transaction['transaction_code'], 'Success');
+        $this->bookingModel->confirm((int) $transaction['booking_id']);
+
+        PusherService::triggerPaymentStatus(
+            (int) $transaction['booking_id'],
+            $transaction['transaction_code'],
+            'Success',
+            $transaction['payment_method'] ?? 'VNPay'
+        );
+
+        return [
+            'transaction_code' => $transaction['transaction_code'],
+            'booking_id' => (int) $transaction['booking_id'],
+            'status' => 'Success',
+            'gateway' => $transaction['payment_method'] ?? 'VNPay',
+        ];
+    }
+
     public function createPaymentForBooking($gateway, $booking, $options = [])
     {
         if ($booking['status'] !== 'Pending') {

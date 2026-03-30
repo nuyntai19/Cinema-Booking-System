@@ -79,7 +79,7 @@ class TransactionController extends BaseController
             $result = $this->transactionService->processGatewayVerification('VNPay', $data);
 
             if ($isGet) {
-                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:5173';
+                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:8080';
                 $transactionCode = $result['transaction_code'] ?? ($data['vnp_TxnRef'] ?? null);
                 $status = $result['status'] ?? 'Failed';
                 $bookingId = $result['booking_id'] ?? null;
@@ -118,17 +118,8 @@ class TransactionController extends BaseController
             Response::success($result, 'VNPay verification processed');
         } catch (Exception $e) {
             if ($isGet) {
-                $appUrl = getenv('APP_URL');
-                if (empty($appUrl)) {
-                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
-                    $appUrl = $scheme . '://' . $host;
-                } else {
-                    $appUrl = rtrim($appUrl, '/');
-                }
-
                 // Redirect user to the frontend booking failed page on failure
-                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:5173';
+                $frontendUrl = getenv('FRONTEND_URL') ?: 'http://localhost:8080';
                 $returnUrl = $frontendUrl . '/booking/failed';
                 $location = $returnUrl . (strpos($returnUrl, '?') === false ? '?' : '&') . 'status=Failed';
                 header('Location: ' . $location);
