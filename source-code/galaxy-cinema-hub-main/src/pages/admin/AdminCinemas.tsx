@@ -91,6 +91,32 @@ const HCM_DISTRICTS = [
   "Thành phố Thủ Đức", "Huyện Bình Chánh", "Huyện Cần Giờ", "Huyện Củ Chi", "Huyện Hóc Môn", "Huyện Nhà Bè"
 ];
 
+const HN_DISTRICTS = [
+  "Quận Ba Đình", "Quận Bắc Từ Liêm", "Quận Cầu Giấy", "Quận Đống Đa", "Quận Hà Đông", "Quận Hai Bà Trưng", "Quận Hoàn Kiếm", "Quận Hoàng Mai", "Quận Long Biên", "Quận Nam Từ Liêm", "Quận Tây Hồ", "Quận Thanh Xuân", "Thị xã Sơn Tây", "Huyện Ba Vì", "Huyện Chương Mỹ", "Huyện Đan Phượng", "Huyện Đông Anh", "Huyện Gia Lâm", "Huyện Hoài Đức", "Huyện Mê Linh", "Huyện Mỹ Đức", "Huyện Phú Xuyên", "Huyện Phúc Thọ", "Huyện Quốc Oai", "Huyện Sóc Sơn", "Huyện Thạch Thất", "Huyện Thanh Oai", "Huyện Thanh Trì", "Huyện Thường Tín", "Huyện Ứng Hòa"
+];
+
+const DN_DISTRICTS = [
+  "Quận Cẩm Lệ", "Quận Hải Châu", "Quận Liên Chiểu", "Quận Ngũ Hành Sơn", "Quận Sơn Trà", "Quận Thanh Khê", "Huyện Hòa Vang", "Huyện Hoàng Sa"
+];
+
+const HP_DISTRICTS = [
+  "Quận Đồ Sơn", "Quận Dương Kinh", "Quận Hải An", "Quận Hồng Bàng", "Quận Kiến An", "Quận Lê Chân", "Quận Ngô Quyền", "Huyện An Dương", "Huyện An Lão", "Huyện Bạch Long Vĩ", "Huyện Cát Hải", "Huyện Kiến Thụy", "Huyện Thủy Nguyên", "Huyện Tiên Lãng", "Huyện Vĩnh Bảo"
+];
+
+const CT_DISTRICTS = [
+  "Quận Bình Thủy", "Quận Cái Răng", "Quận Ninh Kiều", "Quận Ô Môn", "Quận Thốt Nốt", "Huyện Cờ Đỏ", "Huyện Phong Điền", "Huyện Thới Lai", "Huyện Vĩnh Thạnh"
+];
+
+const getDistrictsForCity = (city: string) => {
+  switch (city) {
+    case "Hà Nội": return HN_DISTRICTS;
+    case "Đà Nẵng": return DN_DISTRICTS;
+    case "Hải Phòng": return HP_DISTRICTS;
+    case "Cần Thơ": return CT_DISTRICTS;
+    case "Thành phố Hồ Chí Minh": default: return HCM_DISTRICTS;
+  }
+};
+
 const AdminCinemas: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -440,7 +466,7 @@ const AdminCinemas: React.FC = () => {
                   <Label htmlFor="city">Thành phố</Label>
                   <Select
                     value={formData.city}
-                    onValueChange={(value) => setFormData({ ...formData, city: value })}
+                    onValueChange={(value) => setFormData({ ...formData, city: value, district: "" })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn thành phố" />
@@ -462,7 +488,7 @@ const AdminCinemas: React.FC = () => {
                       <SelectValue placeholder="Chọn quận/huyện" />
                     </SelectTrigger>
                     <SelectContent>
-                      {HCM_DISTRICTS.map(district => (
+                      {getDistrictsForCity(formData.city).map(district => (
                         <SelectItem key={district} value={district}>{district}</SelectItem>
                       ))}
                     </SelectContent>
@@ -518,7 +544,7 @@ const AdminCinemas: React.FC = () => {
                 <LocationPickerMap 
                   lat={formData.lat} 
                   lng={formData.lng} 
-                  onChange={(lat, lng) => setFormData({ ...formData, lat, lng })}
+                  onChange={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
                   addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
                 />
               </div>
@@ -735,7 +761,7 @@ const AdminCinemas: React.FC = () => {
                 <Label htmlFor="edit-city">Thành phố</Label>
                 <Select
                   value={formData.city}
-                  onValueChange={(value) => setFormData({ ...formData, city: value })}
+                  onValueChange={(value) => setFormData({ ...formData, city: value, district: "" })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn thành phố" />
@@ -757,7 +783,7 @@ const AdminCinemas: React.FC = () => {
                     <SelectValue placeholder="Chọn quận/huyện" />
                   </SelectTrigger>
                   <SelectContent>
-                    {HCM_DISTRICTS.map(district => (
+                    {getDistrictsForCity(formData.city).map(district => (
                       <SelectItem key={district} value={district}>{district}</SelectItem>
                     ))}
                   </SelectContent>
@@ -813,7 +839,7 @@ const AdminCinemas: React.FC = () => {
               <LocationPickerMap 
                 lat={formData.lat} 
                 lng={formData.lng} 
-                onChange={(lat, lng) => setFormData({ ...formData, lat, lng })}
+                onChange={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
                 addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
               />
             </div>

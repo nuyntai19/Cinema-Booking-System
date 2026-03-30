@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Phone, Navigation, Clock, Star, Loader } from "lucide-react";
+import { MapPin, Phone, Navigation, Clock, Star, Loader, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -33,55 +34,82 @@ const CinemasPage: React.FC = () => {
   const { toast } = useToast();
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCity, setSelectedCity] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
-  const cities = [
-    { id: "all", name: "Tất cả khu vực" },
-    { id: "hcm", name: "TP. Hồ Chí Minh" },
-    { id: "hanoi", name: "Hà Nội" },
-    { id: "danang", name: "Đà Nẵng" },
-  ];
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 6;
 
   const normalizeText = (value: string) =>
     value
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+      .toLowerCase()
+      .trim();
 
-  const getCinemaRegion = (
-    cinema: Cinema,
-  ): "hcm" | "hanoi" | "danang" | "other" => {
-    const joined = normalizeText(
-      [cinema.city, cinema.district, cinema.street, cinema.address]
-        .filter(Boolean)
-        .join(" "),
-    );
+  const extractCity = (cinema: Cinema): string => {
+    if (cinema.city && cinema.city.trim() !== "") return cinema.city.trim();
+    if (!cinema.address) return "";
+
+    // Phân tích address, lấy phần cuối cùng hoặc từ khóa
+    const joined = normalizeText(cinema.address);
 
     if (
       joined.includes("ho chi minh") ||
       joined.includes("tp.hcm") ||
       joined.includes("tphcm") ||
-      joined.includes("sai gon") ||
-      joined.includes("quan")
+      joined.includes("sai gon")
     ) {
-      return "hcm";
+      return "TP. Hồ Chí Minh";
     }
 
     if (joined.includes("ha noi") || joined.includes("hanoi")) {
-      return "hanoi";
+      return "Hà Nội";
     }
 
     if (joined.includes("da nang") || joined.includes("danang")) {
-      return "danang";
+      return "Đà Nẵng";
     }
 
-    return "other";
+    // Lấy phần tử cuối cùng sau dấu phẩy làm thành phố
+    const parts = cinema.address.split(",").map((p) => p.trim());
+    return parts[parts.length - 1];
   };
 
-  const filteredCinemas =
-    selectedCity === "all"
-      ? cinemas
-      : cinemas.filter((cinema) => getCinemaRegion(cinema) === selectedCity);
+  // Extract unique cities from actual cinemas data
+  const availableCities = Array.from(
+    new Set(cinemas.map(extractCity).filter((city): city is string => !!city))
+  ).sort();
+
+  const suggestedCities = availableCities.filter((city) =>
+    normalizeText(city).startsWith(normalizeText(searchQuery)) ||
+    normalizeText(city).includes(normalizeText(searchQuery)) // dự phòng trường hợp gõ chữ thường
+  );
+
+  const filteredCinemas = selectedCity
+    ? cinemas.filter((cinema) => extractCity(cinema) === selectedCity)
+    : cinemas;
+
+  const totalPages = Math.ceil(filteredCinemas.length / ITEMS_PER_PAGE);
+  const paginatedCinemas = filteredCinemas.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const handleSelectCity = (city: string) => {
+    setSelectedCity(city);
+    setSearchQuery(city);
+    setShowSuggestions(false);
+    setCurrentPage(1);
+  };
+
+  const clearSelection = () => {
+    setSelectedCity(null);
+    setSearchQuery("");
+    setShowSuggestions(false);
+    setCurrentPage(1);
+  };
 
   useEffect(() => {
     const fetchCinemas = async () => {
@@ -137,27 +165,63 @@ const CinemasPage: React.FC = () => {
         </div>
 
         {/* City Filter */}
-        <div className="mb-6">
+        <div className="mb-6 relative max-w-md">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <MapPin className="w-5 h-5 text-primary" />
             Chọn khu vực
           </h2>
-          <div className="flex gap-2 flex-wrap">
-            {cities.map((city) => (
-              <Button
-                key={city.id}
-                variant={selectedCity === city.id ? "default" : "outline"}
-                onClick={() => setSelectedCity(city.id)}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Nhập tên thành phố..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(true);
+                setCurrentPage(1);
+                if (selectedCity && e.target.value !== selectedCity) {
+                  setSelectedCity(null);
+                }
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              className="pl-9 pr-9"
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSelection}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                {city.name}
-              </Button>
-            ))}
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
+
+          {/* Suggestions Dropdown */}
+          {showSuggestions && searchQuery && suggestedCities.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+              {suggestedCities.map((city) => (
+                <div
+                  key={city}
+                  className="px-4 py-2 cursor-pointer hover:bg-muted"
+                  onMouseDown={() => handleSelectCity(city)}
+                >
+                  {city}
+                </div>
+              ))}
+            </div>
+          )}
+          {showSuggestions && searchQuery && suggestedCities.length === 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg px-4 py-3 text-sm text-muted-foreground">
+              Không tìm thấy thành phố nào
+            </div>
+          )}
         </div>
 
         {/* Cinemas List */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCinemas.map((cinema) => (
+          {paginatedCinemas.map((cinema) => (
             <Card
               key={cinema.id}
               className="group hover:shadow-lg transition-all"
@@ -244,6 +308,42 @@ const CinemasPage: React.FC = () => {
             </Card>
           ))}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-8">
+            {currentPage > 1 && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            )}
+
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <Button
+                key={i}
+                variant={currentPage === i + 1 ? "default" : "outline"}
+                size="icon"
+                onClick={() => setCurrentPage(i + 1)}
+              >
+                {i + 1}
+              </Button>
+            ))}
+
+            {currentPage < totalPages && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Map Section */}
         <div className="mt-12">
