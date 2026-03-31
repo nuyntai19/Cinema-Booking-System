@@ -295,44 +295,44 @@ const MovieDetailPage: React.FC = () => {
   }, [id, selectedDate]);
 
   // Fetch reviews
-  useEffect(() => {
-    const fetchReviews = async () => {
-      if (!id) return;
+  const fetchReviews = async () => {
+    if (!id) return;
 
-      try {
-        setLoadingReviews(true);
-        const response = await apiCall<{
-          success: boolean;
-          data: {
-            movie_id: number;
-            reviews: BackendReview[];
-            rating_stats: ReviewStats;
-          };
-        }>(API_ENDPOINTS.MOVIE_REVIEWS(parseInt(id)));
+    try {
+      setLoadingReviews(true);
+      const response = await apiCall<{
+        success: boolean;
+        data: {
+          movie_id: number;
+          reviews: BackendReview[];
+          rating_stats: ReviewStats;
+        };
+      }>(API_ENDPOINTS.MOVIE_REVIEWS(parseInt(id)));
 
-        if (response.success && response.data) {
-          // Map backend reviews to frontend format
-          const mappedReviews = response.data.reviews.map((r) => ({
-            id: r.id.toString(),
-            userName: r.full_name || r.email.split("@")[0],
-            userAvatar:
-              r.avatar ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.email}`,
-            rating: r.rating,
-            comment: r.comment,
-            createdAt: r.created_at,
-            helpful: 0,
-          }));
-          setReviews(mappedReviews);
-          setReviewStats(response.data.rating_stats);
-        }
-      } catch (error) {
-        console.error("Error fetching reviews:", error);
-      } finally {
-        setLoadingReviews(false);
+      if (response.success && response.data) {
+        // Map backend reviews to frontend format
+        const mappedReviews = response.data.reviews.map((r) => ({
+          id: r.id.toString(),
+          userName: r.full_name || r.email.split("@")[0],
+          userAvatar:
+            r.avatar ||
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.email}`,
+          rating: r.rating,
+          comment: r.comment,
+          createdAt: r.created_at,
+          helpful: 0,
+        }));
+        setReviews(mappedReviews);
+        setReviewStats(response.data.rating_stats);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
 
+  useEffect(() => {
     fetchReviews();
   }, [id]);
 
@@ -489,10 +489,8 @@ const MovieDetailPage: React.FC = () => {
         setRating(0);
         setReviewText("");
 
-        // Refresh reviews list after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        // Refresh reviews list without full page reload
+        fetchReviews();
       } else {
         toast({
           title: "Không thể gửi đánh giá",
@@ -701,7 +699,9 @@ const MovieDetailPage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Đạo diễn</p>
-                  <p className="font-medium">{movie.director || "Đang cập nhật"}</p>
+                  <p className="font-medium">
+                    {movie.director || "Đang cập nhật"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">

@@ -105,6 +105,7 @@ interface BackendShowtime {
   hall_name: string;
   start_time: string;
   total_seats: number;
+  sold_seats?: number;
   base_price?: number;
   duration_minutes: number;
 }
@@ -147,6 +148,8 @@ const AdminScheduler: React.FC = () => {
   const [searchCategory, setSearchCategory] = useState<
     "movie" | "cinema" | "room"
   >("movie");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -213,10 +216,15 @@ const AdminScheduler: React.FC = () => {
           cinemaName: s.cinema_name,
           hallId: String(s.cinema_hall_id),
           room: s.hall_name,
-          date: new Date(startDate.getTime() - tzOffsetMs).toISOString().split("T")[0],
-          time: startDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          date: new Date(startDate.getTime() - tzOffsetMs)
+            .toISOString()
+            .split("T")[0],
+          time: startDate.toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           price: s.base_price || 90000,
-          availableSeats: s.total_seats || 0,
+          availableSeats: (s.total_seats || 0) - (s.sold_seats || 0),
           totalSeats: s.total_seats || 0,
           status: startDate > new Date() ? "scheduled" : "completed",
           duration: s.duration_minutes || 0,
@@ -452,12 +460,17 @@ const AdminScheduler: React.FC = () => {
       const query = searchQuery.toLowerCase();
       switch (searchCategory) {
         case "cinema":
-          return showtime.cinemaName.toLowerCase().includes(query);
+          if (!showtime.cinemaName.toLowerCase().includes(query)) return false;
+          break;
         case "room":
-          return showtime.room.toLowerCase().includes(query);
+          if (!showtime.room.toLowerCase().includes(query)) return false;
+          break;
         default:
-          return showtime.movieTitle.toLowerCase().includes(query);
+          if (!showtime.movieTitle.toLowerCase().includes(query)) return false;
       }
+      if (dateFrom && showtime.date < dateFrom) return false;
+      if (dateTo && showtime.date > dateTo) return false;
+      return true;
     })
     .sort((a, b) => {
       const priority = {
@@ -477,7 +490,7 @@ const AdminScheduler: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, searchCategory, filterDate]);
+  }, [searchQuery, searchCategory, filterDate, dateFrom, dateTo]);
 
   const handleAdd = async () => {
     const movie = moviesList.find((m) => String(m.id) === formData.movieId);
@@ -1438,9 +1451,34 @@ const AdminScheduler: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Đang chiếu</p>
+                <p className="text-sm text-muted-foreground">
+                  Phim nhiều suất nhất
+                </p>
                 <p className="text-2xl font-bold">
-                  {showtimes.filter((s) => s.status === "ongoing").length}
+                  {(() => {
+                    const movieCounts: Record<string, number> = {};
+                    showtimes.forEach((s) => {
+                      movieCounts[s.movieTitle] =
+                        (movieCounts[s.movieTitle] || 0) + 1;
+                    });
+                    const sorted = Object.entries(movieCounts).sort(
+                      (a, b) => b[1] - a[1],
+                    );
+                    return sorted.length > 0 ? sorted[0][1] : 0;
+                  })()}
+                </p>
+                <p className="text-xs text-muted-foreground truncate max-w-[150px]">
+                  {(() => {
+                    const movieCounts: Record<string, number> = {};
+                    showtimes.forEach((s) => {
+                      movieCounts[s.movieTitle] =
+                        (movieCounts[s.movieTitle] || 0) + 1;
+                    });
+                    const sorted = Object.entries(movieCounts).sort(
+                      (a, b) => b[1] - a[1],
+                    );
+                    return sorted.length > 0 ? sorted[0][0] : "-";
+                  })()}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -1453,11 +1491,18 @@ const AdminScheduler: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Tỷ lệ lấp đầy</p>
-                <p className="text-2xl font-bold">72%</p>
+                <p className="text-sm text-muted-foreground">Tổng vé đã bán</p>
+                <p className="text-2xl font-bold">
+                  {showtimes
+                    .reduce(
+                      (sum, s) => sum + (s.totalSeats - s.availableSeats),
+                      0,
+                    )
+                    .toLocaleString("vi-VN")}
+                </p>
               </div>
               <div className="w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center">
-                <CalendarIcon className="w-6 h-6 text-purple-500" />
+                <Armchair className="w-6 h-6 text-purple-500" />
               </div>
             </div>
           </CardContent>
@@ -1469,7 +1514,7 @@ const AdminScheduler: React.FC = () => {
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
             <CardTitle>Danh Sách Lịch Chiếu</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Select
                 value={searchCategory}
                 onValueChange={(value: "movie" | "cinema" | "room") =>
@@ -1485,7 +1530,7 @@ const AdminScheduler: React.FC = () => {
                   <SelectItem value="room">Tên phòng</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="relative w-64">
+              <div className="relative w-48">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Tìm kiếm..."
@@ -1493,6 +1538,35 @@ const AdminScheduler: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <span>Từ</span>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-36 h-9"
+                />
+                <span>đến</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-36 h-9"
+                />
+                {(dateFrom || dateTo) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setDateFrom("");
+                      setDateTo("");
+                    }}
+                    className="h-9 px-2 text-xs"
+                  >
+                    Xóa lọc
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1537,7 +1611,7 @@ const AdminScheduler: React.FC = () => {
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">
-                    {showtime.price.toLocaleString("vi-VN")}đ
+                    {Number(showtime.price).toLocaleString("vi-VN")}đ
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">

@@ -54,7 +54,14 @@ class Showtime
                            ch.total_seats,
                            c.id as cinema_id,
                            c.name as cinema_name,
-                           c.address as cinema_address
+                           c.address as cinema_address,
+                           COALESCE((
+                               SELECT COUNT(DISTINCT t.seat_id)
+                               FROM tickets t
+                               JOIN bookings b ON t.booking_id = b.id
+                               WHERE b.showtime_id = s.id
+                                 AND b.status IN ('Paid', 'Pending')
+                           ), 0) as sold_seats
                     FROM {$this->table} s
                     JOIN movies m ON s.movie_id = m.id
                     JOIN cinema_halls ch ON s.cinema_hall_id = ch.id
