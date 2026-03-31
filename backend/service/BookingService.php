@@ -59,6 +59,10 @@ class BookingService {
         return $this->bookingModel->cancel((int)$id);
     }
 
+    public function refundBooking($id) {
+        return $this->bookingModel->refund((int)$id);
+    }
+
     public function getUserBookings($userId, $page, $limit) {
         $bookings = $this->bookingModel->getUserBookings((int)$userId, $page, $limit);
         $total = $this->bookingModel->countUserBookings((int)$userId);

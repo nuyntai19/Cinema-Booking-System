@@ -219,6 +219,7 @@ $router->get('/api/bookings/:id', 'BookingController@show');
 $router->post('/api/bookings', 'BookingController@create'); // Create booking & hold seats
 $router->put('/api/bookings/:id/confirm', 'BookingController@confirm'); // Confirm payment
 $router->put('/api/bookings/:id/cancel', 'BookingController@cancel');
+$router->put('/api/bookings/:id/refund', 'BookingController@refund'); // Admin refund
 $router->put('/api/bookings/:id', 'BookingController@update'); // Update booking (change seats, concessions, etc.)
 $router->get('/api/bookings/user/:userId', 'BookingController@getUserBookings');
 $router->get('/api/bookings/showtime/:showtimeId', 'BookingController@getBookingsByShowtime'); // Get all bookings for a showtime (for seat hold status)
@@ -324,6 +325,7 @@ $router->get('/api/admin/seat-heatmap', 'AdminController@getSeatHeatmap'); // Ad
 $router->get('/api/admin/recent-transactions', 'AdminController@getRecentTransactions'); // Admin
 $router->get('/api/admin/transactions', 'AdminController@getTransactions'); // Admin with pagination/filter
 $router->get('/api/admin/transactions/export-details', 'AdminController@getTransactionsExportDetails'); // Admin detailed export
+$router->put('/api/admin/bookings/:id/force-status', 'AdminController@forceUpdateBookingStatus'); // Admin force-update booking status
 
 // ============================================
 // SYSTEM CONFIG ROUTES

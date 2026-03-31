@@ -34,7 +34,6 @@ import { useToast } from "@/hooks/use-toast";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import LocationPickerMap from "@/components/cinema/LocationPickerMap";
 
-
 interface Cinema {
   id: string;
   name: string;
@@ -86,34 +85,117 @@ const VIETNAM_CITIES = [
 ];
 
 const HCM_DISTRICTS = [
-  "Quận 1", "Quận 3", "Quận 4", "Quận 5", "Quận 6", "Quận 7", "Quận 8", "Quận 10", "Quận 11", "Quận 12",
-  "Quận Bình Tân", "Quận Bình Thạnh", "Quận Gò Vấp", "Quận Phú Nhuận", "Quận Tân Bình", "Quận Tân Phú",
-  "Thành phố Thủ Đức", "Huyện Bình Chánh", "Huyện Cần Giờ", "Huyện Củ Chi", "Huyện Hóc Môn", "Huyện Nhà Bè"
+  "Quận 1",
+  "Quận 3",
+  "Quận 4",
+  "Quận 5",
+  "Quận 6",
+  "Quận 7",
+  "Quận 8",
+  "Quận 10",
+  "Quận 11",
+  "Quận 12",
+  "Quận Bình Tân",
+  "Quận Bình Thạnh",
+  "Quận Gò Vấp",
+  "Quận Phú Nhuận",
+  "Quận Tân Bình",
+  "Quận Tân Phú",
+  "Thành phố Thủ Đức",
+  "Huyện Bình Chánh",
+  "Huyện Cần Giờ",
+  "Huyện Củ Chi",
+  "Huyện Hóc Môn",
+  "Huyện Nhà Bè",
 ];
 
 const HN_DISTRICTS = [
-  "Quận Ba Đình", "Quận Bắc Từ Liêm", "Quận Cầu Giấy", "Quận Đống Đa", "Quận Hà Đông", "Quận Hai Bà Trưng", "Quận Hoàn Kiếm", "Quận Hoàng Mai", "Quận Long Biên", "Quận Nam Từ Liêm", "Quận Tây Hồ", "Quận Thanh Xuân", "Thị xã Sơn Tây", "Huyện Ba Vì", "Huyện Chương Mỹ", "Huyện Đan Phượng", "Huyện Đông Anh", "Huyện Gia Lâm", "Huyện Hoài Đức", "Huyện Mê Linh", "Huyện Mỹ Đức", "Huyện Phú Xuyên", "Huyện Phúc Thọ", "Huyện Quốc Oai", "Huyện Sóc Sơn", "Huyện Thạch Thất", "Huyện Thanh Oai", "Huyện Thanh Trì", "Huyện Thường Tín", "Huyện Ứng Hòa"
+  "Quận Ba Đình",
+  "Quận Bắc Từ Liêm",
+  "Quận Cầu Giấy",
+  "Quận Đống Đa",
+  "Quận Hà Đông",
+  "Quận Hai Bà Trưng",
+  "Quận Hoàn Kiếm",
+  "Quận Hoàng Mai",
+  "Quận Long Biên",
+  "Quận Nam Từ Liêm",
+  "Quận Tây Hồ",
+  "Quận Thanh Xuân",
+  "Thị xã Sơn Tây",
+  "Huyện Ba Vì",
+  "Huyện Chương Mỹ",
+  "Huyện Đan Phượng",
+  "Huyện Đông Anh",
+  "Huyện Gia Lâm",
+  "Huyện Hoài Đức",
+  "Huyện Mê Linh",
+  "Huyện Mỹ Đức",
+  "Huyện Phú Xuyên",
+  "Huyện Phúc Thọ",
+  "Huyện Quốc Oai",
+  "Huyện Sóc Sơn",
+  "Huyện Thạch Thất",
+  "Huyện Thanh Oai",
+  "Huyện Thanh Trì",
+  "Huyện Thường Tín",
+  "Huyện Ứng Hòa",
 ];
 
 const DN_DISTRICTS = [
-  "Quận Cẩm Lệ", "Quận Hải Châu", "Quận Liên Chiểu", "Quận Ngũ Hành Sơn", "Quận Sơn Trà", "Quận Thanh Khê", "Huyện Hòa Vang", "Huyện Hoàng Sa"
+  "Quận Cẩm Lệ",
+  "Quận Hải Châu",
+  "Quận Liên Chiểu",
+  "Quận Ngũ Hành Sơn",
+  "Quận Sơn Trà",
+  "Quận Thanh Khê",
+  "Huyện Hòa Vang",
+  "Huyện Hoàng Sa",
 ];
 
 const HP_DISTRICTS = [
-  "Quận Đồ Sơn", "Quận Dương Kinh", "Quận Hải An", "Quận Hồng Bàng", "Quận Kiến An", "Quận Lê Chân", "Quận Ngô Quyền", "Huyện An Dương", "Huyện An Lão", "Huyện Bạch Long Vĩ", "Huyện Cát Hải", "Huyện Kiến Thụy", "Huyện Thủy Nguyên", "Huyện Tiên Lãng", "Huyện Vĩnh Bảo"
+  "Quận Đồ Sơn",
+  "Quận Dương Kinh",
+  "Quận Hải An",
+  "Quận Hồng Bàng",
+  "Quận Kiến An",
+  "Quận Lê Chân",
+  "Quận Ngô Quyền",
+  "Huyện An Dương",
+  "Huyện An Lão",
+  "Huyện Bạch Long Vĩ",
+  "Huyện Cát Hải",
+  "Huyện Kiến Thụy",
+  "Huyện Thủy Nguyên",
+  "Huyện Tiên Lãng",
+  "Huyện Vĩnh Bảo",
 ];
 
 const CT_DISTRICTS = [
-  "Quận Bình Thủy", "Quận Cái Răng", "Quận Ninh Kiều", "Quận Ô Môn", "Quận Thốt Nốt", "Huyện Cờ Đỏ", "Huyện Phong Điền", "Huyện Thới Lai", "Huyện Vĩnh Thạnh"
+  "Quận Bình Thủy",
+  "Quận Cái Răng",
+  "Quận Ninh Kiều",
+  "Quận Ô Môn",
+  "Quận Thốt Nốt",
+  "Huyện Cờ Đỏ",
+  "Huyện Phong Điền",
+  "Huyện Thới Lai",
+  "Huyện Vĩnh Thạnh",
 ];
 
 const getDistrictsForCity = (city: string) => {
   switch (city) {
-    case "Hà Nội": return HN_DISTRICTS;
-    case "Đà Nẵng": return DN_DISTRICTS;
-    case "Hải Phòng": return HP_DISTRICTS;
-    case "Cần Thơ": return CT_DISTRICTS;
-    case "Thành phố Hồ Chí Minh": default: return HCM_DISTRICTS;
+    case "Hà Nội":
+      return HN_DISTRICTS;
+    case "Đà Nẵng":
+      return DN_DISTRICTS;
+    case "Hải Phòng":
+      return HP_DISTRICTS;
+    case "Cần Thơ":
+      return CT_DISTRICTS;
+    case "Thành phố Hồ Chí Minh":
+    default:
+      return HCM_DISTRICTS;
   }
 };
 
@@ -126,17 +208,27 @@ const AdminCinemas: React.FC = () => {
   const [selectedCinema, setSelectedCinema] = useState<Cinema | null>(null);
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchCategory, setSearchCategory] = useState<"name" | "address" | "manager">("name");
+  const [searchCategory, setSearchCategory] = useState<
+    "name" | "address" | "manager"
+  >("name");
   const [managers, setManagers] = useState<ManagerUser[]>([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
 
   const fetchManagers = async () => {
     setLoadingManagers(true);
     try {
-      const res = await apiCall<{ success: boolean; data: { users: { id: number; email: string; full_name: string; role_name?: string }[] } }>(
-        `${API_ENDPOINTS.USERS}?limit=100&role_id=4`
-      );
-      const list = (res.data?.users || []).map(u => ({
+      const res = await apiCall<{
+        success: boolean;
+        data: {
+          users: {
+            id: number;
+            email: string;
+            full_name: string;
+            role_name?: string;
+          }[];
+        };
+      }>(`${API_ENDPOINTS.USERS}?limit=100&role_id=4`);
+      const list = (res.data?.users || []).map((u) => ({
         id: u.id,
         email: u.email,
         full_name: u.full_name || u.email,
@@ -156,9 +248,10 @@ const AdminCinemas: React.FC = () => {
   const fetchCinemas = async () => {
     try {
       setLoading(true);
-      const response = await apiCall<{ success: boolean; data: { cinemas: BackendCinema[] } }>(
-        API_ENDPOINTS.CINEMAS
-      );
+      const response = await apiCall<{
+        success: boolean;
+        data: { cinemas: BackendCinema[] };
+      }>(API_ENDPOINTS.CINEMAS);
       const backendCinemas = response.data?.cinemas || [];
       const mapped: Cinema[] = backendCinemas.map((c) => ({
         id: String(c.id),
@@ -171,7 +264,11 @@ const AdminCinemas: React.FC = () => {
         lng: c.lng ? Number(c.lng) : null,
         hotline: c.hotline || "1900 2224",
         totalRooms: Number(c.total_halls || c.halls?.length || 0),
-        totalSeats: Number(c.total_seats || c.halls?.reduce((sum, h) => sum + h.total_seats, 0) || 0),
+        totalSeats: Number(
+          c.total_seats ||
+            c.halls?.reduce((sum, h) => sum + h.total_seats, 0) ||
+            0,
+        ),
         features: c.halls?.map((h) => h.name) || [],
         status: (c.status as "active" | "maintenance" | "closed") || "active",
         manager: c.manager_name || "Chưa gán",
@@ -230,7 +327,8 @@ const AdminCinemas: React.FC = () => {
     if (!formData.street.trim() || !formData.district || !formData.city) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập đầy đủ địa chỉ (Tên đường, Quận, Thành phố)",
+        description:
+          "Vui lòng nhập đầy đủ địa chỉ (Tên đường, Quận, Thành phố)",
         variant: "destructive",
       });
       return false;
@@ -263,7 +361,10 @@ const AdminCinemas: React.FC = () => {
           hotline: formData.hotline,
           lat: formData.lat,
           lng: formData.lng,
-          manager_id: formData.manager_id && formData.manager_id !== "none" ? Number(formData.manager_id) : null,
+          manager_id:
+            formData.manager_id && formData.manager_id !== "none"
+              ? Number(formData.manager_id)
+              : null,
         }),
       });
       toast({
@@ -271,7 +372,16 @@ const AdminCinemas: React.FC = () => {
         description: `Đã thêm rạp ${formData.name}`,
       });
       setIsAddDialogOpen(false);
-      setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager_id: "", lat: null, lng: null });
+      setFormData({
+        name: "",
+        street: "",
+        district: "",
+        city: "Thành phố Hồ Chí Minh",
+        hotline: "",
+        manager_id: "",
+        lat: null,
+        lng: null,
+      });
       // Refresh the list
       await fetchCinemas();
     } catch (error) {
@@ -315,7 +425,10 @@ const AdminCinemas: React.FC = () => {
             hotline: formData.hotline,
             lat: formData.lat,
             lng: formData.lng,
-            manager_id: formData.manager_id && formData.manager_id !== "none" ? Number(formData.manager_id) : null,
+            manager_id:
+              formData.manager_id && formData.manager_id !== "none"
+                ? Number(formData.manager_id)
+                : null,
           }),
         });
         toast({
@@ -323,7 +436,16 @@ const AdminCinemas: React.FC = () => {
           description: `Đã cập nhật rạp ${formData.name}`,
         });
         setIsEditDialogOpen(false);
-        setFormData({ name: "", street: "", district: "", city: "Thành phố Hồ Chí Minh", hotline: "", manager_id: "", lat: null, lng: null });
+        setFormData({
+          name: "",
+          street: "",
+          district: "",
+          city: "Thành phố Hồ Chí Minh",
+          hotline: "",
+          manager_id: "",
+          lat: null,
+          lng: null,
+        });
         // Re-fetch from server to ensure UI shows the actual saved data
         await fetchCinemas();
       } catch (error) {
@@ -358,9 +480,9 @@ const AdminCinemas: React.FC = () => {
   const handleManageHalls = async (cinema: Cinema) => {
     setSelectedCinema(cinema);
     try {
-      const response = await apiCall<{ data: { halls: any[] } }>(
-        API_ENDPOINTS.CINEMA_HALLS(Number(cinema.id))
-      );
+      const response = await apiCall<{
+        data: { halls: BackendCinema["halls"] };
+      }>(API_ENDPOINTS.CINEMA_HALLS(Number(cinema.id)));
       setHalls(response.data.halls);
       setIsHallsDialogOpen(true);
     } catch (error) {
@@ -372,7 +494,9 @@ const AdminCinemas: React.FC = () => {
     }
   };
 
-  const handleOpenConfig = (hall: any) => {
+  const handleOpenConfig = (
+    hall: NonNullable<BackendCinema["halls"]>[number],
+  ) => {
     navigate(`/admin/seats?hallId=${hall.id}&cinemaId=${selectedCinema?.id}`);
   };
 
@@ -388,7 +512,11 @@ const AdminCinemas: React.FC = () => {
       handleManageHalls(selectedCinema);
       toast({ title: "Thành công", description: "Đã thêm phòng chiếu" });
     } catch (error) {
-      toast({ title: "Lỗi", description: "Không thể thêm phòng", variant: "destructive" });
+      toast({
+        title: "Lỗi",
+        description: "Không thể thêm phòng",
+        variant: "destructive",
+      });
     }
   };
 
@@ -399,7 +527,11 @@ const AdminCinemas: React.FC = () => {
       if (selectedCinema) handleManageHalls(selectedCinema);
       toast({ title: "Thành công", description: "Đã xóa phòng" });
     } catch (error) {
-      toast({ title: "Lỗi", description: "Không thể xóa phòng. Có thể phòng đã có suất chiếu.", variant: "destructive" });
+      toast({
+        title: "Lỗi",
+        description: "Không thể xóa phòng. Có thể phòng đã có suất chiếu.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -423,7 +555,9 @@ const AdminCinemas: React.FC = () => {
     );
   };
 
-  const assignedManagerIds = cinemas.map(c => c.manager_id).filter((id): id is number => id !== null);
+  const assignedManagerIds = cinemas
+    .map((c) => c.manager_id)
+    .filter((id): id is number => id !== null);
 
   return (
     <div className="p-6 space-y-6">
@@ -466,14 +600,18 @@ const AdminCinemas: React.FC = () => {
                   <Label htmlFor="city">Thành phố</Label>
                   <Select
                     value={formData.city}
-                    onValueChange={(value) => setFormData({ ...formData, city: value, district: "" })}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, city: value, district: "" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn thành phố" />
                     </SelectTrigger>
                     <SelectContent>
-                      {VIETNAM_CITIES.map(city => (
-                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      {VIETNAM_CITIES.map((city) => (
+                        <SelectItem key={city} value={city}>
+                          {city}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -482,14 +620,18 @@ const AdminCinemas: React.FC = () => {
                   <Label htmlFor="district">Quận/Huyện</Label>
                   <Select
                     value={formData.district}
-                    onValueChange={(value) => setFormData({ ...formData, district: value })}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, district: value })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn quận/huyện" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getDistrictsForCity(formData.city).map(district => (
-                        <SelectItem key={district} value={district}>{district}</SelectItem>
+                      {getDistrictsForCity(formData.city).map((district) => (
+                        <SelectItem key={district} value={district}>
+                          {district}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -521,19 +663,31 @@ const AdminCinemas: React.FC = () => {
                 <Label htmlFor="manager">Quản lý</Label>
                 <Select
                   value={formData.manager_id}
-                  onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, manager_id: value })
+                  }
                 >
                   <SelectTrigger id="manager">
-                    <SelectValue placeholder={loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"} />
+                    <SelectValue
+                      placeholder={
+                        loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">-- Chưa gán quản lý --</SelectItem>
                     {managers.map((m) => {
                       const isAssigned = assignedManagerIds.includes(m.id);
                       return (
-                        <SelectItem key={m.id} value={String(m.id)} disabled={isAssigned}>
+                        <SelectItem
+                          key={m.id}
+                          value={String(m.id)}
+                          disabled={isAssigned}
+                        >
                           {m.full_name} {isAssigned && "(Đã gán rạp khác)"}
-                          <span className="text-xs text-muted-foreground ml-1">({m.email})</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({m.email})
+                          </span>
                         </SelectItem>
                       );
                     })}
@@ -541,11 +695,19 @@ const AdminCinemas: React.FC = () => {
                 </Select>
               </div>
               <div className="col-span-2 pt-2">
-                <LocationPickerMap 
-                  lat={formData.lat} 
-                  lng={formData.lng} 
-                  onChange={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
-                  addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
+                <LocationPickerMap
+                  lat={formData.lat}
+                  lng={formData.lng}
+                  onChange={(lat, lng) =>
+                    setFormData((prev) => ({ ...prev, lat, lng }))
+                  }
+                  addressToSearch={[
+                    formData.street,
+                    formData.district,
+                    formData.city,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 />
               </div>
             </div>
@@ -634,7 +796,9 @@ const AdminCinemas: React.FC = () => {
             <div className="flex items-center gap-2">
               <Select
                 value={searchCategory}
-                onValueChange={(value: any) => setSearchCategory(value)}
+                onValueChange={(value: "name" | "address" | "manager") =>
+                  setSearchCategory(value)
+                }
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Tìm theo..." />
@@ -745,102 +909,135 @@ const AdminCinemas: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Tên rạp *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="Galaxy Nguyễn Du"
-              />
-            </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Tên rạp *</Label>
+                <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Galaxy Nguyễn Du"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="edit-city">Thành phố</Label>
                 <Select
                   value={formData.city}
-                  onValueChange={(value) => setFormData({ ...formData, city: value, district: "" })}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, city: value, district: "" })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn thành phố" />
                   </SelectTrigger>
                   <SelectContent>
-                    {VIETNAM_CITIES.map(city => (
-                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    {VIETNAM_CITIES.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-district">Quận/Huyện</Label>
-                <Select
-                  value={formData.district}
-                  onValueChange={(value) => setFormData({ ...formData, district: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn quận/huyện" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getDistrictsForCity(formData.city).map(district => (
-                      <SelectItem key={district} value={district}>{district}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-street">Tên đường</Label>
+                <Label htmlFor="edit-hotline">Hotline</Label>
                 <Input
-                  id="edit-street"
-                  value={formData.street}
+                  id="edit-hotline"
+                  value={formData.hotline}
                   onChange={(e) =>
-                    setFormData({ ...formData, street: e.target.value })
+                    setFormData({ ...formData, hotline: e.target.value })
                   }
-                  placeholder="116 Nguyễn Du"
+                  placeholder="1900 2224"
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-hotline">Hotline</Label>
-              <Input
-                id="edit-hotline"
-                value={formData.hotline}
-                onChange={(e) =>
-                  setFormData({ ...formData, hotline: e.target.value })
-                }
-                placeholder="1900 2224"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-manager">Quản lý</Label>
-              <Select
-                value={formData.manager_id}
-                onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
-              >
-                <SelectTrigger id="edit-manager">
-                  <SelectValue placeholder={loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">-- Chưa gán quản lý --</SelectItem>
-                  {managers.map((m) => {
-                    const isAssigned = assignedManagerIds.includes(m.id) && m.id !== selectedCinema?.manager_id;
-                    return (
-                      <SelectItem key={m.id} value={String(m.id)} disabled={isAssigned}>
-                        {m.full_name} {isAssigned && "(Đã gán rạp khác)"}
-                        <span className="text-xs text-muted-foreground ml-1">({m.email})</span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-district">Quận/Huyện</Label>
+                  <Select
+                    value={formData.district}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, district: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn quận/huyện" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getDistrictsForCity(formData.city).map((district) => (
+                        <SelectItem key={district} value={district}>
+                          {district}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-street">Tên đường</Label>
+                  <Input
+                    id="edit-street"
+                    value={formData.street}
+                    onChange={(e) =>
+                      setFormData({ ...formData, street: e.target.value })
+                    }
+                    placeholder="116 Nguyễn Du"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2"></div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-manager">Quản lý</Label>
+                <Select
+                  value={formData.manager_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, manager_id: value })
+                  }
+                >
+                  <SelectTrigger id="edit-manager">
+                    <SelectValue
+                      placeholder={
+                        loadingManagers ? "Đang tải..." : "Chọn quản lý rạp"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Chưa gán quản lý --</SelectItem>
+                    {managers.map((m) => {
+                      const isAssigned =
+                        assignedManagerIds.includes(m.id) &&
+                        m.id !== selectedCinema?.manager_id;
+                      return (
+                        <SelectItem
+                          key={m.id}
+                          value={String(m.id)}
+                          disabled={isAssigned}
+                        >
+                          {m.full_name} {isAssigned && "(Đã gán rạp khác)"}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({m.email})
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid gap-2 col-span-2 pt-2">
-              <LocationPickerMap 
-                lat={formData.lat} 
-                lng={formData.lng} 
-                onChange={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
-                addressToSearch={[formData.street, formData.district, formData.city].filter(Boolean).join(", ")}
+              <LocationPickerMap
+                lat={formData.lat}
+                lng={formData.lng}
+                onChange={(lat, lng) =>
+                  setFormData((prev) => ({ ...prev, lat, lng }))
+                }
+                addressToSearch={[
+                  formData.street,
+                  formData.district,
+                  formData.city,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               />
             </div>
           </div>
@@ -860,8 +1057,13 @@ const AdminCinemas: React.FC = () => {
       <Dialog open={isHallsDialogOpen} onOpenChange={setIsHallsDialogOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Quản lý Phòng Chiếu - {selectedCinema?.name}</DialogTitle>
-            <DialogDescription> Thêm, xóa phòng và thiết lập sơ đồ ghế </DialogDescription>
+            <DialogTitle>
+              Quản lý Phòng Chiếu - {selectedCinema?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {" "}
+              Thêm, xóa phòng và thiết lập sơ đồ ghế{" "}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -890,10 +1092,18 @@ const AdminCinemas: React.FC = () => {
                         <Badge variant="outline">Sẵn sàng</Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/admin/seats/${hall.id}`)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/admin/seats/${hall.id}`)}
+                        >
                           Thiết lập sơ đồ
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteHall(hall.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteHall(hall.id)}
+                        >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
                       </TableCell>
@@ -901,7 +1111,10 @@ const AdminCinemas: React.FC = () => {
                   ))}
                   {(!halls || halls.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell
+                        colSpan={4}
+                        className="text-center py-8 text-muted-foreground"
+                      >
                         Chưa có phòng chiếu nào
                       </TableCell>
                     </TableRow>
@@ -912,8 +1125,6 @@ const AdminCinemas: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-
     </div>
   );
 };

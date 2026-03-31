@@ -70,6 +70,7 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/bookings/user/${userId}`,
   CONFIRM_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/confirm`,
   CANCEL_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/cancel`,
+  REFUND_BOOKING: (id: number) => `${API_BASE_URL}/api/bookings/${id}/refund`,
 
   // Transactions
   TRANSACTIONS: `${API_BASE_URL}/api/transactions`,
@@ -123,6 +124,8 @@ export const API_ENDPOINTS = {
   ADMIN_SEAT_HEATMAP: `${API_BASE_URL}/api/admin/seat-heatmap`,
   ADMIN_RECENT_TRANSACTIONS: `${API_BASE_URL}/api/admin/recent-transactions`,
   ADMIN_TRANSACTIONS: `${API_BASE_URL}/api/admin/transactions`,
+  ADMIN_FORCE_BOOKING_STATUS: (id: number) =>
+    `${API_BASE_URL}/api/admin/bookings/${id}/force-status`,
 
   // Loyalty
   LOYALTY_POINTS: (userId: number) =>
@@ -217,10 +220,10 @@ export const apiCall = async <T = unknown>(
     const isJson = contentType.includes("application/json");
     const raw = await response.text();
 
-    let data: any = null;
+    let data: Record<string, unknown> | null = null;
     if (isJson) {
       try {
-        data = raw ? JSON.parse(raw) : {};
+        data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
       } catch {
         throw new Error(
           `Phản hồi API không phải JSON hợp lệ (${response.status}) tại ${endpoint}`,
@@ -243,14 +246,17 @@ export const apiCall = async <T = unknown>(
       if (response.status === 403) {
         throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
       }
-      throw new Error(data.message || "API request failed");
+      throw new Error(
+        (typeof data?.message === "string" ? data.message : null) ||
+          "API request failed",
+      );
     }
 
     if (hasHandledUnauthorized) {
       hasHandledUnauthorized = false;
     }
 
-    return data;
+    return data as T;
   } catch (error) {
     console.error("API Error:", error);
     throw error;

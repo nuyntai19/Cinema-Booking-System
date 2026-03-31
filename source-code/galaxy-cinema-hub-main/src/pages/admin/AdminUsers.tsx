@@ -204,7 +204,12 @@ const AdminUsers: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
-        setRoles(data.data.roles || []);
+        setRoles(
+          (data.data.roles || []).filter(
+            (r: { id: number; name: string }) =>
+              r.name.toLowerCase() !== "guest",
+          ),
+        );
       }
     } catch (error) {
       console.error("❌ Error fetching roles:", error);

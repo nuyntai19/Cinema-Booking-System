@@ -657,4 +657,70 @@ class AdminController extends BaseController {
             Response::serverError('Không thể tải chi tiết giao dịch export: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Admin-only: force-update booking status bypassing normal state checks.
+     * Body: { "action": "confirm" | "cancel" | "refund" }
+     */
+    public function forceUpdateBookingStatus($id) {
+        AuthMiddleware::authenticate();
+        AuthMiddleware::requireRole(['Admin', 'Manager']);
+
+        $id = (int)$id;
+        $body = json_decode(file_get_contents('php://input'), true);
+        $action = $body['action'] ?? '';
+
+        if (!in_array($action, ['confirm', 'cancel', 'refund'], true)) {
+            Response::error('Action không hợp lệ. Chọn: confirm, cancel, refund', 400);
+            return;
+        }
+
+        // Verify booking exists
+        $stmt = $this->db->prepare("SELECT id, status FROM bookings WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$booking) {
+            Response::notFound('Booking not found');
+            return;
+        }
+
+        try {
+            require_once __DIR__ . '/../models/Booking.php';
+            $bookingModel = new Booking($this->db);
+
+            if ($action === 'confirm') {
+                // Use full confirm flow (awards loyalty points, marks tickets SOLD, etc.)
+                $bookingModel->confirm($id);
+                Response::success(['booking_id' => $id], 'Đã xác nhận thành công');
+            } elseif ($action === 'cancel') {
+                // Force: update status + tickets + transaction to Failed
+                $this->db->beginTransaction();
+                $this->db->prepare("UPDATE bookings SET status = 'Cancelled' WHERE id = :id")
+                    ->execute([':id' => $id]);
+                $this->db->prepare("UPDATE tickets SET status = 'REFUNDED' WHERE booking_id = :id AND status IN ('HOLDING', 'SOLD')")
+                    ->execute([':id' => $id]);
+                $this->db->prepare("UPDATE transactions SET status = 'Failed' WHERE booking_id = :id AND status = 'Pending'")
+                    ->execute([':id' => $id]);
+                $this->db->commit();
+                Response::success(['booking_id' => $id], 'Đã đánh dấu thất bại');
+            } else {
+                // refund: bookings→Cancelled, tickets→REFUNDED, transactions→Failed
+                // (DB ENUM: bookings: Pending/Paid/Cancelled/Expired, transactions: Pending/Success/Failed)
+                $this->db->beginTransaction();
+                $this->db->prepare("UPDATE bookings SET status = 'Cancelled' WHERE id = :id")
+                    ->execute([':id' => $id]);
+                $this->db->prepare("UPDATE tickets SET status = 'REFUNDED' WHERE booking_id = :id AND status IN ('HOLDING', 'SOLD')")
+                    ->execute([':id' => $id]);
+                $this->db->prepare("UPDATE transactions SET status = 'Failed' WHERE booking_id = :id AND status = 'Pending'")
+                    ->execute([':id' => $id]);
+                $this->db->commit();
+                Response::success(['booking_id' => $id], 'Đã hoàn tiền');
+            }
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            Response::serverError('Lỗi cập nhật: ' . $e->getMessage());
+        }
+    }
 }

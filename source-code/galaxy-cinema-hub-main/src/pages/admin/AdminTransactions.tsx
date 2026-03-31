@@ -12,6 +12,7 @@ import {
   LineChart as LineChartIcon,
   Eye,
   Loader2,
+  Wrench,
   Film,
   MapPin,
   Calendar,
@@ -52,7 +53,11 @@ import { API_BASE_URL, API_ENDPOINTS, apiCall } from "@/lib/api";
 import * as XLSX from "xlsx";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import type { TDocumentDefinitions, Content, TableCell as PdfTableCell } from "pdfmake/interfaces";
+import type {
+  TDocumentDefinitions,
+  Content,
+  TableCell as PdfTableCell,
+} from "pdfmake/interfaces";
 import {
   CartesianGrid,
   Cell,
@@ -83,7 +88,9 @@ const ensurePdfMakeReady = () => {
       (pdfMake as typeof pdfMake & { vfs?: Record<string, string> }).vfs = vfs;
     }
   } else {
-    console.warn("Không tìm thấy font vfs cho pdfMake, PDF có thể bị lỗi hiển thị tiếng Việt.");
+    console.warn(
+      "Không tìm thấy font vfs cho pdfMake, PDF có thể bị lỗi hiển thị tiếng Việt.",
+    );
   }
 
   pdfMake.setFonts({
@@ -189,12 +196,25 @@ interface CustomerStat {
   orders: TransactionItem[];
 }
 
+interface ExportDetailItem {
+  bookingCode: string;
+  customerName: string;
+  itemType: string;
+  itemName: string;
+  unitPrice: number | string;
+  quantity: number;
+  totalPrice: number | string;
+  transactionDate: string;
+}
+
 const AdminTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [selectedDetail, setSelectedDetail] = useState<BookingDetail | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<BookingDetail | null>(
+    null,
+  );
   const [paymentMethod, setPaymentMethod] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -222,8 +242,12 @@ const AdminTransactions: React.FC = () => {
 
   // Export dialog state
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportDateMode, setExportDateMode] = useState<"all" | "day" | "month" | "year" | "custom">("all");
-  const [exportDay, setExportDay] = useState(new Date().toISOString().slice(0, 10));
+  const [exportDateMode, setExportDateMode] = useState<
+    "all" | "day" | "month" | "year" | "custom"
+  >("all");
+  const [exportDay, setExportDay] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
   const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
   const [exportYear, setExportYear] = useState(new Date().getFullYear());
   const [exportCustomFrom, setExportCustomFrom] = useState("");
@@ -236,13 +260,18 @@ const AdminTransactions: React.FC = () => {
       case "month": {
         const firstDay = `${exportYear}-${String(exportMonth).padStart(2, "0")}-01`;
         const lastDay = new Date(exportYear, exportMonth, 0).getDate();
-        return { from: firstDay, to: `${exportYear}-${String(exportMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}` };
+        return {
+          from: firstDay,
+          to: `${exportYear}-${String(exportMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+        };
       }
       case "year":
         return { from: `${exportYear}-01-01`, to: `${exportYear}-12-31` };
       case "custom":
-        if (exportCustomFrom && exportCustomTo) return { from: exportCustomFrom, to: exportCustomTo };
-        if (exportCustomFrom) return { from: exportCustomFrom, to: "2099-12-31" };
+        if (exportCustomFrom && exportCustomTo)
+          return { from: exportCustomFrom, to: exportCustomTo };
+        if (exportCustomFrom)
+          return { from: exportCustomFrom, to: "2099-12-31" };
         if (exportCustomTo) return { from: "2000-01-01", to: exportCustomTo };
         return null;
       default:
@@ -260,8 +289,10 @@ const AdminTransactions: React.FC = () => {
         return `Năm ${exportYear}`;
       case "custom": {
         const parts: string[] = [];
-        if (exportCustomFrom) parts.push(new Date(exportCustomFrom).toLocaleDateString("vi-VN"));
-        if (exportCustomTo) parts.push(new Date(exportCustomTo).toLocaleDateString("vi-VN"));
+        if (exportCustomFrom)
+          parts.push(new Date(exportCustomFrom).toLocaleDateString("vi-VN"));
+        if (exportCustomTo)
+          parts.push(new Date(exportCustomTo).toLocaleDateString("vi-VN"));
         return parts.join(" - ") || "Tất cả";
       }
       default:
@@ -271,9 +302,7 @@ const AdminTransactions: React.FC = () => {
 
   // Stats view state
   const [showStats, setShowStats] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(
-    new Date().getMonth() + 1,
-  );
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [chartType, setChartType] = useState<"day" | "month" | "year">("day");
   const [movieData, setMovieData] = useState<
@@ -303,8 +332,82 @@ const AdminTransactions: React.FC = () => {
 
   const [customerStats, setCustomerStats] = useState<CustomerStat[]>([]);
   const [customerSort, setCustomerSort] = useState<"desc" | "asc">("desc");
-  const [selectedCustomerOrders, setSelectedCustomerOrders] = useState<TransactionItem[] | null>(null);
+  const [selectedCustomerOrders, setSelectedCustomerOrders] = useState<
+    TransactionItem[] | null
+  >(null);
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [fixingStatus, setFixingStatus] = useState<
+    "confirm" | "cancel" | "refund" | null
+  >(null);
+  const [fixDialogOpen, setFixDialogOpen] = useState(false);
+  const [fixTargetTransaction, setFixTargetTransaction] =
+    useState<TransactionItem | null>(null);
+
+  const handleFixStatus = async (action: "confirm" | "cancel") => {
+    if (!selectedDetail || fixingStatus) return;
+    const bookingId = selectedDetail.id;
+    if (!bookingId) return;
+    setFixingStatus(action);
+    try {
+      const endpoint =
+        action === "confirm"
+          ? API_ENDPOINTS.CONFIRM_BOOKING(bookingId)
+          : API_ENDPOINTS.CANCEL_BOOKING(bookingId);
+      await apiCall(endpoint, { method: "PUT" });
+      // Reload detail and transaction list
+      const res = await apiCall<{ success: boolean; data: BookingDetail }>(
+        `${API_BASE_URL}/api/bookings/${bookingId}`,
+      );
+      if (res.success && res.data) setSelectedDetail(res.data);
+      // Refresh list
+      const params = buildQueryParams(page, limit);
+      const listRes = await apiCall<ApiResponse<AdminTransactionsData>>(
+        `${API_ENDPOINTS.ADMIN_TRANSACTIONS}?${params.toString()}`,
+      );
+      setTransactions(listRes.data.items || []);
+      setPagination(listRes.data.pagination || pagination);
+      setSummary(listRes.data.summary || summary);
+    } catch (err) {
+      console.error("Lỗi cập nhật trạng thái:", err);
+    } finally {
+      setFixingStatus(null);
+    }
+  };
+
+  const isShowtimeActive = (transaction: TransactionItem): boolean => {
+    if (!transaction.showDate || !transaction.showTime) return false;
+    const dateStr = `${transaction.showDate}T${transaction.showTime}`;
+    const showDateTime = new Date(dateStr);
+    return showDateTime > new Date();
+  };
+
+  const handleTableFix = async (action: "confirm" | "cancel" | "refund") => {
+    if (!fixTargetTransaction || fixingStatus) return;
+    const bookingId =
+      fixTargetTransaction.bookingId ?? Number(fixTargetTransaction.id);
+    if (!bookingId) return;
+    setFixingStatus(action);
+    try {
+      await apiCall(API_ENDPOINTS.ADMIN_FORCE_BOOKING_STATUS(bookingId), {
+        method: "PUT",
+        body: JSON.stringify({ action }),
+      });
+      setFixDialogOpen(false);
+      setFixTargetTransaction(null);
+      // Refresh list
+      const params = buildQueryParams(page, limit);
+      const listRes = await apiCall<ApiResponse<AdminTransactionsData>>(
+        `${API_ENDPOINTS.ADMIN_TRANSACTIONS}?${params.toString()}`,
+      );
+      setTransactions(listRes.data.items || []);
+      setPagination(listRes.data.pagination || pagination);
+      setSummary(listRes.data.summary || summary);
+    } catch (err) {
+      console.error("Lỗi cập nhật trạng thái:", err);
+    } finally {
+      setFixingStatus(null);
+    }
+  };
 
   const pieChartData = useMemo(
     () => [
@@ -506,7 +609,9 @@ const AdminTransactions: React.FC = () => {
     return normalized.includes("cash") || normalized.includes("tiền mặt");
   };
 
-  const fetchTransactionsForExport = async (overrideDateRange?: { from: string; to: string } | null): Promise<TransactionItem[]> => {
+  const fetchTransactionsForExport = async (
+    overrideDateRange?: { from: string; to: string } | null,
+  ): Promise<TransactionItem[]> => {
     const params = buildQueryParams(1, 5000);
     // Override date range for export if provided
     if (overrideDateRange) {
@@ -519,13 +624,18 @@ const AdminTransactions: React.FC = () => {
     return res.data?.items || [];
   };
 
-  const fetchTransactionDetailsForExport = async (overrideDateRange?: { from: string; to: string } | null): Promise<any[]> => {
+  const fetchTransactionDetailsForExport = async (
+    overrideDateRange?: { from: string; to: string } | null,
+  ): Promise<ExportDetailItem[]> => {
     const params = buildQueryParams(1, 5000);
     if (overrideDateRange) {
       params.set("date_from", overrideDateRange.from);
       params.set("date_to", overrideDateRange.to);
     }
-    const res = await apiCall<{ success: boolean; data: { items: any[] } }>(
+    const res = await apiCall<{
+      success: boolean;
+      data: { items: ExportDetailItem[] };
+    }>(
       `${API_ENDPOINTS.ADMIN_TRANSACTIONS}/export-details?${params.toString()}`,
     );
     return res.data?.items || [];
@@ -585,12 +695,21 @@ const AdminTransactions: React.FC = () => {
       // Top 5 Customers
       const customerMap = new Map<string, CustomerStat>();
       filteredRows.forEach((row) => {
-        const key = row.customerEmail && row.customerEmail !== "-" && row.customerEmail !== "guest" && row.customerEmail !== "Khách vãng lai" 
-                    ? row.customerEmail 
-                    : row.customerName || "Khách vãng lai";
-        
+        const key =
+          row.customerEmail &&
+          row.customerEmail !== "-" &&
+          row.customerEmail !== "guest" &&
+          row.customerEmail !== "Khách vãng lai"
+            ? row.customerEmail
+            : row.customerName || "Khách vãng lai";
+
         if (!customerMap.has(key)) {
-          customerMap.set(key, { email: row.customerEmail || "", name: row.customerName || "Khách Vãng Lai", revenue: 0, orders: [] });
+          customerMap.set(key, {
+            email: row.customerEmail || "",
+            name: row.customerName || "Khách Vãng Lai",
+            revenue: 0,
+            orders: [],
+          });
         }
         const curr = customerMap.get(key)!;
         curr.revenue += Number(row.amount || 0);
@@ -598,13 +717,15 @@ const AdminTransactions: React.FC = () => {
       });
 
       const topCustomers = Array.from(customerMap.values())
-        .sort((a,b) => b.revenue - a.revenue)
+        .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5);
       setCustomerStats(topCustomers);
 
       // Payment share for pie chart
       const total = filteredRows.length;
-      const cash = filteredRows.filter((row) => isCashMethod(row.paymentMethod)).length;
+      const cash = filteredRows.filter((row) =>
+        isCashMethod(row.paymentMethod),
+      ).length;
       const transfer = Math.max(total - cash, 0);
       setPaymentShare({ cash, transfer, total });
 
@@ -614,16 +735,23 @@ const AdminTransactions: React.FC = () => {
         if (!item.transactionDate) return;
         const date = new Date(item.transactionDate);
         const day = date.getDate();
-        revenueByDay.set(day, (revenueByDay.get(day) || 0) + Number(item.amount || 0));
+        revenueByDay.set(
+          day,
+          (revenueByDay.get(day) || 0) + Number(item.amount || 0),
+        );
       });
-      const daysWithData = Array.from(revenueByDay.keys()).sort((a, b) => a - b);
+      const daysWithData = Array.from(revenueByDay.keys()).sort(
+        (a, b) => a - b,
+      );
       const today = new Date();
       const isCurrentMonth =
-        today.getFullYear() === selectedYear && today.getMonth() + 1 === selectedMonth;
+        today.getFullYear() === selectedYear &&
+        today.getMonth() + 1 === selectedMonth;
       const fallbackDay = isCurrentMonth ? today.getDate() : 0;
-      const maxDay = daysWithData.length > 0
-        ? daysWithData[daysWithData.length - 1]
-        : fallbackDay;
+      const maxDay =
+        daysWithData.length > 0
+          ? daysWithData[daysWithData.length - 1]
+          : fallbackDay;
       const dayPoints: Array<{ day: number; revenue: number }> = [];
       for (let i = 1; i <= Math.max(maxDay, 0); i += 1) {
         dayPoints.push({ day: i, revenue: revenueByDay.get(i) || 0 });
@@ -635,7 +763,10 @@ const AdminTransactions: React.FC = () => {
       yearRows.forEach((item) => {
         if (!item.transactionDate) return;
         const month = new Date(item.transactionDate).getMonth() + 1;
-        revenueByMonth.set(month, (revenueByMonth.get(month) || 0) + Number(item.amount || 0));
+        revenueByMonth.set(
+          month,
+          (revenueByMonth.get(month) || 0) + Number(item.amount || 0),
+        );
       });
       const monthPoints: Array<{ month: number; revenue: number }> = [];
       for (let i = 1; i <= 12; i += 1) {
@@ -648,7 +779,10 @@ const AdminTransactions: React.FC = () => {
       rows.forEach((item) => {
         if (!item.transactionDate) return;
         const year = new Date(item.transactionDate).getFullYear();
-        revenueByYear.set(year, (revenueByYear.get(year) || 0) + Number(item.amount || 0));
+        revenueByYear.set(
+          year,
+          (revenueByYear.get(year) || 0) + Number(item.amount || 0),
+        );
       });
       const currentYear = new Date().getFullYear();
       const years = Array.from({ length: 5 }, (_, i) => currentYear - 4 + i);
@@ -660,7 +794,7 @@ const AdminTransactions: React.FC = () => {
     } finally {
       setStatsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear, chartType, movieSort]);
 
   useEffect(() => {
@@ -705,10 +839,21 @@ const AdminTransactions: React.FC = () => {
 
       // Sheet tiêu đề với thông tin khoảng thời gian
       const headerInfo = [
-        { "Thông tin": "Báo cáo giao dịch", "Giá trị": `Ngày xuất: ${new Date().toLocaleString("vi-VN")}` },
+        {
+          "Thông tin": "Báo cáo giao dịch",
+          "Giá trị": `Ngày xuất: ${new Date().toLocaleString("vi-VN")}`,
+        },
         { "Thông tin": "Khoảng thời gian", "Giá trị": getExportDateLabel() },
-        { "Thông tin": "Tổng giao dịch", "Giá trị": `${rows.length} giao dịch` },
-        { "Thông tin": "Tổng doanh thu", "Giá trị": formatVND(rows.reduce((s, r) => s + Number(r.amount || 0), 0)) },
+        {
+          "Thông tin": "Tổng giao dịch",
+          "Giá trị": `${rows.length} giao dịch`,
+        },
+        {
+          "Thông tin": "Tổng doanh thu",
+          "Giá trị": formatVND(
+            rows.reduce((s, r) => s + Number(r.amount || 0), 0),
+          ),
+        },
       ];
       const summarySheet = XLSX.utils.json_to_sheet(headerInfo);
       summarySheet["!cols"] = [{ wch: 24 }, { wch: 40 }];
@@ -738,14 +883,15 @@ const AdminTransactions: React.FC = () => {
         STT: index + 1,
         "Mã đặt vé": item.bookingCode,
         "Khách hàng": item.customerName,
-        "Loại": item.itemType,
+        Loại: item.itemType,
         "Sản phẩm": item.itemName,
         "Đơn giá": formatVND(Number(item.unitPrice || 0)),
         "Số lượng": item.quantity,
         "Thành tiền": formatVND(Number(item.totalPrice || 0)),
-        "Thời gian giao dịch": item.transactionDate && item.transactionDate !== "-"
-          ? formatDateTime(item.transactionDate)
-          : "-",
+        "Thời gian giao dịch":
+          item.transactionDate && item.transactionDate !== "-"
+            ? formatDateTime(item.transactionDate)
+            : "-",
       }));
 
       const itemDetailSheet = XLSX.utils.json_to_sheet(itemDetailRows);
@@ -760,10 +906,17 @@ const AdminTransactions: React.FC = () => {
         { wch: 14 },
         { wch: 22 },
       ];
-      XLSX.utils.book_append_sheet(workbook, itemDetailSheet, "ChiTietGiaoDich");
+      XLSX.utils.book_append_sheet(
+        workbook,
+        itemDetailSheet,
+        "ChiTietGiaoDich",
+      );
 
       const exportDate = new Date().toISOString().slice(0, 10);
-      const fileSuffix = exportDateMode !== "all" ? `-${exportDateMode}-${getExportDateLabel().replace(/[\s\/]/g, "-")}` : "";
+      const fileSuffix =
+        exportDateMode !== "all"
+          ? `-${exportDateMode}-${getExportDateLabel().replace(/[\s/]/g, "-")}`
+          : "";
       XLSX.writeFile(workbook, `giao-dich${fileSuffix}-${exportDate}.xlsx`);
     } finally {
       setExportingType(null);
@@ -788,7 +941,10 @@ const AdminTransactions: React.FC = () => {
       const monthRows = rows.filter((row) => {
         if (!row.transactionDate) return false;
         const date = new Date(row.transactionDate);
-        return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear;
+        return (
+          date.getMonth() + 1 === selectedMonth &&
+          date.getFullYear() === selectedYear
+        );
       });
 
       const yearRows = rows.filter((row) => {
@@ -802,7 +958,9 @@ const AdminTransactions: React.FC = () => {
         0,
       );
 
-      const cashCount = monthRows.filter((row) => isCashMethod(row.paymentMethod)).length;
+      const cashCount = monthRows.filter((row) =>
+        isCashMethod(row.paymentMethod),
+      ).length;
       const transferCount = Math.max(monthRows.length - cashCount, 0);
 
       const movieMap = new Map<string, { tickets: number; revenue: number }>();
@@ -825,10 +983,15 @@ const AdminTransactions: React.FC = () => {
         monthRows.forEach((item) => {
           if (!item.transactionDate) return;
           const d = new Date(item.transactionDate).getDate();
-          revenueByDay.set(d, (revenueByDay.get(d) || 0) + Number(item.amount || 0));
+          revenueByDay.set(
+            d,
+            (revenueByDay.get(d) || 0) + Number(item.amount || 0),
+          );
         });
         const today = new Date();
-        const isCurrentMonth = today.getFullYear() === selectedYear && today.getMonth() + 1 === selectedMonth;
+        const isCurrentMonth =
+          today.getFullYear() === selectedYear &&
+          today.getMonth() + 1 === selectedMonth;
         const maxDay = Math.max(
           revenueByDay.size > 0 ? Math.max(...revenueByDay.keys()) : 0,
           isCurrentMonth ? today.getDate() : 0,
@@ -845,7 +1008,10 @@ const AdminTransactions: React.FC = () => {
         yearRows.forEach((item) => {
           if (!item.transactionDate) return;
           const m = new Date(item.transactionDate).getMonth() + 1;
-          revenueByMonth.set(m, (revenueByMonth.get(m) || 0) + Number(item.amount || 0));
+          revenueByMonth.set(
+            m,
+            (revenueByMonth.get(m) || 0) + Number(item.amount || 0),
+          );
         });
         const pts: Array<{ label: string; value: number }> = [];
         for (let i = 1; i <= 12; i += 1) {
@@ -859,11 +1025,17 @@ const AdminTransactions: React.FC = () => {
         rows.forEach((item) => {
           if (!item.transactionDate) return;
           const y = new Date(item.transactionDate).getFullYear();
-          revenueByYear.set(y, (revenueByYear.get(y) || 0) + Number(item.amount || 0));
+          revenueByYear.set(
+            y,
+            (revenueByYear.get(y) || 0) + Number(item.amount || 0),
+          );
         });
         const currentYear = new Date().getFullYear();
         const years = Array.from({ length: 5 }, (_, i) => currentYear - 4 + i);
-        return years.map((y) => ({ label: String(y), value: revenueByYear.get(y) || 0 }));
+        return years.map((y) => ({
+          label: String(y),
+          value: revenueByYear.get(y) || 0,
+        }));
       })();
 
       const formatNumber = (value: number) =>
@@ -871,7 +1043,12 @@ const AdminTransactions: React.FC = () => {
       const toPercent = (part: number, total: number) =>
         total > 0 ? `${((part / total) * 100).toFixed(1)}%` : "0%";
 
-      const buildMetricCard = (label: string, value: string, hint?: string, fillColor = "#eef2ff") => {
+      const buildMetricCard = (
+        label: string,
+        value: string,
+        hint?: string,
+        fillColor = "#eef2ff",
+      ) => {
         const stack: Content[] = [
           { text: label.toUpperCase(), style: "metricLabel" },
           { text: value, style: "metricValue" },
@@ -930,13 +1107,29 @@ const AdminTransactions: React.FC = () => {
         ],
         [
           { text: "Tiền mặt", style: "tableCell" },
-          { text: formatNumber(cashCount), style: "tableCell", alignment: "right" },
-          { text: toPercent(cashCount, monthRows.length), style: "tableCell", alignment: "right" },
+          {
+            text: formatNumber(cashCount),
+            style: "tableCell",
+            alignment: "right",
+          },
+          {
+            text: toPercent(cashCount, monthRows.length),
+            style: "tableCell",
+            alignment: "right",
+          },
         ],
         [
           { text: "Chuyển khoản", style: "tableCell" },
-          { text: formatNumber(transferCount), style: "tableCell", alignment: "right" },
-          { text: toPercent(transferCount, monthRows.length), style: "tableCell", alignment: "right" },
+          {
+            text: formatNumber(transferCount),
+            style: "tableCell",
+            alignment: "right",
+          },
+          {
+            text: toPercent(transferCount, monthRows.length),
+            style: "tableCell",
+            alignment: "right",
+          },
         ],
       ] as unknown as PdfTableCell[][];
 
@@ -947,9 +1140,16 @@ const AdminTransactions: React.FC = () => {
           { text: "Tỷ lệ", style: "tableHeader", alignment: "right" },
         ],
         ...Object.entries(statusCounters).map(([key, value]) => [
-          { text: getStatusLabel(key as TransactionItem["status"]), style: "tableCell" },
+          {
+            text: getStatusLabel(key as TransactionItem["status"]),
+            style: "tableCell",
+          },
           { text: formatNumber(value), style: "tableCell", alignment: "right" },
-          { text: toPercent(value, totalTransactions), style: "tableCell", alignment: "right" },
+          {
+            text: toPercent(value, totalTransactions),
+            style: "tableCell",
+            alignment: "right",
+          },
         ]),
       ] as unknown as PdfTableCell[][];
 
@@ -963,8 +1163,16 @@ const AdminTransactions: React.FC = () => {
         ...topMovies.map((item, index) => [
           { text: `#${index + 1}`, style: "tableCell", alignment: "center" },
           { text: item.movie, style: "tableCell" },
-          { text: formatNumber(item.tickets), style: "tableCell", alignment: "right" },
-          { text: formatVND(item.revenue), style: "tableCell", alignment: "right" },
+          {
+            text: formatNumber(item.tickets),
+            style: "tableCell",
+            alignment: "right",
+          },
+          {
+            text: formatVND(item.revenue),
+            style: "tableCell",
+            alignment: "right",
+          },
         ]),
       ] as unknown as PdfTableCell[][];
 
@@ -1074,7 +1282,11 @@ const AdminTransactions: React.FC = () => {
             text: `Phạm vi: Tháng ${selectedMonth}/${selectedYear} • Tổng dữ liệu: ${formatNumber(totalTransactions)} giao dịch`,
             style: "meta",
           },
-          { text: `Ngày xuất: ${new Date().toLocaleString("vi-VN")}`, style: "meta", margin: [0, 0, 0, 20] },
+          {
+            text: `Ngày xuất: ${new Date().toLocaleString("vi-VN")}`,
+            style: "meta",
+            margin: [0, 0, 0, 20],
+          },
           ...metricRows,
           { text: "Chi tiết thanh toán", style: "sectionTitle" },
           {
@@ -1143,11 +1355,26 @@ const AdminTransactions: React.FC = () => {
           },
         ],
         styles: {
-          header: { fontSize: 20, bold: true, alignment: "center", color: "#111827" },
+          header: {
+            fontSize: 20,
+            bold: true,
+            alignment: "center",
+            color: "#111827",
+          },
           meta: { fontSize: 11, color: "#4b5563", alignment: "center" },
-          sectionTitle: { fontSize: 14, bold: true, color: "#111827", margin: [0, 24, 0, 10] },
+          sectionTitle: {
+            fontSize: 14,
+            bold: true,
+            color: "#111827",
+            margin: [0, 24, 0, 10],
+          },
           metricLabel: { fontSize: 10, color: "#6b7280" },
-          metricValue: { fontSize: 18, bold: true, color: "#111827", margin: [0, 4, 0, 2] },
+          metricValue: {
+            fontSize: 18,
+            bold: true,
+            color: "#111827",
+            margin: [0, 4, 0, 2],
+          },
           metricHint: { fontSize: 10, color: "#4b5563" },
           tableHeader: { color: "#ffffff", bold: true },
           tableCell: { fontSize: 11, color: "#0f172a" },
@@ -1156,8 +1383,13 @@ const AdminTransactions: React.FC = () => {
         },
       };
 
-      const pdfSuffix = exportDateMode !== "all" ? `-${exportDateMode}-${exportDateLabel.replace(/[\s\/]/g, "-")}` : "";
-      pdfMake.createPdf(docDefinition).download(`bao-cao-doanh-thu${pdfSuffix}-${exportDate}.pdf`);
+      const pdfSuffix =
+        exportDateMode !== "all"
+          ? `-${exportDateMode}-${exportDateLabel.replace(/[\s/]/g, "-")}`
+          : "";
+      pdfMake
+        .createPdf(docDefinition)
+        .download(`bao-cao-doanh-thu${pdfSuffix}-${exportDate}.pdf`);
     } finally {
       setExportingType(null);
     }
@@ -1233,7 +1465,9 @@ const AdminTransactions: React.FC = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Tổng doanh thu</p>
+                  <p className="text-sm text-muted-foreground">
+                    Tổng doanh thu
+                  </p>
                   <p className="text-2xl font-bold">
                     {totalRevenue.toLocaleString("vi-VN")}đ
                   </p>
@@ -1309,17 +1543,21 @@ const AdminTransactions: React.FC = () => {
                       <label className="text-sm font-medium">Tháng:</label>
                       <Select
                         value={String(selectedMonth)}
-                        onValueChange={(value) => setSelectedMonth(Number(value))}
+                        onValueChange={(value) =>
+                          setSelectedMonth(Number(value))
+                        }
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                            <SelectItem key={month} value={String(month)}>
-                              Tháng {month}
-                            </SelectItem>
-                          ))}
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                            (month) => (
+                              <SelectItem key={month} value={String(month)}>
+                                Tháng {month}
+                              </SelectItem>
+                            ),
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1327,14 +1565,17 @@ const AdminTransactions: React.FC = () => {
                       <label className="text-sm font-medium">Năm:</label>
                       <Select
                         value={String(selectedYear)}
-                        onValueChange={(value) => setSelectedYear(Number(value))}
+                        onValueChange={(value) =>
+                          setSelectedYear(Number(value))
+                        }
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 5 }, (_, i) =>
-                            new Date().getFullYear() - 2 + i,
+                          {Array.from(
+                            { length: 5 },
+                            (_, i) => new Date().getFullYear() - 2 + i,
                           ).map((year) => (
                             <SelectItem key={year} value={String(year)}>
                               {year}
@@ -1390,13 +1631,17 @@ const AdminTransactions: React.FC = () => {
                           innerRadius={70}
                           outerRadius={110}
                           paddingAngle={4}
-                          label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                          label={({ percent }) =>
+                            `${(percent * 100).toFixed(1)}%`
+                          }
                         >
                           <Cell fill="#22c55e" />
                           <Cell fill="#3b82f6" />
                         </Pie>
                         <Tooltip
-                          formatter={(value: number) => formatPiePercent(Number(value))}
+                          formatter={(value: number) =>
+                            formatPiePercent(Number(value))
+                          }
                         />
                         <Legend
                           verticalAlign="middle"
@@ -1410,43 +1655,102 @@ const AdminTransactions: React.FC = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      Doanh Thu {chartType === "day" ? "Theo Ngày" : chartType === "month" ? "Theo Tháng" : "Theo Năm"}
+                      Doanh Thu{" "}
+                      {chartType === "day"
+                        ? "Theo Ngày"
+                        : chartType === "month"
+                          ? "Theo Tháng"
+                          : "Theo Năm"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="h-[360px]">
                     <ResponsiveContainer width="100%" height="100%">
                       {chartType === "day" ? (
-                        <LineChart data={dayRevenueData} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <LineChart
+                          data={dayRevenueData}
+                          margin={{ top: 16, right: 16, left: 8, bottom: 8 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e5e7eb"
+                          />
                           <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => v.toLocaleString("vi-VN")} />
+                          <YAxis
+                            tick={{ fontSize: 12 }}
+                            tickFormatter={(v) => v.toLocaleString("vi-VN")}
+                          />
                           <Tooltip
                             labelFormatter={(label) => `Ngày ${label}`}
-                            formatter={(value: number) => [`${value.toLocaleString("vi-VN")}đ`, "Doanh thu"]}
+                            formatter={(value: number) => [
+                              `${value.toLocaleString("vi-VN")}đ`,
+                              "Doanh thu",
+                            ]}
                           />
-                          <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4 }}
+                          />
                         </LineChart>
                       ) : chartType === "month" ? (
-                        <LineChart data={monthRevenueData} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <LineChart
+                          data={monthRevenueData}
+                          margin={{ top: 16, right: 16, left: 8, bottom: 8 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e5e7eb"
+                          />
                           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => v.toLocaleString("vi-VN")} />
+                          <YAxis
+                            tick={{ fontSize: 12 }}
+                            tickFormatter={(v) => v.toLocaleString("vi-VN")}
+                          />
                           <Tooltip
                             labelFormatter={(label) => `Tháng ${label}`}
-                            formatter={(value: number) => [`${value.toLocaleString("vi-VN")}đ`, "Doanh thu"]}
+                            formatter={(value: number) => [
+                              `${value.toLocaleString("vi-VN")}đ`,
+                              "Doanh thu",
+                            ]}
                           />
-                          <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4 }}
+                          />
                         </LineChart>
                       ) : (
-                        <LineChart data={yearRevenueData} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <LineChart
+                          data={yearRevenueData}
+                          margin={{ top: 16, right: 16, left: 8, bottom: 8 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e5e7eb"
+                          />
                           <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => v.toLocaleString("vi-VN")} />
+                          <YAxis
+                            tick={{ fontSize: 12 }}
+                            tickFormatter={(v) => v.toLocaleString("vi-VN")}
+                          />
                           <Tooltip
                             labelFormatter={(label) => `Năm ${label}`}
-                            formatter={(value: number) => [`${value.toLocaleString("vi-VN")}đ`, "Doanh thu"]}
+                            formatter={(value: number) => [
+                              `${value.toLocaleString("vi-VN")}đ`,
+                              "Doanh thu",
+                            ]}
                           />
-                          <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4 }}
+                          />
                         </LineChart>
                       )}
                     </ResponsiveContainer>
@@ -1546,8 +1850,11 @@ const AdminTransactions: React.FC = () => {
                     <div className="mt-4 flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">
                         Hiển thị {(moviePage - 1) * moviesPerPage + 1} -
-                        {Math.min(moviePage * moviesPerPage, filteredMovies.length)} /{" "}
-                        {filteredMovies.length} phim
+                        {Math.min(
+                          moviePage * moviesPerPage,
+                          filteredMovies.length,
+                        )}{" "}
+                        / {filteredMovies.length} phim
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -1562,7 +1869,10 @@ const AdminTransactions: React.FC = () => {
                           Trước
                         </Button>
 
-                        {Array.from({ length: totalMoviePages }, (_, i) => i + 1)
+                        {Array.from(
+                          { length: totalMoviePages },
+                          (_, i) => i + 1,
+                        )
                           .filter(
                             (num) =>
                               num === 1 ||
@@ -1572,7 +1882,9 @@ const AdminTransactions: React.FC = () => {
                           .map((num, idx, arr) => (
                             <React.Fragment key={num}>
                               {idx > 0 && arr[idx - 1] !== num - 1 && (
-                                <span className="text-muted-foreground">...</span>
+                                <span className="text-muted-foreground">
+                                  ...
+                                </span>
                               )}
                               <Button
                                 size="sm"
@@ -1611,7 +1923,9 @@ const AdminTransactions: React.FC = () => {
                     <CardTitle>Top 5 Khách Hàng</CardTitle>
                     <Select
                       value={customerSort}
-                      onValueChange={(val: "desc" | "asc") => setCustomerSort(val)}
+                      onValueChange={(val: "desc" | "asc") =>
+                        setCustomerSort(val)
+                      }
                     >
                       <SelectTrigger className="w-full sm:w-48">
                         <SelectValue placeholder="Sắp xếp" />
@@ -1629,7 +1943,9 @@ const AdminTransactions: React.FC = () => {
                       <TableRow>
                         <TableHead>Khách Hàng</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead className="text-center">Số Đơn Hàng</TableHead>
+                        <TableHead className="text-center">
+                          Số Đơn Hàng
+                        </TableHead>
                         <TableHead className="text-right">Tổng Mua</TableHead>
                         <TableHead className="text-center">Đơn Hàng</TableHead>
                       </TableRow>
@@ -1637,22 +1953,48 @@ const AdminTransactions: React.FC = () => {
                     <TableBody>
                       {customerStats.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Không có dữ liệu khách hàng</TableCell>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center py-8 text-muted-foreground"
+                          >
+                            Không có dữ liệu khách hàng
+                          </TableCell>
                         </TableRow>
                       ) : (
-                        [...customerStats].sort((a,b) => customerSort === "desc" ? b.revenue - a.revenue : a.revenue - b.revenue).map((c, i) => (
-                           <TableRow key={i}>
-                             <TableCell className="font-medium">{c.name}</TableCell>
-                             <TableCell className="text-muted-foreground text-sm">{c.email}</TableCell>
-                             <TableCell className="text-center">{c.orders.length}</TableCell>
-                             <TableCell className="text-right font-bold text-primary">{c.revenue.toLocaleString("vi-VN")}đ</TableCell>
-                             <TableCell className="text-center">
-                               <Button variant="outline" size="sm" onClick={() => { setSelectedCustomerOrders(c.orders); setCustomerDialogOpen(true); }}>
-                                 Xem {c.orders.length} Đơn
-                               </Button>
-                             </TableCell>
-                           </TableRow>
-                        ))
+                        [...customerStats]
+                          .sort((a, b) =>
+                            customerSort === "desc"
+                              ? b.revenue - a.revenue
+                              : a.revenue - b.revenue,
+                          )
+                          .map((c, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium">
+                                {c.name}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {c.email}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {c.orders.length}
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-primary">
+                                {c.revenue.toLocaleString("vi-VN")}đ
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedCustomerOrders(c.orders);
+                                    setCustomerDialogOpen(true);
+                                  }}
+                                >
+                                  Xem {c.orders.length} Đơn
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
                       )}
                     </TableBody>
                   </Table>
@@ -1667,259 +2009,279 @@ const AdminTransactions: React.FC = () => {
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <CardTitle>Danh Sách Giao Dịch</CardTitle>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Mã GD/Mã booking/khách/phim..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-10"
-                />
-              </div>
-              <Select
-                value={filterStatus}
-                onValueChange={(value) => {
-                  setFilterStatus(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  <SelectItem value="success">Thành công</SelectItem>
-                  <SelectItem value="pending">Đang xử lý</SelectItem>
-                  <SelectItem value="failed">Thất bại</SelectItem>
-                  <SelectItem value="refunded">Đã hoàn</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={paymentMethod}
-                onValueChange={(value) => {
-                  setPaymentMethod(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-36">
-                  <SelectValue placeholder="Thanh toán" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="momo">Momo</SelectItem>
-                  <SelectItem value="vnpay">VNPay</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full sm:w-40"
-              />
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full sm:w-40"
-              />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchQuery("");
-                  setFilterStatus("all");
-                  setPaymentMethod("all");
-                  setDateFrom("");
-                  setDateTo("");
-                  setPage(1);
-                }}
-              >
-                Xóa lọc
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mã Đặt Vé</TableHead>
-                <TableHead>Khách Hàng</TableHead>
-                <TableHead>Phim</TableHead>
-                <TableHead>Rạp/Ngày/Giờ</TableHead>
-                <TableHead>Số Ghế</TableHead>
-                <TableHead>Số Tiền</TableHead>
-                <TableHead>Thanh Toán</TableHead>
-                <TableHead>Trạng Thái</TableHead>
-                <TableHead>Thời Gian</TableHead>
-                <TableHead className="text-center">Chi Tiết</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <TableRow>
-                  <TableCell
-                    colSpan={10}
-                    className="text-center py-8 text-muted-foreground"
-                  >
-                    Đang tải dữ liệu giao dịch...
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading && error && (
-                <TableRow>
-                  <TableCell
-                    colSpan={10}
-                    className="text-center py-8 text-red-500"
-                  >
-                    {error}
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading && !error && transactions.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={10}
-                    className="text-center py-8 text-muted-foreground"
-                  >
-                    Không có giao dịch phù hợp
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading &&
-                !error &&
-                transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-mono font-medium">
-                      {transaction.bookingCode}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {transaction.customerName}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {transaction.customerEmail}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {transaction.movieTitle}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{transaction.cinemaName}</div>
-                        <div className="text-muted-foreground">
-                          {transaction.showDate
-                            ? `${formatDate(transaction.showDate)} - ${transaction.showTime}`
-                            : "-"}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {transaction.seatCount}
-                    </TableCell>
-                    <TableCell className="font-bold text-primary">
-                      {transaction.amount.toLocaleString("vi-VN")}đ
-                    </TableCell>
-                    <TableCell>{transaction.paymentMethod}</TableCell>
-                    <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {transaction.transactionDate
-                        ? formatDateTime(transaction.transactionDate)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
-                        onClick={() => openDetail(transaction)}
-                      >
-                        <Eye className="w-3 h-3" />
-                        Chi tiết
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-
-          {!isLoading && !error && (
-            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground">
-                Hiển thị {(pagination.page - 1) * pagination.limit + 1} -{" "}
-                {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
-                / {pagination.total} giao dịch
-              </div>
-
-              <div className="flex items-center gap-2">
+              <CardTitle>Danh Sách Giao Dịch</CardTitle>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Mã GD/Mã booking/khách/phim..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPage(1);
+                    }}
+                    className="pl-10"
+                  />
+                </div>
                 <Select
-                  value={String(limit)}
+                  value={filterStatus}
                   onValueChange={(value) => {
-                    setLimit(Number(value));
+                    setFilterStatus(value);
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Trạng thái" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10 / trang</SelectItem>
-                    <SelectItem value="20">20 / trang</SelectItem>
-                    <SelectItem value="50">50 / trang</SelectItem>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value="success">Thành công</SelectItem>
+                    <SelectItem value="pending">Đang xử lý</SelectItem>
+                    <SelectItem value="failed">Thất bại</SelectItem>
                   </SelectContent>
                 </Select>
-
+                <Select
+                  value={paymentMethod}
+                  onValueChange={(value) => {
+                    setPaymentMethod(value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-36">
+                    <SelectValue placeholder="Thanh toán" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="momo">Momo</SelectItem>
+                    <SelectItem value="vnpay">VNPay</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full sm:w-40"
+                />
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full sm:w-40"
+                />
                 <Button
                   variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setFilterStatus("all");
+                    setPaymentMethod("all");
+                    setDateFrom("");
+                    setDateTo("");
+                    setPage(1);
+                  }}
                 >
-                  Trước
-                </Button>
-
-                {pageNumbers.map((num) => (
-                  <Button
-                    key={num}
-                    size="sm"
-                    variant={num === page ? "default" : "outline"}
-                    onClick={() => setPage(num)}
-                  >
-                    {num}
-                  </Button>
-                ))}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= (pagination.totalPages || 1)}
-                  onClick={() =>
-                    setPage((prev) =>
-                      Math.min(pagination.totalPages || 1, prev + 1),
-                    )
-                  }
-                >
-                  Sau
+                  Xóa lọc
                 </Button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã Đặt Vé</TableHead>
+                  <TableHead>Khách Hàng</TableHead>
+                  <TableHead>Phim</TableHead>
+                  <TableHead>Rạp/Ngày/Giờ</TableHead>
+                  <TableHead>Số Ghế</TableHead>
+                  <TableHead>Số Tiền</TableHead>
+                  <TableHead>Thanh Toán</TableHead>
+                  <TableHead>Trạng Thái</TableHead>
+                  <TableHead>Thời Gian</TableHead>
+                  <TableHead className="text-center">Chi Tiết</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={10}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      Đang tải dữ liệu giao dịch...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && error && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={10}
+                      className="text-center py-8 text-red-500"
+                    >
+                      {error}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && !error && transactions.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={10}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      Không có giao dịch phù hợp
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading &&
+                  !error &&
+                  transactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="font-mono font-medium">
+                        {transaction.bookingCode}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">
+                            {transaction.customerName}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {transaction.customerEmail}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {transaction.movieTitle}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>{transaction.cinemaName}</div>
+                          <div className="text-muted-foreground">
+                            {transaction.showDate
+                              ? `${formatDate(transaction.showDate)} - ${transaction.showTime}`
+                              : "-"}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {transaction.seatCount}
+                      </TableCell>
+                      <TableCell className="font-bold text-primary">
+                        {transaction.amount.toLocaleString("vi-VN")}đ
+                      </TableCell>
+                      <TableCell>{transaction.paymentMethod}</TableCell>
+                      <TableCell>
+                        {getStatusBadge(transaction.status)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {transaction.transactionDate
+                          ? formatDateTime(transaction.transactionDate)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                            onClick={() => openDetail(transaction)}
+                          >
+                            <Eye className="w-3 h-3" />
+                            Chi tiết
+                          </Button>
+                          {transaction.status === "pending" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 h-7 px-2 text-xs hover:bg-yellow-50 hover:text-yellow-700 hover:border-yellow-400 border-yellow-300 text-yellow-700"
+                              onClick={() => {
+                                setFixTargetTransaction(transaction);
+                                setFixDialogOpen(true);
+                              }}
+                            >
+                              <Wrench className="w-3 h-3" />
+                              Xử lý
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+
+            {!isLoading && !error && (
+              <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Hiển thị {(pagination.page - 1) * pagination.limit + 1} -{" "}
+                  {Math.min(
+                    pagination.page * pagination.limit,
+                    pagination.total,
+                  )}{" "}
+                  / {pagination.total} giao dịch
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={String(limit)}
+                    onValueChange={(value) => {
+                      setLimit(Number(value));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 / trang</SelectItem>
+                      <SelectItem value="20">20 / trang</SelectItem>
+                      <SelectItem value="50">50 / trang</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    Trước
+                  </Button>
+
+                  {pageNumbers.map((num) => (
+                    <Button
+                      key={num}
+                      size="sm"
+                      variant={num === page ? "default" : "outline"}
+                      onClick={() => setPage(num)}
+                    >
+                      {num}
+                    </Button>
+                  ))}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= (pagination.totalPages || 1)}
+                    onClick={() =>
+                      setPage((prev) =>
+                        Math.min(pagination.totalPages || 1, prev + 1),
+                      )
+                    }
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* ===================== TRANSACTION DETAIL DIALOG ===================== */}
@@ -1935,57 +2297,89 @@ const AdminTransactions: React.FC = () => {
           {detailLoading && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <p className="text-sm text-muted-foreground">Đang tải chi tiết...</p>
+              <p className="text-sm text-muted-foreground">
+                Đang tải chi tiết...
+              </p>
             </div>
           )}
 
           {!detailLoading && selectedDetail && (
             <div className="space-y-5">
-
               {/* Booking info */}
               <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Thông Tin Đặt Vé</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  Thông Tin Đặt Vé
+                </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-muted-foreground">Mã đặt vé:</span>
-                    <p className="font-mono font-bold text-primary">{selectedDetail.booking_code}</p>
+                    <p className="font-mono font-bold text-primary">
+                      {selectedDetail.booking_code}
+                    </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Trạng thái:</span>
-                    <p className="font-medium capitalize">{selectedDetail.status}</p>
+                    <p className="font-medium capitalize">
+                      {selectedDetail.status}
+                    </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Khách hàng:</span>
-                    <p className="font-medium">{selectedDetail.customer_name || "(Khách vãng lai)"}</p>
+                    <p className="font-medium">
+                      {selectedDetail.customer_name || "(Khách vãng lai)"}
+                    </p>
                   </div>
-                  {selectedDetail.customer_email && selectedDetail.customer_email !== "-" && !selectedDetail.customer_email.includes("@guest.local") ? (
+                  {selectedDetail.customer_email &&
+                  selectedDetail.customer_email !== "-" &&
+                  !selectedDetail.customer_email.includes("@guest.local") ? (
                     <div>
                       <span className="text-muted-foreground">Email:</span>
-                      <p className="text-xs break-all">{selectedDetail.customer_email}</p>
+                      <p className="text-xs break-all">
+                        {selectedDetail.customer_email}
+                      </p>
                     </div>
                   ) : null}
                   <div>
                     <span className="text-muted-foreground">Thanh toán:</span>
-                    <p className="font-medium">{selectedDetail.transaction?.payment_method || selectedDetail.payment_method || "-"}</p>
+                    <p className="font-medium">
+                      {selectedDetail.transaction?.payment_method ||
+                        selectedDetail.payment_method ||
+                        "-"}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">TT thanh toán:</span>
-                    <p className="font-medium">{selectedDetail.transaction?.status || selectedDetail.payment_status || "-"}</p>
+                    <span className="text-muted-foreground">
+                      TT thanh toán:
+                    </span>
+                    <p className="font-medium">
+                      {selectedDetail.transaction?.status ||
+                        selectedDetail.payment_status ||
+                        "-"}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Show info */}
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Suất Chiếu</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  Suất Chiếu
+                </h3>
                 <div className="flex flex-col gap-2 text-sm">
                   <div className="flex items-center gap-2">
                     <Film className="w-4 h-4 text-blue-500 shrink-0" />
-                    <span className="font-semibold">{selectedDetail.movie_title}</span>
+                    <span className="font-semibold">
+                      {selectedDetail.movie_title}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
-                    <span>{selectedDetail.cinema_name}{selectedDetail.hall_name ? ` — ${selectedDetail.hall_name}` : ""}</span>
+                    <span>
+                      {selectedDetail.cinema_name}
+                      {selectedDetail.hall_name
+                        ? ` — ${selectedDetail.hall_name}`
+                        : ""}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-green-500 shrink-0" />
@@ -1993,15 +2387,21 @@ const AdminTransactions: React.FC = () => {
                       {selectedDetail.start_time ? (
                         <>
                           {formatDate(selectedDetail.start_time)} lúc{" "}
-                          {new Date(selectedDetail.start_time).toLocaleTimeString("vi-VN", {
+                          {new Date(
+                            selectedDetail.start_time,
+                          ).toLocaleTimeString("vi-VN", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </>
                       ) : (
                         <>
-                          {selectedDetail.show_date ? formatDate(selectedDetail.show_date) : "-"}
-                          {selectedDetail.show_time ? ` lúc ${selectedDetail.show_time}` : ""}
+                          {selectedDetail.show_date
+                            ? formatDate(selectedDetail.show_date)
+                            : "-"}
+                          {selectedDetail.show_time
+                            ? ` lúc ${selectedDetail.show_time}`
+                            : ""}
                         </>
                       )}
                     </span>
@@ -2012,31 +2412,48 @@ const AdminTransactions: React.FC = () => {
               {/* Tickets */}
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                  <Armchair className="w-4 h-4" /> Vé ({selectedDetail.tickets?.length ?? 0})
+                  <Armchair className="w-4 h-4" /> Vé (
+                  {selectedDetail.tickets?.length ?? 0})
                 </h3>
                 {selectedDetail.tickets && selectedDetail.tickets.length > 0 ? (
                   <div className="rounded-lg border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/60">
                         <tr>
-                          <th className="text-left px-3 py-2 font-medium">Ghế</th>
-                          <th className="text-left px-3 py-2 font-medium">Loại</th>
-                          <th className="text-right px-3 py-2 font-medium">Giá vé</th>
-                          <th className="text-center px-3 py-2 font-medium">Trạng thái</th>
+                          <th className="text-left px-3 py-2 font-medium">
+                            Ghế
+                          </th>
+                          <th className="text-left px-3 py-2 font-medium">
+                            Loại
+                          </th>
+                          <th className="text-right px-3 py-2 font-medium">
+                            Giá vé
+                          </th>
+                          <th className="text-center px-3 py-2 font-medium">
+                            Trạng thái
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedDetail.tickets.map((ticket, idx) => (
-                          <tr key={ticket.ticket_code ?? idx} className="border-t">
+                          <tr
+                            key={ticket.ticket_code ?? idx}
+                            className="border-t"
+                          >
                             <td className="px-3 py-2 font-mono font-bold">
-                              {ticket.row_code}{ticket.number}
+                              {ticket.row_code}
+                              {ticket.number}
                             </td>
-                            <td className="px-3 py-2 text-muted-foreground">{ticket.seat_type}</td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {ticket.seat_type}
+                            </td>
                             <td className="px-3 py-2 text-right font-semibold text-primary">
                               {formatVND(ticket.price)}
                             </td>
                             <td className="px-3 py-2 text-center">
-                              <Badge variant="outline" className="text-xs">{ticket.status}</Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {ticket.status}
+                              </Badge>
                             </td>
                           </tr>
                         ))}
@@ -2044,46 +2461,68 @@ const AdminTransactions: React.FC = () => {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic pl-1">Không có thông tin vé</p>
+                  <p className="text-sm text-muted-foreground italic pl-1">
+                    Không có thông tin vé
+                  </p>
                 )}
               </div>
 
               {/* Concessions */}
-              {selectedDetail.concessions && selectedDetail.concessions.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <Popcorn className="w-4 h-4" /> Bắp Nước ({selectedDetail.concessions.length})
-                  </h3>
-                  <div className="rounded-lg border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/60">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-medium">Sản phẩm</th>
-                          <th className="text-center px-3 py-2 font-medium">SL</th>
-                          <th className="text-right px-3 py-2 font-medium">Đơn giá</th>
-                          <th className="text-right px-3 py-2 font-medium">Thành tiền</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedDetail.concessions.map((item, idx) => (
-                          <tr key={idx} className="border-t">
-                            <td className="px-3 py-2 font-medium">{item.name}</td>
-                            <td className="px-3 py-2 text-center">{item.quantity}</td>
-                            <td className="px-3 py-2 text-right text-muted-foreground">{formatVND(item.price)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{formatVND(item.price * item.quantity)}</td>
+              {selectedDetail.concessions &&
+                selectedDetail.concessions.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                      <Popcorn className="w-4 h-4" /> Bắp Nước (
+                      {selectedDetail.concessions.length})
+                    </h3>
+                    <div className="rounded-lg border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/60">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium">
+                              Sản phẩm
+                            </th>
+                            <th className="text-center px-3 py-2 font-medium">
+                              SL
+                            </th>
+                            <th className="text-right px-3 py-2 font-medium">
+                              Đơn giá
+                            </th>
+                            <th className="text-right px-3 py-2 font-medium">
+                              Thành tiền
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {selectedDetail.concessions.map((item, idx) => (
+                            <tr key={idx} className="border-t">
+                              <td className="px-3 py-2 font-medium">
+                                {item.name}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {item.quantity}
+                              </td>
+                              <td className="px-3 py-2 text-right text-muted-foreground">
+                                {formatVND(item.price)}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold">
+                                {formatVND(item.price * item.quantity)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Price summary */}
               <Separator />
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng vé + bắp nước:</span>
+                  <span className="text-muted-foreground">
+                    Tổng vé + bắp nước:
+                  </span>
                   <span>{formatVND(selectedDetail.total_price)}</span>
                 </div>
                 {selectedDetail.discount_amount > 0 && (
@@ -2094,8 +2533,184 @@ const AdminTransactions: React.FC = () => {
                 )}
                 <div className="flex justify-between font-bold text-base">
                   <span>Thanh toán:</span>
-                  <span className="text-primary">{formatVND(selectedDetail.final_price)}</span>
+                  <span className="text-primary">
+                    {formatVND(selectedDetail.final_price)}
+                  </span>
                 </div>
+              </div>
+
+              {/* Fix pending status actions */}
+              {selectedDetail.status?.toLowerCase() === "pending" && (
+                <div className="rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-800 p-4 space-y-3">
+                  <h3 className="font-semibold text-sm text-yellow-700 dark:text-yellow-400 uppercase tracking-wide flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Xử Lý Giao Dịch Đang Chờ
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Giao dịch này đang ở trạng thái{" "}
+                    <span className="font-semibold text-yellow-600">
+                      Đang xử lý
+                    </span>
+                    . Bạn có thể xác nhận thủ công hoặc đánh dấu thất bại.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      size="sm"
+                      className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={fixingStatus !== null}
+                      onClick={() => handleFixStatus("confirm")}
+                    >
+                      {fixingStatus === "confirm" ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-3.5 h-3.5" />
+                      )}
+                      Xác nhận thành công
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="gap-2"
+                      disabled={fixingStatus !== null}
+                      onClick={() => handleFixStatus("cancel")}
+                    >
+                      {fixingStatus === "cancel" ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5" />
+                      )}
+                      Đánh dấu thất bại
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== FIX STATUS DIALOG ===================== */}
+      <Dialog open={fixDialogOpen} onOpenChange={setFixDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Wrench className="w-5 h-5 text-yellow-500" />
+              Xử Lý Giao Dịch Đang Chờ
+            </DialogTitle>
+          </DialogHeader>
+
+          {fixTargetTransaction && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1.5">
+                <div>
+                  <span className="text-muted-foreground">Mã đặt vé: </span>
+                  <span className="font-mono font-bold text-primary">
+                    {fixTargetTransaction.bookingCode}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Khách hàng: </span>
+                  <span className="font-medium">
+                    {fixTargetTransaction.customerName}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Phim: </span>
+                  <span>{fixTargetTransaction.movieTitle}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Suất chiếu: </span>
+                  <span>
+                    {fixTargetTransaction.showDate
+                      ? `${formatDate(fixTargetTransaction.showDate)} – ${fixTargetTransaction.showTime}`
+                      : "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Số tiền: </span>
+                  <span className="font-bold text-primary">
+                    {fixTargetTransaction.amount.toLocaleString("vi-VN")}đ
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Chọn hành động để cập nhật trạng thái giao dịch:
+              </p>
+
+              <div className="flex flex-col gap-2">
+                {/* Đã hoàn tiền */}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12 border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400"
+                  disabled={fixingStatus !== null}
+                  onClick={() => handleTableFix("refund")}
+                >
+                  {fixingStatus === "refund" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="w-4 h-4" />
+                  )}
+                  <div className="text-left">
+                    <div className="font-semibold">Đã hoàn tiền</div>
+                    <div className="text-xs font-normal text-muted-foreground">
+                      Đánh dấu đã hoàn trả tiền cho khách
+                    </div>
+                  </div>
+                </Button>
+
+                {/* Thất bại */}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  disabled={fixingStatus !== null}
+                  onClick={() => handleTableFix("cancel")}
+                >
+                  {fixingStatus === "cancel" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4" />
+                  )}
+                  <div className="text-left">
+                    <div className="font-semibold">Thất bại</div>
+                    <div className="text-xs font-normal text-muted-foreground">
+                      Đánh dấu giao dịch không thành công
+                    </div>
+                  </div>
+                </Button>
+
+                {/* Thành công – chỉ hiện nếu suất chiếu chưa qua */}
+                {isShowtimeActive(fixTargetTransaction) && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-3 h-12 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                    disabled={fixingStatus !== null}
+                    onClick={() => handleTableFix("confirm")}
+                  >
+                    {fixingStatus === "confirm" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    <div className="text-left">
+                      <div className="font-semibold">Thành công</div>
+                      <div className="text-xs font-normal text-muted-foreground">
+                        Xác nhận thanh toán thành công
+                      </div>
+                    </div>
+                  </Button>
+                )}
+              </div>
+
+              <div className="pt-1">
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  disabled={fixingStatus !== null}
+                  onClick={() => setFixDialogOpen(false)}
+                >
+                  Hủy
+                </Button>
               </div>
             </div>
           )}
@@ -2115,14 +2730,24 @@ const AdminTransactions: React.FC = () => {
           <div className="space-y-5">
             {/* Date mode selector */}
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Khoảng thời gian</label>
+              <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Khoảng thời gian
+              </label>
               <div className="grid grid-cols-5 gap-2">
                 {[
-                  { mode: "all" as const, label: "Tất cả", icon: CalendarRange },
+                  {
+                    mode: "all" as const,
+                    label: "Tất cả",
+                    icon: CalendarRange,
+                  },
                   { mode: "day" as const, label: "Ngày", icon: CalendarDays },
                   { mode: "month" as const, label: "Tháng", icon: Calendar },
                   { mode: "year" as const, label: "Năm", icon: Calendar },
-                  { mode: "custom" as const, label: "Tuỳ chọn", icon: CalendarRange },
+                  {
+                    mode: "custom" as const,
+                    label: "Tuỳ chọn",
+                    icon: CalendarRange,
+                  },
                 ].map(({ mode, label, icon: Icon }) => (
                   <button
                     key={mode}
@@ -2143,7 +2768,9 @@ const AdminTransactions: React.FC = () => {
             {/* Date inputs based on mode */}
             {exportDateMode === "day" && (
               <div className="flex items-center gap-3">
-                <label className="text-sm font-medium w-20 shrink-0">Chọn ngày:</label>
+                <label className="text-sm font-medium w-20 shrink-0">
+                  Chọn ngày:
+                </label>
                 <Input
                   type="date"
                   value={exportDay}
@@ -2155,25 +2782,40 @@ const AdminTransactions: React.FC = () => {
 
             {exportDateMode === "month" && (
               <div className="flex items-center gap-3">
-                <label className="text-sm font-medium w-20 shrink-0">Tháng/Năm:</label>
+                <label className="text-sm font-medium w-20 shrink-0">
+                  Tháng/Năm:
+                </label>
                 <div className="flex gap-2 flex-1">
-                  <Select value={String(exportMonth)} onValueChange={(v) => setExportMonth(Number(v))}>
+                  <Select
+                    value={String(exportMonth)}
+                    onValueChange={(v) => setExportMonth(Number(v))}
+                  >
                     <SelectTrigger className="flex-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                        <SelectItem key={m} value={String(m)}>Tháng {m}</SelectItem>
+                        <SelectItem key={m} value={String(m)}>
+                          Tháng {m}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={String(exportYear)} onValueChange={(v) => setExportYear(Number(v))}>
+                  <Select
+                    value={String(exportYear)}
+                    onValueChange={(v) => setExportYear(Number(v))}
+                  >
                     <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => (
-                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      {Array.from(
+                        { length: 6 },
+                        (_, i) => new Date().getFullYear() - 3 + i,
+                      ).map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2183,14 +2825,24 @@ const AdminTransactions: React.FC = () => {
 
             {exportDateMode === "year" && (
               <div className="flex items-center gap-3">
-                <label className="text-sm font-medium w-20 shrink-0">Năm:</label>
-                <Select value={String(exportYear)} onValueChange={(v) => setExportYear(Number(v))}>
+                <label className="text-sm font-medium w-20 shrink-0">
+                  Năm:
+                </label>
+                <Select
+                  value={String(exportYear)}
+                  onValueChange={(v) => setExportYear(Number(v))}
+                >
                   <SelectTrigger className="flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => (
-                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    {Array.from(
+                      { length: 6 },
+                      (_, i) => new Date().getFullYear() - 3 + i,
+                    ).map((y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {y}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2200,7 +2852,9 @@ const AdminTransactions: React.FC = () => {
             {exportDateMode === "custom" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <label className="text-sm font-medium w-20 shrink-0">Từ ngày:</label>
+                  <label className="text-sm font-medium w-20 shrink-0">
+                    Từ ngày:
+                  </label>
                   <Input
                     type="date"
                     value={exportCustomFrom}
@@ -2209,7 +2863,9 @@ const AdminTransactions: React.FC = () => {
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <label className="text-sm font-medium w-20 shrink-0">Đến ngày:</label>
+                  <label className="text-sm font-medium w-20 shrink-0">
+                    Đến ngày:
+                  </label>
                   <Input
                     type="date"
                     value={exportCustomTo}
@@ -2223,7 +2879,9 @@ const AdminTransactions: React.FC = () => {
             {/* Selected range summary */}
             <div className="rounded-lg bg-muted/50 border p-3 text-sm">
               <span className="text-muted-foreground">Sẽ xuất dữ liệu: </span>
-              <span className="font-semibold text-foreground">{getExportDateLabel()}</span>
+              <span className="font-semibold text-foreground">
+                {getExportDateLabel()}
+              </span>
             </div>
 
             {/* Export buttons */}
@@ -2270,12 +2928,18 @@ const AdminTransactions: React.FC = () => {
               <TableBody>
                 {selectedCustomerOrders?.map((ord) => (
                   <TableRow key={ord.id}>
-                    <TableCell className="font-mono">{ord.bookingCode}</TableCell>
+                    <TableCell className="font-mono">
+                      {ord.bookingCode}
+                    </TableCell>
                     <TableCell>{ord.movieTitle}</TableCell>
                     <TableCell>
-                      {ord.transactionDate ? formatDateTime(ord.transactionDate) : "-"}
+                      {ord.transactionDate
+                        ? formatDateTime(ord.transactionDate)
+                        : "-"}
                     </TableCell>
-                    <TableCell className="text-right font-bold text-primary">{ord.amount.toLocaleString("vi-VN")}đ</TableCell>
+                    <TableCell className="text-right font-bold text-primary">
+                      {ord.amount.toLocaleString("vi-VN")}đ
+                    </TableCell>
                     <TableCell className="text-center">
                       <Button
                         size="sm"
@@ -2294,7 +2958,6 @@ const AdminTransactions: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 };

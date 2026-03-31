@@ -134,6 +134,27 @@ class BookingController extends BaseController {
         }
     }
 
+    public function refund($id) {
+        AuthMiddleware::authenticate();
+        AuthMiddleware::requireRole(['Admin', 'Manager']);
+
+        $booking = $this->bookingService->getBookingById($id);
+        if (!$booking) {
+            Response::notFound('Booking not found');
+        }
+
+        if (!in_array($booking['status'], ['Pending', 'Paid'], true)) {
+            Response::error('Booking cannot be refunded', 400);
+        }
+
+        try {
+            $this->bookingService->refundBooking($id);
+            Response::success(['booking_id' => $id], 'Booking refunded');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
     public function getUserBookings($userId) {
         AuthMiddleware::authenticate();
 

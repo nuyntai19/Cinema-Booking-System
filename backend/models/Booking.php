@@ -675,6 +675,30 @@ class Booking {
         }
     }
 
+    public function refund($id) {
+        $this->db->beginTransaction();
+        try {
+            $this->updateStatus($id, 'Refunded');
+
+            $stmt = $this->db->prepare(
+                "UPDATE tickets SET status = 'REFUNDED' WHERE booking_id = :booking_id AND status IN ('HOLDING', 'SOLD')"
+            );
+            $stmt->execute([':booking_id' => $id]);
+
+            // Mark transaction as Refunded
+            $stmt2 = $this->db->prepare(
+                "UPDATE transactions SET status = 'Refunded' WHERE booking_id = :booking_id"
+            );
+            $stmt2->execute([':booking_id' => $id]);
+
+            $this->db->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
     public function calculateTotalPrice($showtime, $seatDetails, $concessions) {
         $basePrice = (float)($showtime['base_price'] ?? 0);
         if ($basePrice <= 0) {
