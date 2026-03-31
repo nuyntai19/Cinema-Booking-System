@@ -47,6 +47,68 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useHoldTimer, formatHoldTime } from "@/hooks/useHoldTimer";
+
+interface MovieInfo {
+  id: string;
+  title: string;
+  poster: string;
+}
+
+interface MovieApiData {
+  id: number;
+  title: string;
+  poster_url?: string;
+}
+
+interface PromotionItem {
+  id: number;
+  code: string;
+  title?: string;
+  description?: string;
+  discount_type?: string;
+  discount_value?: number;
+  discount_amount?: number;
+  min_order_value?: number;
+  start_date: string;
+  end_date: string;
+  usage_limit?: number;
+  used_count?: number;
+  is_auto_apply?: boolean;
+  status?: string;
+}
+
+interface VoucherItem extends PromotionItem {
+  promo_code?: string;
+  promotion_id?: number;
+}
+
+interface TierInfo {
+  id: number;
+  name: string;
+  rank_name?: string;
+  discount_rate: string;
+}
+
+interface TicketData {
+  ticket_code?: string;
+  ticketCode?: string;
+}
+
+interface BookingData {
+  booking_code?: string;
+  bookingCode?: string;
+  booking_id?: number;
+}
+
+interface VoucherApplyResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    discount: number;
+    voucher_id: number;
+  };
+}
 
 const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
@@ -58,6 +120,9 @@ const PaymentPage: React.FC = () => {
     clearBooking,
     selectedShowtime,
   } = useBooking();
+
+  const { timeLeft: holdTimeLeft, isActive: holdTimerActive } = useHoldTimer();
+  const { pauseHoldTimer, resumeHoldTimer } = useBooking();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("momo");
   const [promoCode, setPromoCode] = useState("");
@@ -83,11 +148,11 @@ const PaymentPage: React.FC = () => {
   const timeoutHandledRef = useRef(false);
 
   // Promotions & vouchers for display
-  const [activePromos, setActivePromos] = useState<any[]>([]);
-  const [userVouchers, setUserVouchers] = useState<any[]>([]);
-  const [userTier, setUserTier] = useState<any>(null);
+  const [activePromos, setActivePromos] = useState<PromotionItem[]>([]);
+  const [userVouchers, setUserVouchers] = useState<VoucherItem[]>([]);
+  const [userTier, setUserTier] = useState<TierInfo | null>(null);
 
-  const [movie, setMovie] = useState<any>(null);
+  const [movie, setMovie] = useState<MovieInfo | null>(null);
   const [loadingMovie, setLoadingMovie] = useState(true);
 
   // Fetch movie from API
@@ -101,7 +166,7 @@ const PaymentPage: React.FC = () => {
         setLoadingMovie(true);
         const response = await apiCall<{
           success: boolean;
-          data: { movie: any };
+          data: { movie: MovieApiData };
         }>(API_ENDPOINTS.MOVIE_DETAIL(parseInt(selectedMovie)));
         if (response.success && response.data?.movie) {
           const m = response.data.movie;
@@ -139,7 +204,10 @@ const PaymentPage: React.FC = () => {
   useEffect(() => {
     const fetchPromosAndVouchers = async () => {
       try {
-        const promoRes: any = await apiCall(API_ENDPOINTS.PROMOTIONS_ACTIVE);
+        const promoRes = await apiCall<{
+          data?: { promotions?: PromotionItem[] };
+          promotions?: PromotionItem[];
+        }>(API_ENDPOINTS.PROMOTIONS_ACTIVE);
         const promos = promoRes?.data?.promotions || promoRes?.promotions || [];
         setActivePromos(promos);
       } catch {
@@ -149,9 +217,10 @@ const PaymentPage: React.FC = () => {
       if (user?.id) {
         try {
           // Fetch ALL vouchers (including expired, used) to show but disable ineligible ones
-          const vRes: any = await apiCall(
-            `${API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id))}?status=all`,
-          );
+          const vRes = await apiCall<{
+            data?: { vouchers?: VoucherItem[] };
+            vouchers?: VoucherItem[];
+          }>(`${API_ENDPOINTS.USER_VOUCHERS(parseInt(user.id))}?status=all`);
           const vouchers = vRes?.data?.vouchers || vRes?.vouchers || [];
 
           // Helper function to parse date string (YYYY-MM-DD) to local date
@@ -161,7 +230,7 @@ const PaymentPage: React.FC = () => {
           };
 
           // Sort vouchers: ACTIVE+valid dates first, then others
-          const sortedVouchers = [...vouchers].sort((a: any, b: any) => {
+          const sortedVouchers = [...vouchers].sort((a, b) => {
             // Check status
             const aActive = a.status === "ACTIVE";
             const bActive = b.status === "ACTIVE";
@@ -173,13 +242,13 @@ const PaymentPage: React.FC = () => {
             const aValidDate =
               aActive && a.start_date && a.end_date
                 ? today >= parseLocalDate(a.start_date) &&
-                today <= parseLocalDate(a.end_date)
+                  today <= parseLocalDate(a.end_date)
                 : false;
 
             const bValidDate =
               bActive && b.start_date && b.end_date
                 ? today >= parseLocalDate(b.start_date) &&
-                today <= parseLocalDate(b.end_date)
+                  today <= parseLocalDate(b.end_date)
                 : false;
 
             // ACTIVE + valid dates first
@@ -199,7 +268,7 @@ const PaymentPage: React.FC = () => {
         }
 
         try {
-          const tierRes: any = await apiCall(
+          const tierRes = await apiCall<{ data?: { tier?: TierInfo } }>(
             API_ENDPOINTS.MEMBERSHIP_USER_TIER(parseInt(user.id)),
           );
           if (tierRes?.data?.tier) setUserTier(tierRes.data.tier);
@@ -237,19 +306,17 @@ const PaymentPage: React.FC = () => {
     setIsVisaMode(false);
     paymentHandledRef.current = false;
     timeoutHandledRef.current = false;
+    resumeHoldTimer();
   };
 
-  const cancelPaymentSession = async (
-    title: string,
-    description: string,
-    navigateToSeats = false,
-  ) => {
+  const cancelPaymentSession = async (title: string, description: string) => {
     if (isCancellingPayment) {
       return;
     }
 
     setIsCancellingPayment(true);
     try {
+      // Cancel the booking on server
       if (currentBookingId) {
         try {
           await BookingService.cancel(String(currentBookingId));
@@ -258,7 +325,45 @@ const PaymentPage: React.FC = () => {
         }
       }
 
-      resetPaymentSession();
+      // Release held seats on server
+      if (selectedShowtime) {
+        try {
+          const token =
+            localStorage.getItem("token") || sessionStorage.getItem("token");
+          if (token) {
+            await fetch(
+              API_ENDPOINTS.SHOWTIME_RELEASE_SEATS(
+                parseInt(selectedShowtime.id),
+              ),
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({}),
+              },
+            );
+          }
+        } catch {
+          // Ignore release errors
+        }
+      }
+
+      // Reset modal state
+      setShowQRModal(false);
+      setMomoQrImageUrl(null);
+      setPaymentUrl(null);
+      setCurrentBookingId(null);
+      setCurrentBookingCode(null);
+      setQRTimeLeft(300);
+      setIsVnpayMode(false);
+      setIsVisaMode(false);
+      paymentHandledRef.current = false;
+      timeoutHandledRef.current = false;
+
+      // Full reset: clear all booking state (seats, timer, concessions)
+      clearBooking();
 
       toast({
         title,
@@ -266,10 +371,8 @@ const PaymentPage: React.FC = () => {
         variant: "destructive",
       });
 
-      if (navigateToSeats) {
-        // Let toast render before route transition so user can see feedback.
-        setTimeout(() => navigate("/booking/seats"), 150);
-      }
+      // Navigate back to seat selection
+      setTimeout(() => navigate("/booking/seats"), 150);
     } finally {
       setIsCancellingPayment(false);
     }
@@ -296,11 +399,12 @@ const PaymentPage: React.FC = () => {
     const releaseHoldOnTimeout = async () => {
       await cancelPaymentSession(
         "Thanh toán thất bại",
-        "Đã hết 5 phút thanh toán. Ghế đã được giải phóng.",
+        "Đã hết 5 phút thanh toán. Ghế đã được giải phóng. Vui lòng chọn lại.",
       );
     };
 
     void releaseHoldOnTimeout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showQRModal, qrTimeLeft, currentBookingId, toast]);
 
   // Guard against accidental leave while waiting for payment confirmation.
@@ -366,7 +470,8 @@ const PaymentPage: React.FC = () => {
         const rawTickets = Array.isArray(ticketRes?.data) ? ticketRes.data : [];
         ticketCodes = rawTickets
           .map(
-            (ticket: any) => ticket?.ticket_code || ticket?.ticketCode || null,
+            (ticket: TicketData) =>
+              ticket?.ticket_code || ticket?.ticketCode || null,
           )
           .filter((code: string | null): code is string => Boolean(code));
       } catch {
@@ -378,10 +483,8 @@ const PaymentPage: React.FC = () => {
           const bookingRes = await BookingService.getById(
             String(currentBookingId),
           );
-          resolvedBookingCode =
-            (bookingRes?.data as any)?.booking_code ||
-            (bookingRes?.data as any)?.bookingCode ||
-            null;
+          const bd = bookingRes?.data as unknown as BookingData;
+          resolvedBookingCode = bd?.booking_code || bd?.bookingCode || null;
         } catch {
           // Ignore booking code fetch errors; we still have fallback ticket code.
         }
@@ -566,7 +669,7 @@ const PaymentPage: React.FC = () => {
 
       const response = await BookingService.create(bookingRequest);
       const createdBookingId = toPositiveInt(
-        (response as any)?.data?.booking_id,
+        (response.data as unknown as BookingData)?.booking_id,
       );
       if (!response.success || !createdBookingId) {
         toast({
@@ -577,17 +680,21 @@ const PaymentPage: React.FC = () => {
         return null;
       }
       return createdBookingId;
-    } catch (error: any) {
-      const fieldErrors = error?.errors
-        ? Object.values(error.errors).filter(Boolean).join(" ")
+    } catch (error: unknown) {
+      const err = error as Record<string, unknown>;
+      const errErrors = err?.errors as Record<string, string> | undefined;
+      const fieldErrors = errErrors
+        ? Object.values(errErrors).filter(Boolean).join(" ")
         : "";
       const detail =
-        fieldErrors || error?.message || "Có lỗi xảy ra khi xử lý đơn hàng.";
+        fieldErrors ||
+        (err?.message as string) ||
+        "Có lỗi xảy ra khi xử lý đơn hàng.";
 
       console.error("Create booking failed", {
-        statusCode: error?.statusCode,
-        message: error?.message,
-        errors: error?.errors,
+        statusCode: err?.statusCode,
+        message: err?.message,
+        errors: err?.errors,
         payload: bookingRequest,
       });
 
@@ -616,10 +723,9 @@ const PaymentPage: React.FC = () => {
 
         try {
           const bookingRes = await BookingService.getById(String(bookingId));
+          const bd = bookingRes?.data as unknown as BookingData;
           const resolvedBookingCode =
-            (bookingRes?.data as any)?.booking_code ||
-            (bookingRes?.data as any)?.bookingCode ||
-            null;
+            bd?.booking_code || bd?.bookingCode || null;
           setCurrentBookingCode(resolvedBookingCode);
         } catch {
           setCurrentBookingCode(null);
@@ -647,11 +753,14 @@ const PaymentPage: React.FC = () => {
         setMomoQrImageUrl(buildQrImageUrl(normalizeQrPayload(qrPayload)));
         if (payUrl) setPaymentUrl(payUrl);
         setShowQRModal(true);
+        pauseHoldTimer();
         setQRTimeLeft(300);
         timeoutHandledRef.current = false;
       } else if (method === "atm") {
         // VNPay: tạo transaction để lấy pay_url, mở popup VNPay và hiển thị màn hình chờ
-        const vnpayResponse = await TransactionService.vnpayPayment({ booking_id: bookingId });
+        const vnpayResponse = await TransactionService.vnpayPayment({
+          booking_id: bookingId,
+        });
         const payUrl = vnpayResponse?.data?.pay_url;
         if (!payUrl) {
           await BookingService.cancel(String(bookingId));
@@ -668,15 +777,17 @@ const PaymentPage: React.FC = () => {
         setIsVnpayMode(true);
         setPaymentUrl(payUrl);
         setShowQRModal(true);
+        pauseHoldTimer();
         setQRTimeLeft(300);
         timeoutHandledRef.current = false;
         // Tự động mở popup VNPay
         const popup = window.open(
           payUrl,
-          'vnpay_popup',
-          'width=600,height=700,scrollbars=yes,resizable=yes,left=' +
-            Math.round((window.screen.width - 600) / 2) + ',top=' +
-            Math.round((window.screen.height - 700) / 2)
+          "vnpay_popup",
+          "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
+            Math.round((window.screen.width - 600) / 2) +
+            ",top=" +
+            Math.round((window.screen.height - 700) / 2),
         );
         if (popup) {
           vnpayPopupRef.current = popup;
@@ -684,12 +795,15 @@ const PaymentPage: React.FC = () => {
           // Popup bị block — thông báo user
           toast({
             title: "Vui lòng cho phép popup",
-            description: "Trình duyệt đã chặn cửa sổ thanh toán. Nhấn 'Mở lại VNPay' để thử lại.",
+            description:
+              "Trình duyệt đã chặn cửa sổ thanh toán. Nhấn 'Mở lại VNPay' để thử lại.",
           });
         }
       } else if (method === "visa") {
         // Visa nội địa qua VNPAY — mở popup và hiển thị màn hình chờ giống VNPay
-        const visaResponse = await TransactionService.visaPayment({ booking_id: bookingId });
+        const visaResponse = await TransactionService.visaPayment({
+          booking_id: bookingId,
+        });
         const payUrl = visaResponse?.data?.pay_url;
         if (!payUrl) {
           await BookingService.cancel(String(bookingId));
@@ -707,22 +821,25 @@ const PaymentPage: React.FC = () => {
         setIsVnpayMode(false);
         setPaymentUrl(payUrl);
         setShowQRModal(true);
+        pauseHoldTimer();
         setQRTimeLeft(300);
         timeoutHandledRef.current = false;
         // Tự động mở popup Visa
         const visaPopup = window.open(
           payUrl,
-          'visa_popup',
-          'width=600,height=700,scrollbars=yes,resizable=yes,left=' +
-            Math.round((window.screen.width - 600) / 2) + ',top=' +
-            Math.round((window.screen.height - 700) / 2)
+          "visa_popup",
+          "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
+            Math.round((window.screen.width - 600) / 2) +
+            ",top=" +
+            Math.round((window.screen.height - 700) / 2),
         );
         if (visaPopup) {
           visaPopupRef.current = visaPopup;
         } else {
           toast({
             title: "Vui lòng cho phép popup",
-            description: "Trình duyệt đã chặn cửa sổ thanh toán. Nhấn 'Mở lại cửa sổ thanh toán' để thử lại.",
+            description:
+              "Trình duyệt đã chặn cửa sổ thanh toán. Nhấn 'Mở lại cửa sổ thanh toán' để thử lại.",
           });
         }
       }
@@ -755,14 +872,17 @@ const PaymentPage: React.FC = () => {
       return;
     }
     try {
-      const res: any = await apiCall(API_ENDPOINTS.APPLY_VOUCHER, {
-        method: "POST",
-        body: JSON.stringify({
-          code: codeToApply,
-          user_id: user?.id ? parseInt(user.id) : undefined,
-          amount: subtotal,
-        }),
-      });
+      const res = await apiCall<VoucherApplyResponse>(
+        API_ENDPOINTS.APPLY_VOUCHER,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            code: codeToApply,
+            user_id: user?.id ? parseInt(user.id) : undefined,
+            amount: subtotal,
+          }),
+        },
+      );
       if (res.success && res.data) {
         setDiscount(res.data.discount || 0);
         setAppliedVoucherId(res.data.voucher_id || null);
@@ -778,8 +898,10 @@ const PaymentPage: React.FC = () => {
           variant: "destructive",
         });
       }
-    } catch (err: any) {
-      const msg = err?.message || "Vui lòng kiểm tra lại mã giảm giá";
+    } catch (err: unknown) {
+      const msg =
+        ((err as Record<string, unknown>)?.message as string) ||
+        "Vui lòng kiểm tra lại mã giảm giá";
       toast({
         title: "Không thể áp dụng",
         description: msg,
@@ -793,7 +915,7 @@ const PaymentPage: React.FC = () => {
     handleApplyPromo(code);
   };
 
-  const isVoucherValid = (voucher: any) => {
+  const isVoucherValid = (voucher: VoucherItem) => {
     // Check if voucher status is ACTIVE
     if (voucher.status && voucher.status !== "ACTIVE") {
       return false;
@@ -813,7 +935,7 @@ const PaymentPage: React.FC = () => {
     return today >= startDate && today <= endDate;
   };
 
-  const isPromoEligible = (promo: any) => {
+  const isPromoEligible = (promo: PromotionItem | VoucherItem) => {
     const minOrder = Number(promo.min_order_value || 0);
     return subtotal >= minOrder;
   };
@@ -861,7 +983,20 @@ const PaymentPage: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-2xl font-bold">Thanh Toán</h1>
+          <h1 className="text-2xl font-bold flex-1">Thanh Toán</h1>
+          {holdTimerActive && !showQRModal && (
+            <div
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-base font-bold",
+                holdTimeLeft <= 60
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-primary",
+              )}
+            >
+              <Clock className="w-4 h-4" />
+              {formatHoldTime(holdTimeLeft)}
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-[1fr,400px] gap-6">
@@ -955,7 +1090,7 @@ const PaymentPage: React.FC = () => {
                 </h2>
                 <div className="space-y-3">
                   {/* User vouchers - showing all, eligible ones first */}
-                  {userVouchers.map((v: any) => {
+                  {userVouchers.map((v) => {
                     // Check if voucher is usable
                     const isUsed = v.status === "USED";
                     const isValid = isVoucherValid(v);
@@ -970,8 +1105,8 @@ const PaymentPage: React.FC = () => {
 
                     const eligible =
                       !isUsed && isValid && meetsMinOrder && !isOutOfStock;
-                    const isApplied = appliedVoucherId 
-                      ? appliedVoucherId === Number(v.id) 
+                    const isApplied = appliedVoucherId
+                      ? appliedVoucherId === Number(v.id)
                       : promoCode && promoCode === (v.code || v.promo_code);
 
                     // Determine status for display
@@ -1053,7 +1188,7 @@ const PaymentPage: React.FC = () => {
 
                   {/* Public active promotions (exclude system & user vouchers) */}
                   {activePromos
-                    .filter((p: any) => {
+                    .filter((p) => {
                       // Check date validity - fix timezone issue
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
@@ -1068,18 +1203,18 @@ const PaymentPage: React.FC = () => {
                       return today >= startDate && today <= endDate;
                     })
                     .filter(
-                      (p: any) =>
+                      (p) =>
                         !userVouchers.some(
-                          (v: any) =>
+                          (v) =>
                             v.promotion_id === p.id || v.promo_code === p.code,
                         ),
                     )
                     .filter(
-                      (p: any) =>
+                      (p) =>
                         !p.is_auto_apply &&
                         !/^(REWARD_20K|REWARD_50K|TIER_|BIRTHDAY)/.test(p.code),
                     )
-                    .map((p: any) => {
+                    .map((p) => {
                       // Check remaining quantity
                       const hasLimit = p.usage_limit && p.usage_limit > 0;
                       const remaining = hasLimit
@@ -1088,7 +1223,8 @@ const PaymentPage: React.FC = () => {
                       const isOutOfStock = hasLimit && remaining <= 0;
 
                       const eligible = isPromoEligible(p) && !isOutOfStock;
-                      const isApplied = promoCode === p.code && !appliedVoucherId;
+                      const isApplied =
+                        promoCode === p.code && !appliedVoucherId;
                       return (
                         <div
                           key={`promo-${p.id}`}
@@ -1249,8 +1385,8 @@ const PaymentPage: React.FC = () => {
                 {isVnpayMode
                   ? "Chờ Xác Nhận Thanh Toán VNPay"
                   : isVisaMode
-                  ? "Chờ Xác Nhận Thanh Toán Visa"
-                  : "Quét Mã QR Để Thanh Toán"}
+                    ? "Chờ Xác Nhận Thanh Toán Visa"
+                    : "Quét Mã QR Để Thanh Toán"}
               </DialogTitle>
               <div
                 className={cn(
@@ -1268,8 +1404,8 @@ const PaymentPage: React.FC = () => {
               {isVnpayMode
                 ? "Cửa sổ thanh toán VNPay đã được mở. Vui lòng hoàn tất thanh toán trong cửa sổ đó."
                 : isVisaMode
-                ? "Cửa sổ thanh toán Visa đã được mở. Vui lòng chọn ngân hàng và hoàn tất thanh toán."
-                : "Mở ứng dụng MoMo và quét mã bên dưới"}
+                  ? "Cửa sổ thanh toán Visa đã được mở. Vui lòng chọn ngân hàng và hoàn tất thanh toán."
+                  : "Mở ứng dụng MoMo và quét mã bên dưới"}
             </DialogDescription>
           </DialogHeader>
 
@@ -1311,37 +1447,57 @@ const PaymentPage: React.FC = () => {
                     )}
                     onClick={() => {
                       if (isVisaMode) {
-                        if (visaPopupRef.current && !visaPopupRef.current.closed) {
+                        if (
+                          visaPopupRef.current &&
+                          !visaPopupRef.current.closed
+                        ) {
                           visaPopupRef.current.focus();
                         } else {
                           const popup = window.open(
                             paymentUrl,
-                            'visa_popup',
-                            'width=600,height=700,scrollbars=yes,resizable=yes,left=' +
-                              Math.round((window.screen.width - 600) / 2) + ',top=' +
-                              Math.round((window.screen.height - 700) / 2)
+                            "visa_popup",
+                            "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
+                              Math.round((window.screen.width - 600) / 2) +
+                              ",top=" +
+                              Math.round((window.screen.height - 700) / 2),
                           );
                           if (popup) visaPopupRef.current = popup;
-                          else window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+                          else
+                            window.open(
+                              paymentUrl,
+                              "_blank",
+                              "noopener,noreferrer",
+                            );
                         }
                       } else {
-                        if (vnpayPopupRef.current && !vnpayPopupRef.current.closed) {
+                        if (
+                          vnpayPopupRef.current &&
+                          !vnpayPopupRef.current.closed
+                        ) {
                           vnpayPopupRef.current.focus();
                         } else {
                           const popup = window.open(
                             paymentUrl,
-                            'vnpay_popup',
-                            'width=600,height=700,scrollbars=yes,resizable=yes,left=' +
-                              Math.round((window.screen.width - 600) / 2) + ',top=' +
-                              Math.round((window.screen.height - 700) / 2)
+                            "vnpay_popup",
+                            "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
+                              Math.round((window.screen.width - 600) / 2) +
+                              ",top=" +
+                              Math.round((window.screen.height - 700) / 2),
                           );
                           if (popup) vnpayPopupRef.current = popup;
-                          else window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+                          else
+                            window.open(
+                              paymentUrl,
+                              "_blank",
+                              "noopener,noreferrer",
+                            );
                         }
                       }
                     }}
                   >
-                    {isVisaMode ? "Mở lại cửa sổ thanh toán Visa" : "Mở lại cửa sổ VNPay"}
+                    {isVisaMode
+                      ? "Mở lại cửa sổ thanh toán Visa"
+                      : "Mở lại cửa sổ VNPay"}
                   </Button>
                 )}
                 <p className="text-xs text-muted-foreground text-center">
@@ -1392,6 +1548,8 @@ const PaymentPage: React.FC = () => {
                 paymentHandledRef.current = false;
                 timeoutHandledRef.current = false;
                 // Giữ nguyên: currentBookingId, currentBookingCode, qrTimeLeft
+                // Resume hold timer so countdown continues
+                resumeHoldTimer();
               }}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -1421,7 +1579,8 @@ const PaymentPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Bạn xác nhận huỷ giao dịch chứ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Nếu đồng ý, giao dịch sẽ bị hủy, ghế của bạn sẽ được giải phóng và bạn sẽ quay lại trang chọn ghế.
+              Nếu đồng ý, giao dịch sẽ bị hủy, ghế của bạn sẽ được giải phóng và
+              bạn sẽ quay lại trang chọn ghế.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1435,7 +1594,6 @@ const PaymentPage: React.FC = () => {
                 await cancelPaymentSession(
                   "Đã huỷ giao dịch",
                   "Bạn đã hủy giao dịch. Ghế đã được giải phóng.",
-                  true,
                 );
               }}
             >

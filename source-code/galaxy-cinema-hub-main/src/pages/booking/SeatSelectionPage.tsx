@@ -8,6 +8,7 @@ import { systemConfig } from "@/data/mockData";
 import { Seat } from "@/types/cinema";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useHoldTimer, formatHoldTime } from "@/hooks/useHoldTimer";
 import {
   validateAge,
   validateCurfew,
@@ -28,6 +29,7 @@ interface SeatFromAPI {
   seat_type: string;
   price_multiplier: number;
   status: string;
+  held_by_me?: boolean;
   calculated_price: number;
 }
 
@@ -85,7 +87,10 @@ const SeatSelectionPage: React.FC = () => {
     clearBooking,
     setSelectedMovie,
     setSelectedShowtime,
+    startHoldTimer,
   } = useBooking();
+
+  const { timeLeft, isActive: holdTimerActive } = useHoldTimer();
 
   // Helper to safely convert string to AgeRating type
   const normalizeAgeRating = (
@@ -110,7 +115,6 @@ const SeatSelectionPage: React.FC = () => {
   };
 
   const [seatMap, setSeatMap] = useState<Seat[][]>([]);
-  const [timeLeft, setTimeLeft] = useState(systemConfig.seatHoldDuration * 60);
   const [ageWarningOpen, setAgeWarningOpen] = useState(false);
   const [curfewWarningOpen, setCurfewWarningOpen] = useState(false);
   const [ageValidation, setAgeValidation] = useState<ValidationError | null>(
@@ -207,22 +211,25 @@ const SeatSelectionPage: React.FC = () => {
         else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple")
           type = "couple";
 
+        // Ghế do chính mình giữ → hiển thị available để có thể chọn lại
+        let seatStatus:
+          | "available"
+          | "held"
+          | "sold"
+          | "maintenance"
+          | "selected" = "available";
+        if (seat.status === "SOLD") seatStatus = "sold";
+        else if (seat.status === "Maintenance") seatStatus = "maintenance";
+        else if (seat.status === "HOLDING" && !seat.held_by_me)
+          seatStatus = "held";
+
         return {
           // Use DB seat id for booking API; render row/number for display.
           id: String(seat.id),
           row: seat.row_code,
           number: seat.number,
           type,
-          status:
-            seat.status === "Available"
-              ? "available"
-              : seat.status === "HOLDING"
-                ? "held"
-                : seat.status === "SOLD"
-                  ? "sold"
-                  : seat.status === "Maintenance"
-                    ? "maintenance"
-                    : "available",
+          status: seatStatus,
           price: Number(seat.calculated_price) || 0,
         };
       });
@@ -301,6 +308,37 @@ const SeatSelectionPage: React.FC = () => {
     setSelectedShowtime,
   ]);
 
+  // refreshSeatMap: gọi lại seat-map API để cập nhật trạng thái ghế (polling)
+  const refreshSeatMap = async () => {
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
+    if (!showtimeId) return;
+    try {
+      const response = await apiCall<{
+        success: boolean;
+        data: SeatMapResponse;
+      }>(API_ENDPOINTS.SHOWTIME_SEAT_MAP(parseInt(showtimeId)));
+      const seatMapData =
+        response.data || (response as unknown as SeatMapResponse);
+      const convertedSeatMap = convertSeatMap(seatMapData);
+      setSeatMap(convertedSeatMap);
+    } catch {
+      // Polling thất bại thì bỏ qua
+    }
+  };
+
+  // Polling cập nhật ghế mỗi 5 giây để hiển thị realtime
+  useEffect(() => {
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
+    if (!showtimeId) return;
+
+    const pollInterval = setInterval(() => {
+      refreshSeatMap();
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShowtime, searchParams]);
+
   // Track whether pending booking has been synced to avoid re-syncing on every render
   const hasSyncedPendingBooking = useRef(false);
   // Track seat IDs that belong to the user's own pending booking
@@ -377,54 +415,34 @@ const SeatSelectionPage: React.FC = () => {
     };
   }, [selectedShowtime, searchParams, user, addSeat, removeSeat]);
 
-  // Track if we've synced the async config load
-  const hasSyncedConfig = useRef(false);
-
-  // Countdown timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      // If systemConfig was updated asynchronously by SettingsLoader (e.g. on F5 reload)
-      if (!hasSyncedConfig.current && systemConfig.seatHoldDuration !== 5) {
-        setTimeLeft(systemConfig.seatHoldDuration * 60);
-        hasSyncedConfig.current = true;
-      }
-
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          toast({
-            title: "Hết thời gian giữ ghế",
-            description: "Vui lòng chọn lại ghế để tiếp tục",
-            variant: "destructive",
-          });
-          clearBooking();
-          navigate("/");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [clearBooking, navigate, toast]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const handleSeatClick = (seat: Seat | Seat[]) => {
+  const handleSeatClick = async (seat: Seat | Seat[]) => {
     const seats = Array.isArray(seat) ? seat : [seat];
+    const showtimeId = selectedShowtime?.id || searchParams.get("showtime");
 
     // Check if any of the seats are already selected (e.g., synced from pending booking)
     const anySelected = seats.some((s) =>
       selectedSeats.find((ss) => ss.id === s.id),
     );
 
-    // If selected → allow deselect
+    // If selected → allow deselect and release hold
     if (anySelected) {
       seats.forEach((s) => removeSeat(s.id));
+      // Release seats on server
+      if (showtimeId) {
+        try {
+          await apiCall(
+            API_ENDPOINTS.SHOWTIME_RELEASE_SEATS(parseInt(showtimeId)),
+            {
+              method: "POST",
+              body: JSON.stringify({
+                seat_ids: seats.map((s) => parseInt(s.id)),
+              }),
+            },
+          );
+        } catch {
+          // Ignore release errors
+        }
+      }
       return;
     }
 
@@ -435,8 +453,31 @@ const SeatSelectionPage: React.FC = () => {
     // Block held seats (from other users)
     if (seats.some((s) => s.status === "held")) return;
 
+    // Hold seats on server first
+    if (showtimeId) {
+      try {
+        await apiCall(API_ENDPOINTS.SHOWTIME_HOLD_SEATS(parseInt(showtimeId)), {
+          method: "POST",
+          body: JSON.stringify({
+            seat_ids: seats.map((s) => parseInt(s.id)),
+          }),
+        });
+      } catch {
+        toast({
+          title: "Ghế đã bị người khác chọn",
+          description: "Vui lòng chọn ghế khác",
+          variant: "destructive",
+        });
+        // Refresh seat map
+        refreshSeatMap();
+        return;
+      }
+    }
+
     // Add available seat
     seats.forEach((s) => addSeat({ ...s, status: "selected" }));
+    // Start the hold timer when first seat is selected
+    startHoldTimer();
   };
 
   const getSeatClass = (seat: Seat | Seat[]) => {
@@ -601,17 +642,19 @@ const SeatSelectionPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-mono text-base md:text-lg font-bold",
-              timeLeft <= 60
-                ? "bg-destructive/10 text-destructive"
-                : "bg-primary/10 text-primary",
-            )}
-          >
-            <Clock className="w-4 h-4 md:w-5 md:h-5" />
-            {formatTime(timeLeft)}
-          </div>
+          {holdTimerActive && (
+            <div
+              className={cn(
+                "flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-mono text-base md:text-lg font-bold",
+                timeLeft <= 60
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-primary",
+              )}
+            >
+              <Clock className="w-4 h-4 md:w-5 md:h-5" />
+              {formatHoldTime(timeLeft)}
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-[1fr,300px] gap-4 md:gap-6">

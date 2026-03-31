@@ -7,6 +7,7 @@ import {
   Loader2,
   AlertCircle,
   ArrowLeft,
+  Clock,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -16,11 +17,14 @@ import { ConcessionItem } from "@/types/cinema";
 import { ConcessionService } from "@/services/concession.service";
 import { Concession } from "@/types/api";
 import { useToast } from "@/hooks/use-toast";
+import { useHoldTimer, formatHoldTime } from "@/hooks/useHoldTimer";
+import { cn } from "@/lib/utils";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 
 const ConcessionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { timeLeft, isActive: holdTimerActive } = useHoldTimer();
   const {
     selectedMovie,
     selectedSeats,
@@ -102,10 +106,9 @@ const ConcessionsPage: React.FC = () => {
             nameVi: c.name, // Use same name if no Vietnamese name
             price: Number(c.price) || 0,
             quantity: selectedMap.get(String(c.id)) || 0,
-            image:
-              c.image_url
-                ? getImageUrl(c.image_url)
-                : "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
+            image: c.image_url
+              ? getImageUrl(c.image_url)
+              : "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
           }));
           setItems(mappedItems);
         } else {
@@ -193,7 +196,20 @@ const ConcessionsPage: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-2xl font-bold">Combo & Bắp Nước</h1>
+          <h1 className="text-2xl font-bold flex-1">Combo & Bắp Nước</h1>
+          {holdTimerActive && (
+            <div
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-base font-bold",
+                timeLeft <= 60
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-primary",
+              )}
+            >
+              <Clock className="w-4 h-4" />
+              {formatHoldTime(timeLeft)}
+            </div>
+          )}
         </div>
 
         {/* Error Alert */}

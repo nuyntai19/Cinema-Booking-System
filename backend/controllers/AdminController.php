@@ -285,6 +285,15 @@ class AdminController extends BaseController {
         AuthMiddleware::requireManager();
 
         try {
+            // Tự động hết hạn các booking Pending quá 10 phút trước khi hiển thị
+            try {
+                require_once __DIR__ . '/../models/Booking.php';
+                $bookingModel = new Booking($this->db);
+                $bookingModel->expireStaleBookings(10);
+            } catch (Exception $ex) {
+                error_log('Auto-expire stale bookings error: ' . $ex->getMessage());
+            }
+
             $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 10;
             $offset = ($page - 1) * $limit;
@@ -318,8 +327,8 @@ class AdminController extends BaseController {
 
             $statusExpr = "CASE
                 WHEN t.status = 'Success' THEN 'success'
-                WHEN t.status = 'Pending' THEN 'pending'
-                WHEN t.status = 'Failed' THEN 'failed'
+                WHEN t.status = 'Pending' AND b.status != 'Expired' THEN 'pending'
+                WHEN t.status = 'Failed' OR b.status = 'Expired' THEN 'failed'
                 WHEN b.status = 'Cancelled' THEN 'refunded'
                 ELSE 'pending'
             END";
@@ -486,8 +495,8 @@ class AdminController extends BaseController {
 
             $statusExpr = "CASE
                 WHEN t.status = 'Success' THEN 'success'
-                WHEN t.status = 'Pending' THEN 'pending'
-                WHEN t.status = 'Failed' THEN 'failed'
+                WHEN t.status = 'Pending' AND b.status != 'Expired' THEN 'pending'
+                WHEN t.status = 'Failed' OR b.status = 'Expired' THEN 'failed'
                 WHEN b.status = 'Cancelled' THEN 'refunded'
                 ELSE 'pending'
             END";

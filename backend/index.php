@@ -207,6 +207,8 @@ $router->put('/api/showtimes/:id', 'ShowtimeController@update'); // Manager
 $router->delete('/api/showtimes/:id', 'ShowtimeController@delete'); // Manager
 $router->get('/api/showtimes/:id/seats', 'ShowtimeController@getAvailableSeats');
 $router->get('/api/showtimes/:id/seat-map', 'ShowtimeController@getSeatMap');
+$router->post('/api/showtimes/:id/hold-seats', 'ShowtimeController@holdSeats');
+$router->post('/api/showtimes/:id/release-seats', 'ShowtimeController@releaseSeats');
 
 // ============================================
 // BOOKING ROUTES

@@ -131,6 +131,25 @@ class Concession
     }
 
     /**
+     * Đếm số đơn đặt vé đã dùng concession này
+     * @param int $id
+     * @return int
+     */
+    public function countFutureBookings($id)
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(DISTINCT bc.booking_id) AS cnt
+             FROM booking_concessions bc
+             INNER JOIN bookings b ON b.id = bc.booking_id
+             WHERE bc.concession_id = :concession_id
+             AND b.status IN ('Pending', 'Paid')"
+        );
+        $stmt->execute([':concession_id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)($row['cnt'] ?? 0);
+    }
+
+    /**
      * Lấy danh sách concessions đang còn bán
      * @return array
      */

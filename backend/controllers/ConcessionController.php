@@ -230,6 +230,16 @@ class ConcessionController
                 Response::notFound('Không tìm thấy sản phẩm');
             }
 
+            // Kiểm tra có đơn đặt vé đang dùng sản phẩm này không
+            $futureCount = $this->concessionModel->countFutureBookings($id);
+            if ($futureCount > 0) {
+                Response::error(
+                    "Không thể xóa sản phẩm này vì đang có $futureCount đơn đặt vé sử dụng.",
+                    400
+                );
+                return;
+            }
+
             $result = $this->concessionModel->delete($id);
 
             if ($result) {

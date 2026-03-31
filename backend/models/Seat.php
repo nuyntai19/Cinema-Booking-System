@@ -146,8 +146,7 @@ class Seat
                 return 'SOLD';
             }
 
-            // Check if seat is being held (pending booking not expired)
-            $holdDuration = Config::$seat_hold_duration; // 600 seconds = 10 minutes
+            // Check if seat is being held via booking (pending booking with active hold)
             $sql = "SELECT t.status
                     FROM tickets t
                     JOIN bookings b ON t.booking_id = b.id
@@ -155,14 +154,28 @@ class Seat
                     AND b.showtime_id = :showtime_id
                     AND b.status = 'Pending'
                     AND t.status = 'HOLDING'
-                    AND TIMESTAMPDIFF(SECOND, b.created_at, NOW()) < :hold_duration
+                    AND (t.hold_expires_at IS NULL OR t.hold_expires_at > NOW())
                     ORDER BY t.created_at DESC
                     LIMIT 1";
 
             $stmt = $this->db->prepare($sql);
             $stmt->bindParam(':seat_id', $seatId, PDO::PARAM_INT);
             $stmt->bindParam(':showtime_id', $showtimeId, PDO::PARAM_INT);
-            $stmt->bindParam(':hold_duration', $holdDuration, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return 'HOLDING';
+            }
+
+            // Check if seat is being held via click-hold (seat_holds table)
+            $sql = "SELECT user_id FROM seat_holds
+                    WHERE showtime_id = :showtime_id AND seat_id = :seat_id AND expires_at > NOW()
+                    LIMIT 1";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':seat_id', $seatId, PDO::PARAM_INT);
+            $stmt->bindParam(':showtime_id', $showtimeId, PDO::PARAM_INT);
             $stmt->execute();
 
             $result = $stmt->fetch(PDO::FETCH_ASSOC);

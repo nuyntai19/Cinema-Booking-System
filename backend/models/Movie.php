@@ -305,7 +305,22 @@ class Movie {
             return false;
         }
     }
-    
+
+    /**
+     * Đếm số suất chiếu từ hôm nay trở đi của phim
+     * @param int $id
+     * @return int
+     */
+    public function countFutureShowtimes($id) {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) AS cnt FROM showtimes
+             WHERE movie_id = :movie_id AND DATE(start_time) >= CURDATE()"
+        );
+        $stmt->execute([':movie_id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)($row['cnt'] ?? 0);
+    }
+
     /**
      * Thêm genre cho phim
      */
