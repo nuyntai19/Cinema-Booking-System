@@ -424,9 +424,9 @@ const AdminConcessions: React.FC = () => {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, string | number>[];
 
-      const mappedData = jsonData.map((row: any) => ({
+      const mappedData = jsonData.map((row: Record<string, string | number>) => ({
         name: row["Tên sản phẩm"] || "",
         price: row["Giá (VNĐ)"] || 0,
         category:
@@ -463,10 +463,10 @@ const AdminConcessions: React.FC = () => {
         }
         await fetchConcessions();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Lỗi import",
-        description: error.message || "Không thể đọc file excel",
+        description: error instanceof Error ? error.message : "Không thể đọc file excel",
         variant: "destructive",
       });
     } finally {
