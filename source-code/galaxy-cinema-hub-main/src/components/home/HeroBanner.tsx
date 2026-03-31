@@ -1,8 +1,8 @@
-import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-import { apiCall, API_ENDPOINTS, getImageUrl } from '@/lib/api';
+import { apiCall, API_ENDPOINTS, getImageUrl } from "@/lib/api";
 
 interface HeroBannerProps {
   slides?: {
@@ -12,34 +12,59 @@ interface HeroBannerProps {
   }[];
 }
 
+function extractYouTubeId(url: string): string | null {
+  const match = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/,
+  );
+  return match ? match[1] : null;
+}
+
 const defaultSlides = [
   {
-    image_url: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1920&h=600&fit=crop',
-    title: 'Experience Cinema',
+    image_url:
+      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1920&h=600&fit=crop",
+    title: "Experience Cinema",
   },
   {
-    image_url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1920&h=600&fit=crop',
-    title: 'Premium Movies',
+    image_url:
+      "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1920&h=600&fit=crop",
+    title: "Premium Movies",
   },
   {
-    image_url: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1920&h=600&fit=crop',
-    title: 'IMAX Experience',
+    image_url:
+      "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1920&h=600&fit=crop",
+    title: "IMAX Experience",
   },
 ];
 
 const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
   const [currentSlide, setCurrentSlide] = React.useState(0);
-  const [activeSlides, setActiveSlides] = React.useState(initialSlides || defaultSlides);
+  const [activeSlides, setActiveSlides] = React.useState(
+    initialSlides || defaultSlides,
+  );
+  const [trailerUrl, setTrailerUrl] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (initialSlides) return; // If manually passed
     const fetchBanners = async () => {
       try {
-        const res = await apiCall<{ success: boolean; data: { posters: any[] } }>(API_ENDPOINTS.POSTERS);
+        const res = await apiCall<{
+          success: boolean;
+          data: {
+            posters: {
+              image_url: string;
+              title?: string | null;
+              target_url?: string | null;
+              is_active?: boolean;
+            }[];
+          };
+        }>(API_ENDPOINTS.POSTERS);
         if (res.success && res.data?.posters) {
           // Lọc ra những banner đang mở (is_active = true)
-          const activePosters = res.data.posters.filter((p: any) => p.is_active === true);
-          
+          const activePosters = res.data.posters.filter(
+            (p) => p.is_active === true,
+          );
+
           if (activePosters.length > 0) {
             setActiveSlides(activePosters);
           } else {
@@ -63,8 +88,12 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
   }, [activeSlides.length]);
 
   const goToSlide = (index: number) => setCurrentSlide(index);
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % activeSlides.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + activeSlides.length) % activeSlides.length);
+  const nextSlide = () =>
+    setCurrentSlide((prev) => (prev + 1) % activeSlides.length);
+  const prevSlide = () =>
+    setCurrentSlide(
+      (prev) => (prev - 1 + activeSlides.length) % activeSlides.length,
+    );
 
   return (
     <div className="relative w-full aspect-[2.4/1] sm:aspect-[2.2/1] lg:aspect-[2/1] max-h-[750px] overflow-hidden bg-secondary">
@@ -78,7 +107,16 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
             key={index}
             className="min-w-full h-full relative cursor-pointer group"
             onClick={() => {
-               if (slide.target_url) window.location.href = slide.target_url;
+              if (slide.target_url) {
+                const ytId = extractYouTubeId(slide.target_url);
+                if (ytId) {
+                  setTrailerUrl(
+                    `https://www.youtube.com/embed/${ytId}?autoplay=1`,
+                  );
+                } else {
+                  window.open(slide.target_url, "_blank", "noopener");
+                }
+              }
             }}
           >
             <img
@@ -89,16 +127,17 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
             {/* Gradient Overlay - keeps center clear */}
             <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60 group-hover:opacity-80 transition-opacity" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-            
+
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 text-center text-white opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300">
-               {slide.target_url && (
-                  <span className="bg-primary/90 hidden sm:inline-block px-4 py-2 rounded-full text-sm font-semibold shadow-lg">Khám phá ngay</span>
-               )}
+              {slide.target_url && (
+                <span className="bg-primary/90 hidden sm:inline-block px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
+                  Khám phá ngay
+                </span>
+              )}
             </div>
           </div>
         ))}
       </div>
-
       {/* Navigation Arrows */}
       <Button
         variant="ghost"
@@ -116,7 +155,6 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
       >
         <ChevronRight className="w-6 h-6" />
       </Button>
-
       {/* Dots */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
         {activeSlides.map((_, index) => (
@@ -125,12 +163,40 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ slides: initialSlides }) => {
             onClick={() => goToSlide(index)}
             className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
               index === currentSlide
-                ? 'bg-primary w-8'
-                : 'bg-white/50 hover:bg-white/80'
+                ? "bg-primary w-8"
+                : "bg-white/50 hover:bg-white/80"
             }`}
           />
         ))}
       </div>
+      {/* Trailer Modal */}
+      {trailerUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setTrailerUrl(null)}
+        >
+          <div
+            className="relative w-[90vw] max-w-4xl aspect-video"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTrailerUrl(null)}
+              className="absolute -top-10 right-0 text-white hover:text-white hover:bg-white/20"
+            >
+              <X className="w-6 h-6" />
+            </Button>
+            <iframe
+              src={trailerUrl}
+              className="w-full h-full rounded-lg"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              title="Trailer"
+            />
+          </div>
+        </div>
+      )}{" "}
     </div>
   );
 };

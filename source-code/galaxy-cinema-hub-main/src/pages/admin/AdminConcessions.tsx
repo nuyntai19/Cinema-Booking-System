@@ -134,7 +134,13 @@ const AdminConcessions: React.FC = () => {
       return;
     }
 
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    const allowedTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Lỗi",
@@ -224,7 +230,9 @@ const AdminConcessions: React.FC = () => {
       toast({
         title: "Lỗi upload URL",
         description:
-          error instanceof Error ? error.message : "Không thể upload ảnh từ URL",
+          error instanceof Error
+            ? error.message
+            : "Không thể upload ảnh từ URL",
         variant: "destructive",
       });
       return null;
@@ -233,7 +241,8 @@ const AdminConcessions: React.FC = () => {
     }
   };
 
-  const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value.trim());
+  const isHttpUrl = (value: string): boolean =>
+    /^https?:\/\//i.test(value.trim());
 
   // Statistics
   const totalItems = concessions.length;
@@ -306,9 +315,7 @@ const AdminConcessions: React.FC = () => {
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Không thể cập nhật sản phẩm";
+        error instanceof Error ? error.message : "Không thể cập nhật sản phẩm";
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -357,7 +364,10 @@ const AdminConcessions: React.FC = () => {
           });
         }
       } else if (shouldUploadUrl && createdConcessionId > 0) {
-        await uploadConcessionImageFromUrl(formData.image_url, createdConcessionId);
+        await uploadConcessionImageFromUrl(
+          formData.image_url,
+          createdConcessionId,
+        );
       }
 
       toast({
@@ -370,9 +380,7 @@ const AdminConcessions: React.FC = () => {
       fetchConcessions(); // Reload data
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Không thể tạo sản phẩm";
+        error instanceof Error ? error.message : "Không thể tạo sản phẩm";
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -422,7 +430,9 @@ const AdminConcessions: React.FC = () => {
     );
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -436,22 +446,29 @@ const AdminConcessions: React.FC = () => {
       const mappedData = jsonData.map((row: any) => ({
         name: row["Tên sản phẩm"] || "",
         price: row["Giá (VNĐ)"] || 0,
-        category: row["Danh mục (Combo/Drink/Snack)"] === "Combo" ? "combo" : row["Danh mục (Combo/Drink/Snack)"] === "Drink" ? "drink" : "snack",
+        category:
+          row["Danh mục (Combo/Drink/Snack)"] === "Combo"
+            ? "combo"
+            : row["Danh mục (Combo/Drink/Snack)"] === "Drink"
+              ? "drink"
+              : "snack",
         image_url: row["Link Ảnh sản phẩm (URL)"] || "",
       }));
 
-      const response = await apiCall<{success: boolean, data: {message: string, success_count: number, errors: string[]}}>(
-        `${API_ENDPOINTS.CONCESSIONS}/import`,
-        {
-          method: "POST",
-          body: JSON.stringify(mappedData),
-        }
-      );
+      const response = await apiCall<{
+        success: boolean;
+        data: { message: string; success_count: number; errors: string[] };
+      }>(`${API_ENDPOINTS.CONCESSIONS}/import`, {
+        method: "POST",
+        body: JSON.stringify(mappedData),
+      });
 
       if (response.success) {
         toast({
           title: "Import thành công",
-          description: response.data?.message || `Đã import thành công ${response.data?.success_count || 0} bắp nước`,
+          description:
+            response.data?.message ||
+            `Đã import thành công ${response.data?.success_count || 0} bắp nước`,
         });
         if (response.data?.errors && response.data.errors.length > 0) {
           console.warn("Import warning:", response.data.errors);
@@ -501,7 +518,11 @@ const AdminConcessions: React.FC = () => {
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
           >
-            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            {importing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileUp className="w-4 h-4" />
+            )}
             Nhập Excel
           </Button>
 
@@ -611,9 +632,11 @@ const AdminConcessions: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xl font-bold text-primary">
-                    {item.price.toLocaleString("vi-VN")}đ
+                    {Number(item.price).toLocaleString("vi-VN")}đ
                   </span>
-                  <Badge variant={item.is_available ? "default" : "destructive"}>
+                  <Badge
+                    variant={item.is_available ? "default" : "destructive"}
+                  >
                     {item.is_available ? "Còn hàng" : "Hết hàng"}
                   </Badge>
                 </div>
@@ -728,7 +751,9 @@ const AdminConcessions: React.FC = () => {
               {formData.image_url && !imageFile && (
                 <div className="relative w-fit">
                   <img
-                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
+                    src={
+                      getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE
+                    }
                     alt="Preview"
                     className="w-24 h-36 object-cover rounded border"
                     onError={(e) => {
@@ -809,7 +834,9 @@ const AdminConcessions: React.FC = () => {
               Hủy
             </Button>
             <Button onClick={handleUpdateItem} disabled={uploadingImage}>
-              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {uploadingImage && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Cập Nhật
             </Button>
           </DialogFooter>
@@ -889,7 +916,9 @@ const AdminConcessions: React.FC = () => {
               {formData.image_url && !imageFile && (
                 <div className="relative w-fit">
                   <img
-                    src={getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE}
+                    src={
+                      getImageUrl(formData.image_url) || IMAGE_FALLBACK_TEMPLATE
+                    }
                     alt="Preview"
                     className="w-24 h-36 object-cover rounded border"
                     onError={(e) => {
@@ -970,7 +999,9 @@ const AdminConcessions: React.FC = () => {
               Hủy
             </Button>
             <Button onClick={handleCreateItem} disabled={uploadingImage}>
-              {uploadingImage && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {uploadingImage && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Tạo Sản Phẩm
             </Button>
           </DialogFooter>

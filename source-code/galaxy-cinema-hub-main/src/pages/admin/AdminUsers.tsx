@@ -89,7 +89,7 @@ const AdminUsers: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  
+
   // API State
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,8 +99,25 @@ const AdminUsers: React.FC = () => {
     total: 0,
     total_pages: 0,
   });
+  const [tierCounts, setTierCounts] = useState<Record<string, number>>({
+    Bronze: 0,
+    Silver: 0,
+    Gold: 0,
+    Platinum: 0,
+  });
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
+    active: 0,
+    banned: 0,
+  });
   const [roles, setRoles] = useState<Array<{ id: number; name: string }>>([]);
-  const [cinemas, setCinemas] = useState<Array<{ id: number; name: string; manager_id?: number | null; manager_name?: string | null }>>([]);
+  const [cinemas, setCinemas] = useState<
+    Array<{
+      id: number;
+      name: string;
+      manager_id?: number | null;
+      manager_name?: string | null;
+    }>
+  >([]);
 
   // Fetch users from API
   const fetchUsers = React.useCallback(async () => {
@@ -129,15 +146,12 @@ const AdminUsers: React.FC = () => {
 
       const apiUrl = `${API_ENDPOINTS.USERS}?${queryParams.toString()}`;
 
-      const response = await fetch(
-        apiUrl,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       const data = await response.json();
 
@@ -145,6 +159,12 @@ const AdminUsers: React.FC = () => {
         setUsers(data.data.users || []);
         if (data.data.pagination) {
           setPagination(data.data.pagination);
+        }
+        if (data.data.tier_counts) {
+          setTierCounts(data.data.tier_counts);
+        }
+        if (data.data.status_counts) {
+          setStatusCounts(data.data.status_counts);
         }
       } else {
         throw new Error(data.message || "Failed to fetch users");
@@ -159,14 +179,21 @@ const AdminUsers: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.page, pagination.limit, filterRole, filterStatus, searchQuery, toast]);
+  }, [
+    pagination.page,
+    pagination.limit,
+    filterRole,
+    filterStatus,
+    searchQuery,
+    toast,
+  ]);
 
   // Fetch roles for dropdown
   const fetchRoles = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
-      const rolesUrl = `${API_ENDPOINTS.USERS.replace('/users', '/roles')}`;
-      
+      const rolesUrl = `${API_ENDPOINTS.USERS.replace("/users", "/roles")}`;
+
       const response = await fetch(rolesUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -175,7 +202,7 @@ const AdminUsers: React.FC = () => {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setRoles(data.data.roles || []);
       }
@@ -227,11 +254,10 @@ const AdminUsers: React.FC = () => {
     cinema_id: "",
   });
 
-  // Statistics
+  // Statistics (from global API counts, not page-local)
   const totalUsers = pagination.total;
-  const activeUsers = users.filter((u) => u.status === "Active").length;
-  const bannedUsers = users.filter((u) => u.status === "Banned" || u.status === "Deleted").length;
-  const goldMembers = users.filter((u) => u.rank_name === "Gold").length;
+  const activeUsers = statusCounts.active || 0;
+  const bannedUsers = statusCounts.banned || 0;
 
   // Edit user handler
   const handleEditUser = (user: User) => {
@@ -254,44 +280,54 @@ const AdminUsers: React.FC = () => {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_ENDPOINTS.USERS}/${selectedUser.id}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          role_id: formData.role_id,
-          ...(formData.cinema_id ? { cinema_id: formData.cinema_id } : {}),
-          ...(formData.password ? { password: formData.password } : {})
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        console.log('✅ User role updated successfully');
-        
-        // Update profile
-        console.log('📝 Updating user profile...', { full_name: formData.full_name, phone: formData.phone, dob: formData.dob });
-        const profileResponse = await fetch(`${API_ENDPOINTS.USERS}/${selectedUser.id}/profile`, {
+      const response = await fetch(
+        `${API_ENDPOINTS.USERS}/${selectedUser.id}`,
+        {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            full_name: formData.full_name,
-            phone: formData.phone,
-            dob: formData.dob || null,
+            role_id: formData.role_id,
+            ...(formData.cinema_id ? { cinema_id: formData.cinema_id } : {}),
+            ...(formData.password ? { password: formData.password } : {}),
           }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log("✅ User role updated successfully");
+
+        // Update profile
+        console.log("📝 Updating user profile...", {
+          full_name: formData.full_name,
+          phone: formData.phone,
+          dob: formData.dob,
         });
+        const profileResponse = await fetch(
+          `${API_ENDPOINTS.USERS}/${selectedUser.id}/profile`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              full_name: formData.full_name,
+              phone: formData.phone,
+              dob: formData.dob || null,
+            }),
+          },
+        );
 
         const profileData = await profileResponse.json();
-        console.log('📦 Profile update response:', profileData);
+        console.log("📦 Profile update response:", profileData);
 
         if (!profileData.success) {
-          console.warn('⚠️ Profile update failed:', profileData.message);
+          console.warn("⚠️ Profile update failed:", profileData.message);
         }
 
         toast({
@@ -308,7 +344,10 @@ const AdminUsers: React.FC = () => {
     } catch (error) {
       toast({
         title: "Lỗi cập nhật",
-        description: error instanceof Error ? error.message : "Không thể cập nhật người dùng",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Không thể cập nhật người dùng",
         variant: "destructive",
       });
     }
@@ -316,13 +355,22 @@ const AdminUsers: React.FC = () => {
 
   // Create user via API
   const handleCreateUser = async () => {
-    const selectedRoleName = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase();
-    const isStaffOrManager = selectedRoleName === 'staff' || selectedRoleName === 'manager';
+    const selectedRoleName = roles
+      .find((r) => r.id === formData.role_id)
+      ?.name?.toLowerCase();
+    const isStaffOrManager =
+      selectedRoleName === "staff" || selectedRoleName === "manager";
 
-    if (!formData.email || !formData.full_name || !formData.password || (isStaffOrManager && !formData.cinema_id)) {
+    if (
+      !formData.email ||
+      !formData.full_name ||
+      !formData.password ||
+      (isStaffOrManager && !formData.cinema_id)
+    ) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng điền đầy đủ thông tin bắt buộc, bao gồm cả rạp chiếu nếu là nhân viên.",
+        description:
+          "Vui lòng điền đầy đủ thông tin bắt buộc, bao gồm cả rạp chiếu nếu là nhân viên.",
         variant: "destructive",
       });
       return;
@@ -364,7 +412,10 @@ const AdminUsers: React.FC = () => {
     } catch (error) {
       toast({
         title: "Lỗi tạo người dùng",
-        description: error instanceof Error ? error.message : "Không thể tạo người dùng mới",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Không thể tạo người dùng mới",
         variant: "destructive",
       });
     }
@@ -399,7 +450,10 @@ const AdminUsers: React.FC = () => {
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: error instanceof Error ? error.message : "Không thể thay đổi trạng thái",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Không thể thay đổi trạng thái",
         variant: "destructive",
       });
     }
@@ -435,7 +489,8 @@ const AdminUsers: React.FC = () => {
     } catch (error) {
       toast({
         title: "Lỗi xóa",
-        description: error instanceof Error ? error.message : "Không thể xóa người dùng",
+        description:
+          error instanceof Error ? error.message : "Không thể xóa người dùng",
         variant: "destructive",
       });
     }
@@ -465,18 +520,19 @@ const AdminUsers: React.FC = () => {
     if (!rank_name) return <span className="text-muted-foreground">-</span>;
 
     const configs: Record<string, { color: string }> = {
+      Platinum: { color: "bg-gradient-to-r from-purple-500 to-indigo-500" },
       Gold: { color: "bg-yellow-500" },
       Silver: { color: "bg-gray-400" },
       Bronze: { color: "bg-orange-600" },
     };
     const config = configs[rank_name];
-    
+
     // Handle case when rank_name is not in configs
     if (!config) {
       console.warn(`⚠️ Unknown rank_name: ${rank_name}`);
       return <span className="text-muted-foreground">{rank_name}</span>;
     }
-    
+
     return (
       <Badge className={`${config.color} text-white flex items-center gap-1`}>
         <Trophy className="w-3 h-3" />
@@ -510,8 +566,14 @@ const AdminUsers: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => fetchUsers()} disabled={isLoading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button
+            variant="outline"
+            onClick={() => fetchUsers()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+            />
             Làm mới
           </Button>
           <Button onClick={() => setIsCreateDialogOpen(true)}>
@@ -562,12 +624,38 @@ const AdminUsers: React.FC = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gold Members</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Hạng Thành Viên
+            </CardTitle>
             <Trophy className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{goldMembers}</div>
-            <p className="text-xs text-muted-foreground">VIP customers</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span>
+                <span className="text-sm">
+                  Bronze: <strong>{tierCounts.Bronze}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                <span className="text-sm">
+                  Silver: <strong>{tierCounts.Silver}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                <span className="text-sm">
+                  Gold: <strong>{tierCounts.Gold}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"></span>
+                <span className="text-sm">
+                  Platinum: <strong>{tierCounts.Platinum}</strong>
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -619,9 +707,7 @@ const AdminUsers: React.FC = () => {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            Danh Sách Người Dùng ({pagination.total})
-          </CardTitle>
+          <CardTitle>Danh Sách Người Dùng ({pagination.total})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -692,7 +778,11 @@ const AdminUsers: React.FC = () => {
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {getRoleBadge(user.role_name)}
-                        {user.cinema_id && <span className="text-xs text-muted-foreground">Rạp #{user.cinema_id}</span>}
+                        {user.cinema_id && (
+                          <span className="text-xs text-muted-foreground">
+                            Rạp #{user.cinema_id}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>{getMembershipBadge(user.rank_name)}</TableCell>
@@ -701,7 +791,9 @@ const AdminUsers: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {user.status === "Active" ? (
-                        <Badge className="bg-green-500 text-white">Active</Badge>
+                        <Badge className="bg-green-500 text-white">
+                          Active
+                        </Badge>
                       ) : (
                         <Badge className="bg-red-500 text-white">Banned</Badge>
                       )}
@@ -719,7 +811,9 @@ const AdminUsers: React.FC = () => {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                          <DropdownMenuItem
+                            onClick={() => handleEditUser(user)}
+                          >
                             <Edit className="w-4 h-4 mr-2" />
                             Chỉnh sửa
                           </DropdownMenuItem>
@@ -819,7 +913,11 @@ const AdminUsers: React.FC = () => {
               <Select
                 value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role_id: parseInt(value), cinema_id: "" })
+                  setFormData({
+                    ...formData,
+                    role_id: parseInt(value),
+                    cinema_id: "",
+                  })
                 }
               >
                 <SelectTrigger id="edit-role">
@@ -837,7 +935,12 @@ const AdminUsers: React.FC = () => {
               </Select>
             </div>
 
-            {(roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'staff' || roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager') && (
+            {(roles
+              .find((r) => r.id === formData.role_id)
+              ?.name?.toLowerCase() === "staff" ||
+              roles
+                .find((r) => r.id === formData.role_id)
+                ?.name?.toLowerCase() === "manager") && (
               <div className="space-y-2">
                 <Label htmlFor="edit-cinema">Chi nhánh Rạp *</Label>
                 <Select
@@ -851,12 +954,19 @@ const AdminUsers: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {cinemas.map((cinema) => {
-                      const isManagerRole = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager';
-                      const isAlreadyAssigned = !!(isManagerRole && cinema.manager_id && cinema.manager_id !== selectedUser?.id);
-                      
+                      const isManagerRole =
+                        roles
+                          .find((r) => r.id === formData.role_id)
+                          ?.name?.toLowerCase() === "manager";
+                      const isAlreadyAssigned = !!(
+                        isManagerRole &&
+                        cinema.manager_id &&
+                        cinema.manager_id !== selectedUser?.id
+                      );
+
                       return (
-                        <SelectItem 
-                          key={cinema.id} 
+                        <SelectItem
+                          key={cinema.id}
                           value={cinema.id.toString()}
                           disabled={isAlreadyAssigned}
                         >
@@ -961,7 +1071,11 @@ const AdminUsers: React.FC = () => {
               <Select
                 value={formData.role_id.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role_id: parseInt(value), cinema_id: "" })
+                  setFormData({
+                    ...formData,
+                    role_id: parseInt(value),
+                    cinema_id: "",
+                  })
                 }
               >
                 <SelectTrigger id="create-role">
@@ -979,7 +1093,12 @@ const AdminUsers: React.FC = () => {
               </Select>
             </div>
 
-            {(roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'staff' || roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager') && (
+            {(roles
+              .find((r) => r.id === formData.role_id)
+              ?.name?.toLowerCase() === "staff" ||
+              roles
+                .find((r) => r.id === formData.role_id)
+                ?.name?.toLowerCase() === "manager") && (
               <div className="space-y-2">
                 <Label htmlFor="create-cinema">Chi nhánh Rạp *</Label>
                 <Select
@@ -993,12 +1112,17 @@ const AdminUsers: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {cinemas.map((cinema) => {
-                      const isManagerRole = roles.find(r => r.id === formData.role_id)?.name?.toLowerCase() === 'manager';
-                      const isAlreadyAssigned = !!(isManagerRole && cinema.manager_id);
-                      
+                      const isManagerRole =
+                        roles
+                          .find((r) => r.id === formData.role_id)
+                          ?.name?.toLowerCase() === "manager";
+                      const isAlreadyAssigned = !!(
+                        isManagerRole && cinema.manager_id
+                      );
+
                       return (
-                        <SelectItem 
-                          key={cinema.id} 
+                        <SelectItem
+                          key={cinema.id}
                           value={cinema.id.toString()}
                           disabled={isAlreadyAssigned}
                         >
@@ -1032,48 +1156,66 @@ const AdminUsers: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 Hiển thị {(pagination.page - 1) * pagination.limit + 1} -{" "}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} trong tổng số{" "}
-                {pagination.total} người dùng
+                {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
+                trong tổng số {pagination.total} người dùng
               </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                  onClick={() =>
+                    setPagination({ ...pagination, page: pagination.page - 1 })
+                  }
                   disabled={pagination.page === 1 || isLoading}
                 >
                   Trang trước
                 </Button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
-                    let pageNumber;
-                    if (pagination.total_pages <= 5) {
-                      pageNumber = i + 1;
-                    } else if (pagination.page <= 3) {
-                      pageNumber = i + 1;
-                    } else if (pagination.page >= pagination.total_pages - 2) {
-                      pageNumber = pagination.total_pages - 4 + i;
-                    } else {
-                      pageNumber = pagination.page - 2 + i;
-                    }
-                    return (
-                      <Button
-                        key={pageNumber}
-                        variant={pagination.page === pageNumber ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setPagination({ ...pagination, page: pageNumber })}
-                        disabled={isLoading}
-                      >
-                        {pageNumber}
-                      </Button>
-                    );
-                  })}
+                  {Array.from(
+                    { length: Math.min(5, pagination.total_pages) },
+                    (_, i) => {
+                      let pageNumber;
+                      if (pagination.total_pages <= 5) {
+                        pageNumber = i + 1;
+                      } else if (pagination.page <= 3) {
+                        pageNumber = i + 1;
+                      } else if (
+                        pagination.page >=
+                        pagination.total_pages - 2
+                      ) {
+                        pageNumber = pagination.total_pages - 4 + i;
+                      } else {
+                        pageNumber = pagination.page - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNumber}
+                          variant={
+                            pagination.page === pageNumber
+                              ? "default"
+                              : "outline"
+                          }
+                          size="sm"
+                          onClick={() =>
+                            setPagination({ ...pagination, page: pageNumber })
+                          }
+                          disabled={isLoading}
+                        >
+                          {pageNumber}
+                        </Button>
+                      );
+                    },
+                  )}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                  disabled={pagination.page === pagination.total_pages || isLoading}
+                  onClick={() =>
+                    setPagination({ ...pagination, page: pagination.page + 1 })
+                  }
+                  disabled={
+                    pagination.page === pagination.total_pages || isLoading
+                  }
                 >
                   Trang sau
                 </Button>

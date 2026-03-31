@@ -234,6 +234,56 @@ class User {
     }
     
     /**
+     * Đếm số lượng user theo hạng thành viên
+     */
+    public function getTierCounts() {
+        try {
+            $query = "SELECT m.rank_name, COUNT(*) as cnt
+                      FROM {$this->table} u
+                      LEFT JOIN user_profiles up ON u.id = up.user_id
+                      LEFT JOIN memberships m ON up.membership_id = m.id
+                      GROUP BY m.rank_name";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $counts = ['Bronze' => 0, 'Silver' => 0, 'Gold' => 0, 'Platinum' => 0];
+            foreach ($rows as $row) {
+                $name = $row['rank_name'];
+                if ($name && isset($counts[$name])) {
+                    $counts[$name] = (int)$row['cnt'];
+                }
+            }
+            return $counts;
+        } catch (PDOException $e) {
+            error_log("User getTierCounts Error: " . $e->getMessage());
+            return ['Bronze' => 0, 'Silver' => 0, 'Gold' => 0, 'Platinum' => 0];
+        }
+    }
+
+    /**
+     * Đếm số user theo status
+     */
+    public function getStatusCounts() {
+        try {
+            $query = "SELECT status, COUNT(*) as cnt FROM {$this->table} GROUP BY status";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $counts = ['active' => 0, 'banned' => 0];
+            foreach ($rows as $row) {
+                $s = strtolower($row['status']);
+                if (isset($counts[$s])) {
+                    $counts[$s] = (int)$row['cnt'];
+                }
+            }
+            return $counts;
+        } catch (PDOException $e) {
+            error_log("User getStatusCounts Error: " . $e->getMessage());
+            return ['active' => 0, 'banned' => 0];
+        }
+    }
+
+    /**
      * Update role của user
      */
     public function updateRole($id, $roleId) {

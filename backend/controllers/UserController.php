@@ -111,6 +111,8 @@ class UserController
             // Get users
             $users = $this->userModel->getAll($filters, $page, $limit);
             $total = $this->userModel->count($filters);
+            $tierCounts = $this->userModel->getTierCounts();
+            $statusCounts = $this->userModel->getStatusCounts();
 
             return Response::success([
                 'users' => $users,
@@ -119,7 +121,9 @@ class UserController
                     'limit' => $limit,
                     'total' => $total,
                     'total_pages' => ceil($total / $limit)
-                ]
+                ],
+                'tier_counts' => $tierCounts,
+                'status_counts' => $statusCounts
             ]);
         } catch (Exception $e) {
             return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
