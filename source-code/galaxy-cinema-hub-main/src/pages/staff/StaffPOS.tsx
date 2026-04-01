@@ -496,9 +496,19 @@ const StaffPOS: React.FC = () => {
       const response = await CustomerService.lookupOrCreate(phone);
       if (response.success && response.data?.customer) {
         setGuestCustomer(response.data.customer);
+
+        const customerDisplayName =
+          response.data.customer.linked_user_full_name ||
+          response.data.customer.name ||
+          "Khách vãng lai";
+
+        const customerTypeText = response.data.customer.has_account
+          ? "Đã liên kết tài khoản"
+          : "Khách vãng lai";
+
         toast({
           title: "Tìm khách thành công",
-          description: `${response.data.customer.name || "Khách vãng lai"} (${response.data.customer.phone})`,
+          description: `${customerDisplayName} (${response.data.customer.phone}) • ${customerTypeText}`,
         });
       } else {
         throw new Error(response.message || "Lỗi tìm kiếm khách");
@@ -635,8 +645,9 @@ const StaffPOS: React.FC = () => {
           <h2 style="margin:0 0 10px;">GALAXY CINEMA - BILL BÁN VÉ</h2>
           <div style="font-size:13px; margin-bottom:12px;">
             <div>Mã booking: <b>${booking.booking_code}</b></div>
-            <div>Khách hàng: <b>${guestCustomer?.name || guestCustomer?.phone || "Khách vãng lai"}</b></div>
+            <div>Khách hàng: <b>${guestCustomer?.linked_user_full_name || guestCustomer?.name || guestCustomer?.phone || "Khách vãng lai"}</b></div>
             <div>SĐT: <b>${guestCustomer?.phone || "-"}</b></div>
+            <div>Loại khách: <b>${guestCustomer?.has_account ? "Đã có tài khoản" : "Khách vãng lai"}</b></div>
             <div>Phim: <b>${booking.movie_title || "-"}</b></div>
             <div>Rạp/Phòng: <b>${booking.cinema_name || "-"} / ${booking.hall_name || "-"}</b></div>
             <div>Suất chiếu: <b>${booking.start_time || "-"}</b></div>
@@ -778,17 +789,7 @@ const StaffPOS: React.FC = () => {
       return;
     }
 
-    const bookingUserId = Number(user?.id || 0);
     const guestCustomerId = Number(guestCustomer.id);
-
-    if (!bookingUserId) {
-      toast({
-        title: "Chưa xác định người mua",
-        description: "Không lấy được tài khoản nhân viên đang đăng nhập.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setSubmitting(true);
 
@@ -803,7 +804,6 @@ const StaffPOS: React.FC = () => {
       }>(API_ENDPOINTS.BOOKINGS, {
         method: "POST",
         body: JSON.stringify({
-          user_id: bookingUserId,
           guest_customer_id: guestCustomerId,
           showtime_id: selectedShowtime.id,
           seat_ids: selectedSeatIds,
@@ -1187,7 +1187,7 @@ const StaffPOS: React.FC = () => {
           <CardContent className="space-y-4">
             {/* Guest Customer Lookup Section */}
             <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
-              <label className="text-sm font-medium">
+              <label className="text-sm font-semibold text-blue-800">
                 Tìm kiếm khách hàng vãng lai
               </label>
               <div className="flex gap-2">
@@ -1242,12 +1242,19 @@ const StaffPOS: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-green-700">
-                        {guestCustomer.name || "Khách vãng lai"}
+                        {guestCustomer.linked_user_full_name ||
+                          guestCustomer.name ||
+                          "Khách vãng lai"}
                       </p>
                       <p className="text-xs text-gray-600">
                         {guestCustomer.phone} • {guestCustomer.total_bookings}{" "}
                         lần mua vé
                       </p>
+                      {guestCustomer.has_account && (
+                        <p className="text-xs text-emerald-700 mt-1">
+                          Đã liên kết tài khoản: {guestCustomer.linked_user_email || `User #${guestCustomer.linked_user_id}`}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">
                         Mã: {guestCustomer.guest_customer_code}
                       </p>
@@ -1256,7 +1263,9 @@ const StaffPOS: React.FC = () => {
                       variant="outline"
                       className="bg-green-100 text-green-700"
                     >
-                      Đã chọn
+                      {guestCustomer.has_account
+                        ? "Đã chọn (Có tài khoản)"
+                        : "Đã chọn"}
                     </Badge>
                   </div>
                 </div>

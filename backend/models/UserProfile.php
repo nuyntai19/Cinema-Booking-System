@@ -58,6 +58,36 @@ class UserProfile {
             return false;
         }
     }
+
+    /**
+     * Kiểm tra số điện thoại đã được dùng bởi tài khoản khác chưa
+     */
+    public function existsByPhone($phone, $excludeUserId = null) {
+        try {
+            $normalizedPhone = preg_replace('/\D+/', '', (string)$phone);
+
+            if ($normalizedPhone === '') {
+                return false;
+            }
+
+            $query = "SELECT user_id FROM {$this->table} WHERE phone = :phone";
+            $params = [':phone' => $normalizedPhone];
+
+            if ($excludeUserId !== null) {
+                $query .= " AND user_id != :exclude_user_id";
+                $params[':exclude_user_id'] = (int)$excludeUserId;
+            }
+
+            $query .= " LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+
+            return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("UserProfile existsByPhone Error: " . $e->getMessage());
+            return false;
+        }
+    }
     
     /**
      * Update profile

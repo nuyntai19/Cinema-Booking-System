@@ -345,8 +345,10 @@ class Booking {
                 b.final_price,
                 b.created_at,
                 pc.id AS guest_customer_id,
-                pc.phone AS customer_phone,
-                pc.name AS customer_name,
+                COALESCE(up.phone, pc.phone, '-') AS customer_phone,
+                COALESCE(up.full_name, pc.name, 'Khách vãng lai') AS customer_name,
+                b.user_id,
+                CASE WHEN b.user_id IS NULL THEN 'guest' ELSE 'registered' END AS customer_type,
                 s.start_time,
                 m.title AS movie_title,
                 c.name AS cinema_name,
@@ -360,6 +362,8 @@ class Booking {
              JOIN movies m ON s.movie_id = m.id
              JOIN cinema_halls h ON s.cinema_hall_id = h.id
              JOIN cinemas c ON h.cinema_id = c.id
+             LEFT JOIN users u ON u.id = b.user_id
+             LEFT JOIN user_profiles up ON up.user_id = u.id
              LEFT JOIN tickets t ON t.booking_id = b.id
              LEFT JOIN seats se ON se.id = t.seat_id
              LEFT JOIN (
@@ -374,7 +378,8 @@ class Booking {
              $whereSql
              GROUP BY
                 b.id, b.booking_code, b.status, b.total_price, b.final_price, b.created_at,
-                pc.id, pc.phone, pc.name,
+                pc.id, up.phone, pc.phone, up.full_name, pc.name,
+                b.user_id,
                 s.start_time, m.title, c.name, h.name,
                 tx.status, tx.payment_method
              ORDER BY b.created_at DESC

@@ -34,12 +34,17 @@ class POSCustomer {
         $existing = $select->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
-            return $existing;  // Trả về khách cũ
+            return $this->attachLinkedUserInfo($existing);  // Trả về khách cũ
         }
+
+        $linkedUser = $this->findRegisteredUserByPhone($phone);
 
         // Tạo mới
         $guestCode = $this->generateGuestCustomerCode($phone);
         $name = trim($name ?? '');  // Empty string if null
+        if ($name === '' && $linkedUser && !empty($linkedUser['full_name'])) {
+            $name = (string)$linkedUser['full_name'];
+        }
 
         $insert = $this->db->prepare(
             "INSERT INTO pos_customers (phone, name, guest_customer_code, created_by_staff_id)
@@ -54,13 +59,13 @@ class POSCustomer {
 
         $customerId = (int)$this->db->lastInsertId();
 
-        return [
+        return $this->attachLinkedUserInfo([
             'id' => $customerId,
             'phone' => $phone,
             'name' => $name,
             'guest_customer_code' => $guestCode,
             'total_bookings' => 0
-        ];
+        ]);
     }
 
     /**
@@ -71,7 +76,12 @@ class POSCustomer {
             "SELECT * FROM pos_customers WHERE id = :id LIMIT 1"
         );
         $stmt->execute([':id' => (int)$id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+
+        return $this->attachLinkedUserInfo($row);
     }
 
     /**
@@ -82,7 +92,40 @@ class POSCustomer {
             "SELECT * FROM pos_customers WHERE phone = :phone LIMIT 1"
         );
         $stmt->execute([':phone' => trim($phone)]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+
+        return $this->attachLinkedUserInfo($row);
+    }
+
+    private function findRegisteredUserByPhone(string $phone): ?array {
+        $stmt = $this->db->prepare(
+            "SELECT u.id AS user_id, u.email, up.full_name, up.phone
+             FROM user_profiles up
+             INNER JOIN users u ON u.id = up.user_id
+             WHERE up.phone = :phone
+               AND u.status = 'Active'
+               AND u.role_id NOT IN (3, 4, 5)
+             LIMIT 1"
+        );
+        $stmt->execute([':phone' => $phone]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
+    private function attachLinkedUserInfo(array $customer): array {
+        $phone = trim((string)($customer['phone'] ?? ''));
+        $linkedUser = $phone !== '' ? $this->findRegisteredUserByPhone($phone) : null;
+
+        $customer['has_account'] = $linkedUser ? true : false;
+        $customer['linked_user_id'] = $linkedUser ? (int)$linkedUser['user_id'] : null;
+        $customer['linked_user_email'] = $linkedUser['email'] ?? null;
+        $customer['linked_user_full_name'] = $linkedUser['full_name'] ?? null;
+
+        return $customer;
     }
 
     /**

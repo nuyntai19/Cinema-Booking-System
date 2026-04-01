@@ -118,6 +118,68 @@ class User {
             return false;
         }
     }
+
+    /**
+     * Khóa tài khoản user
+     */
+    public function lockAccount($id) {
+        try {
+            $query = "UPDATE {$this->table} SET status = 'Banned' WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("User lockAccount Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Xóa cứng tài khoản user
+     */
+    public function hardDelete($id) {
+        try {
+            $query = "DELETE FROM {$this->table} WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("User hardDelete Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Kiểm tra user đã phát sinh đặt vé/giao dịch chưa
+     */
+    public function hasBookingsOrTransactions($userId) {
+        try {
+            $bookingQuery = "SELECT 1 FROM bookings WHERE user_id = :user_id LIMIT 1";
+            $bookingStmt = $this->db->prepare($bookingQuery);
+            $bookingStmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            $bookingStmt->execute();
+
+            if ($bookingStmt->fetch(PDO::FETCH_ASSOC)) {
+                return true;
+            }
+
+            $transactionQuery = "SELECT 1
+                                 FROM transactions t
+                                 INNER JOIN bookings b ON b.id = t.booking_id
+                                 WHERE b.user_id = :user_id
+                                 LIMIT 1";
+            $transactionStmt = $this->db->prepare($transactionQuery);
+            $transactionStmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+            $transactionStmt->execute();
+
+            return (bool)$transactionStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("User hasBookingsOrTransactions Error: " . $e->getMessage());
+            return true;
+        }
+    }
     
     /**
      * Lấy tất cả users với filter và pagination
@@ -126,13 +188,22 @@ class User {
         try {
             $offset = ($page - 1) * $limit;
             
-            $query = "SELECT u.*, up.full_name, up.phone, up.dob, r.name as role_name, m.rank_name, COALESCE(cs.cinema_id, c.id) as cinema_id
+                        $query = "SELECT u.*, up.full_name, up.phone, up.dob, r.name as role_name, m.rank_name, COALESCE(cs.cinema_id, cm.cinema_id) as cinema_id
                       FROM {$this->table} u 
                       LEFT JOIN user_profiles up ON u.id = up.user_id 
                       LEFT JOIN roles r ON u.role_id = r.id
                       LEFT JOIN memberships m ON up.membership_id = m.id
-                      LEFT JOIN cinema_staff cs ON cs.user_id = u.id
-                      LEFT JOIN cinemas c ON c.manager_id = u.id
+                                            LEFT JOIN (
+                                                SELECT user_id, MIN(cinema_id) AS cinema_id
+                                                FROM cinema_staff
+                                                GROUP BY user_id
+                                            ) cs ON cs.user_id = u.id
+                                            LEFT JOIN (
+                                                SELECT manager_id, MIN(id) AS cinema_id
+                                                FROM cinemas
+                                                WHERE manager_id IS NOT NULL
+                                                GROUP BY manager_id
+                                            ) cm ON cm.manager_id = u.id
                       WHERE 1=1";
             
             $params = [];

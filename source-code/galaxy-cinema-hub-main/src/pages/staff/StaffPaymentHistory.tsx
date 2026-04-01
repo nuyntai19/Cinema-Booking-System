@@ -27,6 +27,8 @@ interface PosPaymentHistoryItem {
   seats?: string;
   customer_phone: string;
   customer_name?: string;
+  user_id?: number | null;
+  customer_type?: "guest" | "registered";
   final_price: number;
   created_at: string;
 }
@@ -143,6 +145,7 @@ const StaffPaymentHistory: React.FC = () => {
     const exportRows = items.map((item) => ({
       "Mã booking": item.booking_code || "",
       Khách: item.customer_name || "Khách vãng lai",
+      "Loại khách": item.customer_type === "registered" ? "Đã có tài khoản" : "Khách vãng lai",
       "SĐT khách": item.customer_phone || "",
       Phim: item.movie_title || "",
       Rạp: item.cinema_name || "",
@@ -164,6 +167,7 @@ const StaffPaymentHistory: React.FC = () => {
     worksheet["!cols"] = [
       { wch: 18 },
       { wch: 24 },
+      { wch: 18 },
       { wch: 14 },
       { wch: 28 },
       { wch: 20 },
@@ -319,7 +323,7 @@ const StaffPaymentHistory: React.FC = () => {
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <ReceiptText className="w-5 h-5" />
-              Lịch Sử Thanh Toán (Khách Vãng Lai)
+              Lịch Sử Thanh Toán Tại Quầy
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button
@@ -456,6 +460,11 @@ const StaffPaymentHistory: React.FC = () => {
                       </td>
                       <td className="px-2 py-2">
                         <div>{item.customer_name || "Khách vãng lai"}</div>
+                        <div className="text-xs text-emerald-600">
+                          {item.customer_type === "registered"
+                            ? "Đã có tài khoản"
+                            : "Khách vãng lai"}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {item.customer_phone}
                         </div>

@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Film,
   Users,
+  Armchair,
   BarChart3,
   Calendar,
   LogOut,
@@ -16,6 +17,8 @@ import {
 import { useAuth } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 import { apiCall, API_ENDPOINTS } from "@/lib/api";
+import { useTheme } from "@/hooks/use-theme";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface CinemaInfo {
   id: number;
@@ -28,6 +31,7 @@ const ManagerLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
+  const { setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cinemaInfo, setCinemaInfo] = useState<CinemaInfo | null>(null);
@@ -59,17 +63,26 @@ const ManagerLayout: React.FC = () => {
     if (isAuthenticated && user) void loadCinema();
   }, [isAuthenticated, user, loadCinema]);
 
+  useEffect(() => {
+    if (!user || user.role !== "manager") return;
+    const savedTheme = localStorage.getItem("galaxy-cinema-theme");
+    if (!savedTheme) {
+      setTheme("light");
+    }
+  }, [user, setTheme]);
+
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   if (!isAuthenticated || !user) return null;
 
   const navItems = [
-    { label: "Dashboard",   path: "/manager",              icon: LayoutDashboard, exact: true },
-    { label: "Lịch Chiếu",  path: "/manager/showtimes",    icon: Calendar,        exact: false },
-    { label: "Nhân Viên",   path: "/manager/staff",        icon: Users,           exact: false },
-    { label: "Bắp Nước",   path: "/manager/concessions", icon: Package,         exact: false },
-    { label: "Báo Cáo",    path: "/manager/reports",      icon: BarChart3,       exact: false },
+    { label: "Dashboard", path: "/manager", icon: LayoutDashboard, exact: true },
+    { label: "Lịch Chiếu", path: "/manager/showtimes", icon: Calendar, exact: false },
+    { label: "Chỗ Ngồi", path: "/manager/seats", icon: Armchair, exact: false },
+    { label: "Nhân Viên", path: "/manager/staff", icon: Users, exact: false },
+    { label: "Bắp Nước", path: "/manager/concessions", icon: Package, exact: false },
+    { label: "Báo Cáo", path: "/manager/reports", icon: BarChart3, exact: false },
   ];
 
   const isActive = (item: typeof navItems[0]) =>
@@ -249,14 +262,16 @@ const ManagerLayout: React.FC = () => {
             )}
           </div>
 
-          {/* Right: chỉ giữ nút Refresh */}
-          <button
-            onClick={() => void loadCinema()}
-            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-            title="Làm mới"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="w-9 h-9 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800" />
+            <button
+              onClick={() => void loadCinema()}
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+              title="Làm mới"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </header>
 
         {/* Page Content */}

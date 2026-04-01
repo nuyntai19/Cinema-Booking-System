@@ -24,6 +24,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AppContext";
+import { useTheme } from "@/hooks/use-theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,47 +61,71 @@ const HALL_TEMPLATES = {
 
 type HallTemplateKey = keyof typeof HALL_TEMPLATES;
 
-const SEAT_TYPES = [
+const getSeatTypes = (isLightMode: boolean) => [
   {
     id: 0,
     label: "Khu vực không ngồi",
-    color: "bg-gray-600/40 border-gray-500",
-    activeColor: "ring-2 ring-gray-300 bg-gray-600/60",
-    dotColor: "bg-gray-400",
-    textColor: "text-gray-300",
+    color: isLightMode
+      ? "bg-slate-100 border-slate-300"
+      : "bg-gray-600/40 border-gray-500",
+    activeColor: isLightMode
+      ? "ring-2 ring-slate-500 bg-slate-200"
+      : "ring-2 ring-gray-300 bg-gray-600/60",
+    dotColor: isLightMode ? "bg-slate-400" : "bg-gray-400",
+    textColor: isLightMode ? "text-slate-600" : "text-gray-300",
   },
   {
     id: 1,
     label: "Ghế thường",
-    color: "bg-blue-600 border-blue-500",
-    activeColor: "ring-2 ring-blue-300 bg-blue-500",
-    dotColor: "bg-blue-400",
-    textColor: "text-blue-300",
+    color: isLightMode
+      ? "bg-blue-100 border-blue-300"
+      : "bg-blue-600 border-blue-500",
+    activeColor: isLightMode
+      ? "ring-2 ring-blue-500 bg-blue-200"
+      : "ring-2 ring-blue-300 bg-blue-500",
+    dotColor: isLightMode ? "bg-blue-500" : "bg-blue-400",
+    textColor: isLightMode ? "text-blue-700" : "text-blue-300",
   },
   {
     id: 2,
     label: "Ghế VIP",
-    color: "bg-purple-600 border-purple-500",
-    activeColor: "ring-2 ring-purple-300 bg-purple-500",
-    dotColor: "bg-purple-400",
-    textColor: "text-purple-300",
+    color: isLightMode
+      ? "bg-purple-100 border-purple-300"
+      : "bg-purple-600 border-purple-500",
+    activeColor: isLightMode
+      ? "ring-2 ring-purple-500 bg-purple-200"
+      : "ring-2 ring-purple-300 bg-purple-500",
+    dotColor: isLightMode ? "bg-purple-500" : "bg-purple-400",
+    textColor: isLightMode ? "text-purple-700" : "text-purple-300",
   },
   {
     id: 3,
     label: "Sweetbox / Couple",
-    color: "bg-rose-600 border-rose-500",
-    activeColor: "ring-2 ring-rose-300 bg-rose-500",
-    dotColor: "bg-rose-400",
-    textColor: "text-rose-300",
+    color: isLightMode
+      ? "bg-rose-100 border-rose-300"
+      : "bg-rose-600 border-rose-500",
+    activeColor: isLightMode
+      ? "ring-2 ring-rose-500 bg-rose-200"
+      : "ring-2 ring-rose-300 bg-rose-500",
+    dotColor: isLightMode ? "bg-rose-500" : "bg-rose-400",
+    textColor: isLightMode ? "text-rose-700" : "text-rose-300",
   },
 ];
 
-const SEAT_TYPE_GRID_COLOR: Record<number, string> = {
-  0: "bg-gray-700/60 border-gray-600 text-gray-500 cursor-default",
-  1: "bg-blue-900 border-blue-700 text-blue-200 hover:bg-blue-800",
-  2: "bg-purple-900 border-purple-700 text-purple-200 hover:bg-purple-800",
-  3: "bg-rose-900 border-rose-700 text-rose-200 hover:bg-rose-800",
-};
+const getSeatTypeGridColor = (isLightMode: boolean): Record<number, string> =>
+  isLightMode
+    ? {
+        0: "bg-slate-100 border-slate-300 text-slate-400 cursor-default",
+        1: "bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100",
+        2: "bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100",
+        3: "bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100",
+      }
+    : {
+        0: "bg-gray-700/60 border-gray-600 text-gray-500 cursor-default",
+        1: "bg-blue-900 border-blue-700 text-blue-200 hover:bg-blue-800",
+        2: "bg-purple-900 border-purple-700 text-purple-200 hover:bg-purple-800",
+        3: "bg-rose-900 border-rose-700 text-rose-200 hover:bg-rose-800",
+      };
 
 const SELECTED_COLOR = "ring-2 ring-yellow-400 brightness-125";
 
@@ -160,8 +186,14 @@ const gridToSeats = (grid: number[][]): SeatCell[] => {
 
 const AdminSeatManagement: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { theme } = useTheme();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isManagerMode = user?.role === "manager";
+  const isLightManagerTheme = isManagerMode && theme === "light";
+  const seatTypes = getSeatTypes(isLightManagerTheme);
+  const seatTypeGridColor = getSeatTypeGridColor(isLightManagerTheme);
 
   // ── State ──
   const [cinemas, setCinemas] = useState<BackendCinema[]>([]);
@@ -186,6 +218,29 @@ const AdminSeatManagement: React.FC = () => {
 
   // ── Load cinemas ──
   useEffect(() => {
+    if (isManagerMode) {
+      apiCall<{ success: boolean; data: { cinema: BackendCinema } }>(
+        API_ENDPOINTS.MANAGER_CINEMA_INFO,
+      )
+        .then((res) => {
+          const managerCinema = res.data?.cinema;
+          if (!managerCinema) {
+            throw new Error("Không tìm thấy rạp của manager");
+          }
+          setCinemas([managerCinema]);
+          setSelectedCinemaId(String(managerCinema.id));
+        })
+        .catch(() =>
+          toast({
+            title: "Lỗi",
+            description:
+              "Không tải được thông tin rạp quản lý. Vui lòng liên hệ Admin.",
+            variant: "destructive",
+          }),
+        );
+      return;
+    }
+
     apiCall<{ success: boolean; data: { cinemas: BackendCinema[] } }>(
       API_ENDPOINTS.CINEMAS,
     )
@@ -197,15 +252,21 @@ const AdminSeatManagement: React.FC = () => {
           variant: "destructive",
         }),
       );
-  }, []);
+  }, [isManagerMode, toast]);
 
   // ── Handle URL query params (from AdminCinemas) ──
   useEffect(() => {
+    if (isManagerMode) {
+      const qHall = searchParams.get("hallId");
+      if (qHall) setSelectedHallId(qHall);
+      return;
+    }
+
     const qCinema = searchParams.get("cinemaId");
     const qHall = searchParams.get("hallId");
     if (qCinema) setSelectedCinemaId(qCinema);
     if (qHall) setSelectedHallId(qHall);
-  }, [searchParams]);
+  }, [searchParams, isManagerMode]);
 
   // ── Load halls when cinema changes ──
   useEffect(() => {
@@ -213,8 +274,13 @@ const AdminSeatManagement: React.FC = () => {
       setHalls([]);
       return;
     }
+
+    const hallsEndpoint = isManagerMode
+      ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
+      : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
+
     apiCall<{ success: boolean; data: { halls: BackendHall[] } }>(
-      API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId)),
+      hallsEndpoint,
     )
       .then((res) => {
         const h = res.data?.halls || [];
@@ -231,7 +297,7 @@ const AdminSeatManagement: React.FC = () => {
           variant: "destructive",
         }),
       );
-  }, [selectedCinemaId]);
+  }, [selectedCinemaId, isManagerMode, searchParams, selectedHallId, toast]);
 
   // ── Load seat layout when hall changes ──
   useEffect(() => {
@@ -263,7 +329,7 @@ const AdminSeatManagement: React.FC = () => {
         }),
       )
       .finally(() => setLoading(false));
-  }, [selectedHallId, halls]);
+  }, [selectedHallId, halls, toast]);
 
   // Update hall name from halls list
   useEffect(() => {
@@ -420,16 +486,20 @@ const AdminSeatManagement: React.FC = () => {
       });
       // Refresh halls to update seat count
       if (selectedCinemaId) {
+        const hallsEndpoint = isManagerMode
+          ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
+          : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
         const res = await apiCall<{ data: { halls: BackendHall[] } }>(
-          API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId)),
+          hallsEndpoint,
         );
         setHalls(res.data?.halls || []);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Có thể phòng đang có suất chiếu sắp tới";
       toast({
         title: "Lỗi lưu sơ đồ",
-        description:
-          error?.message || "Có thể phòng đang có suất chiếu sắp tới",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -460,8 +530,11 @@ const AdminSeatManagement: React.FC = () => {
       setHallNameInput("");
       setNewHallTemplate("standard");
       // Refresh halls and auto-select new one
+      const hallsEndpoint = isManagerMode
+        ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
+        : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
       const hallsRes = await apiCall<{ data: { halls: BackendHall[] } }>(
-        API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId)),
+        hallsEndpoint,
       );
       setHalls(hallsRes.data?.halls || []);
       if (res.data?.id) setSelectedHallId(String(res.data.id));
@@ -486,8 +559,11 @@ const AdminSeatManagement: React.FC = () => {
       setHallNameInput("");
       setSelectedHallName(hallNameInput.trim());
       if (selectedCinemaId) {
+        const hallsEndpoint = isManagerMode
+          ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
+          : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
         const res = await apiCall<{ data: { halls: BackendHall[] } }>(
-          API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId)),
+          hallsEndpoint,
         );
         setHalls(res.data?.halls || []);
       }
@@ -517,15 +593,20 @@ const AdminSeatManagement: React.FC = () => {
       setGrid(makeEmptyGrid());
       setSelectedCells(new Set());
       if (selectedCinemaId) {
+        const hallsEndpoint = isManagerMode
+          ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
+          : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
         const res = await apiCall<{ data: { halls: BackendHall[] } }>(
-          API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId)),
+          hallsEndpoint,
         );
         setHalls(res.data?.halls || []);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Phòng có thể đang có suất chiếu";
       toast({
         title: "Không thể xóa",
-        description: error?.message || "Phòng có thể đang có suất chiếu",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -533,7 +614,7 @@ const AdminSeatManagement: React.FC = () => {
 
   // ── Stats ──
   const totalSeats = grid.flat().filter((t) => t !== 0).length;
-  const seatCounts = SEAT_TYPES.slice(1).map((st) => ({
+  const seatCounts = seatTypes.slice(1).map((st) => ({
     ...st,
     count: grid.flat().filter((t) => t === st.id).length,
   }));
@@ -546,7 +627,9 @@ const AdminSeatManagement: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold">Quản Lý Chỗ Ngồi</h1>
           <p className="text-muted-foreground">
-            Thiết kế và quản lý sơ đồ ghế cho từng phòng chiếu
+            {isManagerMode
+              ? "Quản lý sơ đồ ghế cho các phòng chiếu thuộc rạp của bạn"
+              : "Thiết kế và quản lý sơ đồ ghế cho từng phòng chiếu"}
           </p>
         </div>
       </div>
@@ -561,9 +644,11 @@ const AdminSeatManagement: React.FC = () => {
               <Select
                 value={selectedCinemaId}
                 onValueChange={(v) => {
+                  if (isManagerMode) return;
                   setSelectedCinemaId(v);
                   setSelectedHallId("");
                 }}
+                disabled={isManagerMode}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn rạp..." />
@@ -694,8 +779,8 @@ const AdminSeatManagement: React.FC = () => {
                               onMouseEnter={() => handleCellEnter(rIdx, cIdx)}
                               className={cn(
                                 "w-8 h-8 rounded border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all",
-                                SEAT_TYPE_GRID_COLOR[typeId] ??
-                                  SEAT_TYPE_GRID_COLOR[0],
+                                seatTypeGridColor[typeId] ??
+                                  seatTypeGridColor[0],
                                 isSelected && SELECTED_COLOR,
                               )}
                               title={`${String.fromCharCode(65 + rIdx)}${cIdx + 1}`}
@@ -715,7 +800,7 @@ const AdminSeatManagement: React.FC = () => {
 
                 {/* Legend */}
                 <div className="flex flex-wrap gap-4 pt-2 border-t w-full justify-center">
-                  {SEAT_TYPES.map((st) => (
+                  {seatTypes.map((st) => (
                     <div
                       key={st.id}
                       className="flex items-center gap-1.5 text-xs"
@@ -741,7 +826,7 @@ const AdminSeatManagement: React.FC = () => {
                 <CardTitle className="text-sm">Chọn loại ghế để sơn</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {SEAT_TYPES.map((st) => (
+                {seatTypes.map((st) => (
                   <button
                     key={st.id}
                     onClick={() => setActiveMode(st.id)}

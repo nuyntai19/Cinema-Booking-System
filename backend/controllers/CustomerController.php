@@ -44,7 +44,7 @@ class CustomerController {
             return Response::success([
                 'customer' => $customer,
                 'is_new' => false,  // Note: Không thể biết là mới hay cũ từ đây, client phải xử lý
-                'message' => 'Tìm thấy hoặc tạo khách vãng lai thành công'
+                'message' => 'Tìm thấy hoặc tạo khách hàng thành công'
             ]);
 
         } catch (Exception $e) {
@@ -77,7 +77,7 @@ class CustomerController {
 
             return Response::success([
                 'customer' => $customer,
-                'message' => 'Tìm thấy khách vãng lai'
+                'message' => 'Tìm thấy khách hàng'
             ]);
 
         } catch (Exception $e) {

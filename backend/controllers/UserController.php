@@ -195,7 +195,7 @@ class UserController
             $data = json_decode(file_get_contents('php://input'), true);
 
             // Validate required fields
-            $required = ['email', 'password', 'full_name', 'phone', 'role_id'];
+            $required = ['email', 'full_name', 'phone', 'dob', 'role_id'];
             foreach ($required as $field) {
                 if (empty($data[$field])) {
                     return Response::error("Thiếu thông tin: $field", 400);
@@ -204,8 +204,15 @@ class UserController
 
             // Validate email
             $email = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
+            $fullName = trim((string)($data['full_name'] ?? ''));
+            $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? ''));
+
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 return Response::error('Email không hợp lệ', 400);
+            }
+
+            if ($fullName === '') {
+                return Response::error('Họ và tên không được để trống', 400);
             }
 
             // Check email exists
@@ -214,17 +221,25 @@ class UserController
             }
 
             // Validate phone
-            if (!preg_match('/^[0-9]{10,11}$/', $data['phone'])) {
-                return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
+            if (!preg_match('/^0\d{9,10}$/', $phone)) {
+                return Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
             }
 
-            // Check phone exists
-            if ($this->userProfileModel->findByPhone($data['phone'])) {
+            if ($this->userProfileModel->existsByPhone($phone)) {
                 return Response::error('Số điện thoại đã được sử dụng', 409);
             }
 
             // Hash password
-            $passwordHash = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 10]);
+            $password = trim((string)($data['password'] ?? ''));
+            if ($password === '') {
+                return Response::error('Mật khẩu không được để trống', 400);
+            }
+
+            if (mb_strlen($password, 'UTF-8') < 6) {
+                return Response::error('Mật khẩu phải có ít nhất 6 ký tự', 400);
+            }
+
+            $passwordHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 10]);
 
             // Create user
             $userId = $this->userModel->create([
@@ -241,8 +256,8 @@ class UserController
             // Create profile
             $profileCreated = $this->userProfileModel->create([
                 'user_id' => $userId,
-                'full_name' => $data['full_name'],
-                'phone' => $data['phone'],
+                'full_name' => $fullName,
+                'phone' => $phone,
                 'dob' => $data['dob'] ?? null,
                 'membership_id' => 1 // Bronze default
             ]);
@@ -312,7 +327,15 @@ class UserController
             if ($isAdmin) {
                 $updateData = [];
 
+                // Không cho admin đổi mật khẩu tại màn quản lý người dùng
+                if (isset($data['password'])) {
+                    return Response::error('Admin không được đổi mật khẩu người dùng tại màn này', 400);
+                }
+
                 if (isset($data['status'])) {
+                    if ($currentUserId == $id) {
+                        return Response::error('Admin không thể tự khóa/mở khóa tài khoản của chính mình', 400);
+                    }
                     $updateData['status'] = $data['status'];
                 }
 
@@ -322,14 +345,6 @@ class UserController
 
                 if (isset($data['current_points'])) {
                     $updateData['current_points'] = $data['current_points'];
-                }
-
-                if (isset($data['password']) && !empty($data['password'])) {
-                    if (strlen($data['password']) < 6) {
-                        return Response::error('Mật khẩu mới phải có ít nhất 6 ký tự', 400);
-                    }
-                    $passwordHash = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 10]);
-                    $updateData['password_hash'] = $passwordHash;
                 }
 
                 if (!empty($updateData)) {
@@ -364,7 +379,7 @@ class UserController
 
     /**
      * DELETE /api/users/:id
-     * Xóa user (soft delete - set status = 'Deleted')
+        * Xóa user khi chưa có phát sinh; nếu đã có booking/giao dịch thì khóa tài khoản
      * Authorization: Admin only
      */
     public function delete($id)
@@ -387,14 +402,32 @@ class UserController
                 return Response::error('Không tìm thấy người dùng', 404);
             }
 
-            // Soft delete
-            $deleted = $this->userModel->delete($id);
+            $hasActivities = $this->userModel->hasBookingsOrTransactions($id);
+
+            if ($hasActivities) {
+                $locked = $this->userModel->lockAccount($id);
+
+                if (!$locked) {
+                    return Response::error('Không thể khóa tài khoản', 500);
+                }
+
+                return Response::success([
+                    'message' => 'Tài khoản đã có giao dịch/đặt vé nên hệ thống chuyển sang khóa tài khoản',
+                    'action' => 'locked',
+                ]);
+            }
+
+            // Chỉ xóa cứng khi user chưa phát sinh dữ liệu nghiệp vụ
+            $deleted = $this->userModel->hardDelete($id);
 
             if (!$deleted) {
                 return Response::error('Xóa thất bại', 500);
             }
 
-            return Response::success(['message' => 'Xóa người dùng thành công']);
+            return Response::success([
+                'message' => 'Xóa người dùng thành công',
+                'action' => 'deleted',
+            ]);
         } catch (Exception $e) {
             return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
         }
@@ -515,26 +548,48 @@ class UserController
                 return Response::error('Không có dữ liệu để cập nhật', 400);
             }
 
-            // Validate phone nếu có
-            if (isset($data['phone'])) {
-                if (!preg_match('/^[0-9]{10,11}$/', $data['phone'])) {
-                    return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
-                }
-                
-                $existingPhone = $this->userProfileModel->findByPhone($data['phone']);
-                if ($existingPhone && $existingPhone['user_id'] != $id) {
-                    return Response::error('Số điện thoại đã được sử dụng bởi người dùng khác', 409);
+            if (isset($data['full_name'])) {
+                $data['full_name'] = trim((string)$data['full_name']);
+                if ($data['full_name'] === '') {
+                    return Response::error('Họ và tên không được để trống', 400);
                 }
             }
 
-            // Validate DOB nếu có
-            if (isset($data['dob'])) {
-                $dob = new DateTime($data['dob']);
-                $today = new DateTime();
-                $age = $today->diff($dob)->y;
+            if (isset($data['phone'])) {
+                $data['phone'] = preg_replace('/\D+/', '', (string)$data['phone']);
+            }
 
-                if ($age < 13) {
-                    return Response::error('Bạn phải đủ 13 tuổi', 400);
+            // Validate phone nếu có
+            if (isset($data['phone']) && $data['phone'] !== '' && !preg_match('/^0\d{9,10}$/', $data['phone'])) {
+                return Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
+            }
+
+            if (isset($data['phone']) && $data['phone'] !== '' && $this->userProfileModel->existsByPhone($data['phone'], $id)) {
+                return Response::error('Số điện thoại đã được sử dụng', 409);
+            }
+
+            // Validate DOB nếu có
+            if (isset($data['dob']) && !empty($data['dob'])) {
+                try {
+                    new DateTime($data['dob']);
+                } catch (Exception $e) {
+                    return Response::error('Ngày sinh không hợp lệ', 400);
+                }
+            }
+
+            // Ensure profile row exists before update (tránh báo thành công nhưng không ghi dữ liệu)
+            $existingProfile = $this->userProfileModel->getByUserId($id);
+            if (!$existingProfile) {
+                $created = $this->userProfileModel->create([
+                    'user_id' => (int)$id,
+                    'full_name' => $data['full_name'] ?? ('User #' . $id),
+                    'phone' => $data['phone'] ?? '',
+                    'dob' => !empty($data['dob']) ? $data['dob'] : null,
+                    'membership_id' => 1,
+                ]);
+
+                if (!$created) {
+                    return Response::error('Không thể khởi tạo hồ sơ người dùng', 500);
                 }
             }
 

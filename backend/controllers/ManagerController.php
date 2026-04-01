@@ -609,7 +609,13 @@ class ManagerController extends BaseController
             $emailCheck->execute([':email' => $email]);
             if ($emailCheck->fetchColumn()) Response::error('Email đã được sử dụng', 409);
 
-            if (!preg_match('/^[0-9]{10,11}$/', $input['phone'])) Response::error('Số điện thoại không hợp lệ', 400);
+            $phone = preg_replace('/\D+/', '', (string)$input['phone']);
+            if (!preg_match('/^0\d{9,10}$/', $phone)) Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
+
+            $phoneCheck = $this->db->prepare("SELECT user_id FROM user_profiles WHERE phone = :phone LIMIT 1");
+            $phoneCheck->execute([':phone' => $phone]);
+            if ($phoneCheck->fetchColumn()) Response::error('Số điện thoại đã được sử dụng', 409);
+
             if (strlen($input['password']) < 6) Response::error('Mật khẩu phải có ít nhất 6 ký tự', 400);
 
             $hash = password_hash($input['password'], PASSWORD_BCRYPT, ['cost' => 10]);
@@ -623,7 +629,7 @@ class ManagerController extends BaseController
 
             // Create user profile
             $pStmt = $this->db->prepare("INSERT INTO user_profiles (user_id, full_name, phone, membership_id) VALUES (:uid,:name,:phone,1)");
-            $pStmt->execute([':uid' => $userId, ':name' => $input['full_name'], ':phone' => $input['phone']]);
+            $pStmt->execute([':uid' => $userId, ':name' => trim((string)$input['full_name']), ':phone' => $phone]);
 
             // Link staff to this cinema via cinema_staff
             $csStmt = $this->db->prepare("INSERT IGNORE INTO cinema_staff (cinema_id, user_id, created_at) VALUES (:cid,:uid,NOW())");
@@ -651,8 +657,21 @@ class ManagerController extends BaseController
             if (!$check->fetch()) Response::notFound('Nhân viên không tồn tại hoặc không thuộc rạp của bạn');
 
             $input = json_decode(file_get_contents('php://input'), true) ?: [];
-            if (isset($input['phone']) && !preg_match('/^[0-9]{10,11}$/', $input['phone'])) {
-                Response::error('Số điện thoại không hợp lệ', 400);
+            if (isset($input['phone'])) {
+                $normalizedPhone = preg_replace('/\D+/', '', (string)$input['phone']);
+                if ($normalizedPhone !== '' && !preg_match('/^0\d{9,10}$/', $normalizedPhone)) {
+                    Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
+                }
+
+                if ($normalizedPhone !== '') {
+                    $phoneCheck = $this->db->prepare("SELECT user_id FROM user_profiles WHERE phone = :phone AND user_id != :uid LIMIT 1");
+                    $phoneCheck->execute([':phone' => $normalizedPhone, ':uid' => $id]);
+                    if ($phoneCheck->fetchColumn()) {
+                        Response::error('Số điện thoại đã được sử dụng', 409);
+                    }
+                }
+
+                $input['phone'] = $normalizedPhone;
             }
 
             if (isset($input['password']) && !empty($input['password'])) {
@@ -760,8 +779,16 @@ class ManagerController extends BaseController
                         continue;
                     }
 
-                    if (!preg_match('/^[0-9]{10,11}$/', $item['phone'])) {
-                        $errors[] = "Dòng " . ($index + 1) . ": Số điện thoại không hợp lệ";
+                    $phone = preg_replace('/\D+/', '', (string)$item['phone']);
+                    if (!preg_match('/^0\d{9,10}$/', $phone)) {
+                        $errors[] = "Dòng " . ($index + 1) . ": Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)";
+                        continue;
+                    }
+
+                    $phoneCheck = $this->db->prepare("SELECT user_id FROM user_profiles WHERE phone = :phone LIMIT 1");
+                    $phoneCheck->execute([':phone' => $phone]);
+                    if ($phoneCheck->fetchColumn()) {
+                        $errors[] = "Dòng " . ($index + 1) . ": Số điện thoại đã được sử dụng";
                         continue;
                     }
                     if (strlen($item['password']) < 6) {
@@ -778,7 +805,7 @@ class ManagerController extends BaseController
                     $userId = (int)$this->db->lastInsertId();
 
                     $pStmt = $this->db->prepare("INSERT INTO user_profiles (user_id, full_name, phone, membership_id) VALUES (:uid,:name,:phone,1)");
-                    $pStmt->execute([':uid' => $userId, ':name' => $item['full_name'], ':phone' => $item['phone']]);
+                    $pStmt->execute([':uid' => $userId, ':name' => trim((string)$item['full_name']), ':phone' => $phone]);
 
                     $csStmt = $this->db->prepare("INSERT IGNORE INTO cinema_staff (cinema_id, user_id, created_at) VALUES (:cid,:uid,NOW())");
                     $csStmt->execute([':cid' => $cinemaId, ':uid' => $userId]);

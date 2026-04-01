@@ -141,6 +141,10 @@ export interface POSCustomer {
   total_bookings: number;
   first_visit_date?: string;
   created_by_staff_id?: number | null;
+  has_account?: boolean;
+  linked_user_id?: number | null;
+  linked_user_email?: string | null;
+  linked_user_full_name?: string | null;
 }
 
 export interface LookupOrCreateCustomerRequest {

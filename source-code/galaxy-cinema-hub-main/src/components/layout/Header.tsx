@@ -125,6 +125,11 @@ const Header: React.FC = () => {
                       <Link to="/staff">Staff Portal</Link>
                     </DropdownMenuItem>
                   )}
+                  {user?.role === "manager" && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/manager">Quản Lý Rạp</Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={logout}

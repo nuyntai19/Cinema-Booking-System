@@ -151,6 +151,7 @@ const App = () => (
                 <Route path="/manager" element={<ManagerLayout />}>
                   <Route index element={<ManagerDashboard />} />
                   <Route path="showtimes" element={<ManagerShowtimes />} />
+                  <Route path="seats" element={<AdminSeatManagement />} />
                   <Route path="staff" element={<ManagerStaff />} />
                   <Route path="reports" element={<ManagerReports />} />
                   <Route path="concessions" element={<ManagerConcessions />} />

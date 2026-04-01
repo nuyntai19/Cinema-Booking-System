@@ -51,9 +51,17 @@ class BookingController extends BaseController {
 
         // Support both user_id (authenticated user) and guest_customer_id (POS walk-in)
         $guestCustomerId = $data['guest_customer_id'] ?? null;
-        $userId = $guestCustomerId
-            ? null
-            : ($data['user_id'] ?? ($_REQUEST['auth_user_id'] ?? null));
+        $userId = $data['user_id'] ?? ($_REQUEST['auth_user_id'] ?? null);
+
+        // POS flow: when guest_customer_id is provided, always resolve account ownership by phone.
+        // This prevents accidentally attaching the booking to staff/admin account from payload user_id.
+        if ($guestCustomerId) {
+            $userId = null;
+            $linkedUserId = $this->resolveRegisteredUserIdByGuestCustomer((int)$guestCustomerId);
+            if ($linkedUserId) {
+                $userId = $linkedUserId;
+            }
+        }
         $showtimeId = $data['showtime_id'] ?? null;
 
         if (!$showtimeId || empty($seatIds)) {
@@ -360,6 +368,31 @@ class BookingController extends BaseController {
             }
         }
         return array_values(array_filter($result));
+    }
+
+    private function resolveRegisteredUserIdByGuestCustomer(int $guestCustomerId): ?int {
+        if ($guestCustomerId <= 0) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT u.id
+             FROM pos_customers pc
+             INNER JOIN user_profiles up ON up.phone = pc.phone
+             INNER JOIN users u ON u.id = up.user_id
+             WHERE pc.id = :guest_customer_id
+               AND u.status = 'Active'
+               AND u.role_id NOT IN (3, 4, 5)
+             LIMIT 1"
+        );
+        $stmt->execute([':guest_customer_id' => $guestCustomerId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row || !isset($row['id'])) {
+            return null;
+        }
+
+        return (int)$row['id'];
     }
 
     private function authorizeBookingAccess($booking) {

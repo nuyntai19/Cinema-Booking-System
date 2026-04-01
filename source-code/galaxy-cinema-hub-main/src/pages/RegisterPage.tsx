@@ -92,7 +92,7 @@ const RegisterPage: React.FC = () => {
       return false;
     }
 
-    // Validate age (must be at least 13 years old and not more than 100 years old)
+    // Validate age only for impossible values
     const birthDate = new Date(formData.dob);
     const today = new Date();
     const age = today.getFullYear() - birthDate.getFullYear();
@@ -100,15 +100,6 @@ const RegisterPage: React.FC = () => {
     const dayDiff = today.getDate() - birthDate.getDate();
     const calculatedAge =
       monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
-
-    if (calculatedAge < 13) {
-      toast({
-        title: "Lỗi",
-        description: "Bạn phải đủ 13 tuổi để đăng ký tài khoản",
-        variant: "destructive",
-      });
-      return false;
-    }
 
     if (calculatedAge > 100) {
       toast({

@@ -2,8 +2,8 @@
 require_once __DIR__ . '/../models/CinemaHall.php';
 require_once __DIR__ . '/../models/Seat.php';
 require_once __DIR__ . '/../core/Response.php';
-require_once __DIR__ . '/../utils/JWT.php';
-require_once __DIR__ . '/../config/Config.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
+require_once __DIR__ . '/../config/Database.php';
 
 /**
  * HallController
@@ -13,29 +13,63 @@ class HallController
 {
     private $hallModel;
     private $seatModel;
+    private $db;
 
     public function __construct()
     {
         $this->hallModel = new CinemaHall();
         $this->seatModel = new Seat();
+        $this->db = Database::getInstance()->getConnection();
     }
 
-    private function isAdmin()
+    private function getCurrentUserId(): int
     {
-        try {
-            $headers = getallheaders();
-            $authHeader = $headers['Authorization'] ?? '';
-            if (empty($authHeader))
-                return false;
+        return (int) ($_REQUEST['auth_user_id'] ?? 0);
+    }
 
-            $token = str_replace('Bearer ', '', $authHeader);
-            $payload = JWT::decode($token, Config::$jwt_secret);
+    private function getCurrentUserRole(): string
+    {
+        return (string) ($_REQUEST['auth_user_role'] ?? '');
+    }
 
-            return $payload && $payload['role_id'] == 5;
-        } catch (Exception $e) {
-            error_log("JWT decode error in HallController: " . $e->getMessage());
+    private function isManagerRole(): bool
+    {
+        return $this->getCurrentUserRole() === 'Manager';
+    }
+
+    private function getManagerCinemaId(): ?int
+    {
+        $userId = $this->getCurrentUserId();
+        if (!$userId) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare("SELECT id FROM cinemas WHERE manager_id = :uid LIMIT 1");
+        $stmt->execute([':uid' => $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ? (int) $row['id'] : null;
+    }
+
+    private function ensureManagerCanAccessCinema(int $cinemaId): bool
+    {
+        if (!$this->isManagerRole()) {
+            return true;
+        }
+
+        $managerCinemaId = $this->getManagerCinemaId();
+        if (!$managerCinemaId || $managerCinemaId !== $cinemaId) {
+            Response::forbidden('Manager chỉ được thao tác trong rạp mà mình quản lý');
             return false;
         }
+
+        return true;
+    }
+
+    private function ensureManagerCanAccessHall(array $hall): bool
+    {
+        $hallCinemaId = isset($hall['cinema_id']) ? (int) $hall['cinema_id'] : 0;
+        return $this->ensureManagerCanAccessCinema($hallCinemaId);
     }
 
     /**
@@ -43,9 +77,13 @@ class HallController
      */
     public function show($id)
     {
+        AuthMiddleware::requireManager();
+
         $hall = $this->hallModel->getById($id);
         if (!$hall)
             return Response::error('Không tìm thấy phòng', 404);
+
+        $this->ensureManagerCanAccessHall($hall);
 
         $hall['seats'] = $this->hallModel->getSeats($id);
         return Response::success(['hall' => $hall]);
@@ -56,13 +94,14 @@ class HallController
      */
     public function create()
     {
-        if (!$this->isAdmin())
-            return Response::error('Không có quyền', 403);
+        AuthMiddleware::requireManager();
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['cinema_id']) || empty($input['name'])) {
             return Response::error('Thiếu thông tin rạp hoặc tên phòng', 400);
         }
+
+        $this->ensureManagerCanAccessCinema((int) $input['cinema_id']);
 
         $id = $this->hallModel->create($input);
         if (!$id)
@@ -76,8 +115,13 @@ class HallController
      */
     public function update($id)
     {
-        if (!$this->isAdmin())
-            return Response::error('Không có quyền', 403);
+        AuthMiddleware::requireManager();
+
+        $hall = $this->hallModel->getById($id);
+        if (!$hall)
+            return Response::error('Không tìm thấy phòng', 404);
+
+        $this->ensureManagerCanAccessHall($hall);
 
         $input = json_decode(file_get_contents('php://input'), true);
         $result = $this->hallModel->update($id, $input);
@@ -92,12 +136,13 @@ class HallController
      */
     public function delete($id)
     {
-        if (!$this->isAdmin())
-            return Response::error('Không có quyền', 403);
+        AuthMiddleware::requireManager();
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)
             return Response::error('Không tìm thấy phòng', 404);
+
+        $this->ensureManagerCanAccessHall($hall);
 
         if ($this->seatModel->hasFutureShowtimeBindings((int) $id)) {
             return Response::error('Không thể xóa phòng vì còn suất chiếu tương lai', 409);
@@ -119,12 +164,13 @@ class HallController
      */
     public function saveLayout($id)
     {
-        if (!$this->isAdmin())
-            return Response::error('Không có quyền', 403);
+        AuthMiddleware::requireManager();
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)
             return Response::error('Không tìm thấy phòng', 404);
+
+        $this->ensureManagerCanAccessHall($hall);
 
         if ($this->seatModel->hasFutureShowtimeBindings((int) $id)) {
             return Response::error('Không thể thay đổi sơ đồ ghế vì còn suất chiếu tương lai', 409);

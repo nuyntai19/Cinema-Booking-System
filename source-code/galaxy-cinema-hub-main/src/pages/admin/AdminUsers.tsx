@@ -16,6 +16,7 @@ import {
   Loader2,
   RefreshCw,
   Trash,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,14 +82,31 @@ interface Pagination {
   total_pages: number;
 }
 
+const getDefaultFormData = () => ({
+  email: "",
+  password: "",
+  full_name: "",
+  phone: "",
+  dob: "",
+  role_id: 2, // Member default
+  cinema_id: "",
+});
+
+const normalizePhone = (phone: string) => phone.replace(/\D/g, "").trim();
+const isValidVietnamPhone = (phone: string) => /^0\d{9,10}$/.test(phone);
+
 const AdminUsers: React.FC = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<User | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   // API State
   const [users, setUsers] = useState<User[]>([]);
@@ -249,15 +267,38 @@ const AdminUsers: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, filterRole, filterStatus, pagination.page]);
 
-  const [formData, setFormData] = useState({
-    email: "",
-    full_name: "",
-    phone: "",
-    dob: "",
-    role_id: 2, // Member default
-    password: "",
-    cinema_id: "",
-  });
+  const [formData, setFormData] = useState(getDefaultFormData);
+
+  useEffect(() => {
+    try {
+      const rawUser = localStorage.getItem("user");
+      if (!rawUser) return;
+
+      const parsedUser = JSON.parse(rawUser);
+      if (parsedUser?.id) {
+        setCurrentUserId(Number(parsedUser.id));
+      }
+    } catch (error) {
+      console.warn("⚠️ Không thể đọc current user", error);
+    }
+  }, []);
+
+  const resetFormData = () => {
+    setFormData(getDefaultFormData());
+  };
+
+  const handleOpenCreateDialog = () => {
+    setSelectedUser(null);
+    setIsEditDialogOpen(false);
+    resetFormData();
+    setIsCreateDialogOpen(true);
+  };
+
+  const isSelfUser = (user: User) =>
+    currentUserId !== null && Number(user.id) === Number(currentUserId);
+
+  const isUserDialogOpen =
+    isEditDialogOpen || isCreateDialogOpen || isDeleteDialogOpen;
 
   // Statistics (from global API counts, not page-local)
   const totalUsers = pagination.total;
@@ -269,11 +310,11 @@ const AdminUsers: React.FC = () => {
     setSelectedUser(user);
     setFormData({
       email: user.email,
+      password: "",
       full_name: user.full_name,
       phone: user.phone || "",
       dob: user.dob || "",
       role_id: user.role_id,
-      password: "",
       cinema_id: user.cinema_id ? user.cinema_id.toString() : "",
     });
     setIsEditDialogOpen(true);
@@ -282,6 +323,27 @@ const AdminUsers: React.FC = () => {
   // Update user via API
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
+
+    const trimmedFullName = formData.full_name.trim();
+    const normalizedPhone = normalizePhone(formData.phone);
+
+    if (!trimmedFullName) {
+      toast({
+        title: "Thiếu thông tin",
+        description: "Họ và tên không được để trống",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (normalizedPhone && !isValidVietnamPhone(normalizedPhone)) {
+      toast({
+        title: "Số điện thoại không hợp lệ",
+        description: "Số điện thoại Việt Nam phải bắt đầu bằng 0 và có 10-11 số",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -296,7 +358,6 @@ const AdminUsers: React.FC = () => {
           body: JSON.stringify({
             role_id: formData.role_id,
             ...(formData.cinema_id ? { cinema_id: formData.cinema_id } : {}),
-            ...(formData.password ? { password: formData.password } : {}),
           }),
         },
       );
@@ -321,8 +382,8 @@ const AdminUsers: React.FC = () => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              full_name: formData.full_name,
-              phone: formData.phone,
+              full_name: trimmedFullName,
+              phone: normalizedPhone,
               dob: formData.dob || null,
             }),
           },
@@ -331,17 +392,24 @@ const AdminUsers: React.FC = () => {
         const profileData = await profileResponse.json();
         console.log("📦 Profile update response:", profileData);
 
-        if (!profileData.success) {
-          console.warn("⚠️ Profile update failed:", profileData.message);
+        if (!profileResponse.ok || !profileData.success) {
+          throw new Error(
+            profileData.message || "Không thể cập nhật họ tên/số điện thoại",
+          );
         }
 
         toast({
           title: "Cập nhật thành công",
-          description: `Đã cập nhật thông tin người dùng ${formData.full_name}`,
+          description: `Đã cập nhật thông tin người dùng ${trimmedFullName}`,
         });
 
         setIsEditDialogOpen(false);
         setSelectedUser(null);
+        setFormData((prev) => ({
+          ...prev,
+          full_name: trimmedFullName,
+          phone: normalizedPhone,
+        }));
         fetchUsers(); // Reload
       } else {
         throw new Error(data.message);
@@ -360,6 +428,9 @@ const AdminUsers: React.FC = () => {
 
   // Create user via API
   const handleCreateUser = async () => {
+    const trimmedFullName = formData.full_name.trim();
+    const normalizedPhone = normalizePhone(formData.phone);
+
     const selectedRoleName = roles
       .find((r) => r.id === formData.role_id)
       ?.name?.toLowerCase();
@@ -368,14 +439,23 @@ const AdminUsers: React.FC = () => {
 
     if (
       !formData.email ||
-      !formData.full_name ||
-      !formData.password ||
+      !trimmedFullName ||
+      !formData.dob ||
       (isStaffOrManager && !formData.cinema_id)
     ) {
       toast({
         title: "Lỗi",
         description:
-          "Vui lòng điền đầy đủ thông tin bắt buộc, bao gồm cả rạp chiếu nếu là nhân viên.",
+          "Vui lòng điền đầy đủ thông tin bắt buộc (bao gồm ngày sinh), và chọn rạp nếu là nhân viên.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isValidVietnamPhone(normalizedPhone)) {
+      toast({
+        title: "Số điện thoại không hợp lệ",
+        description: "Số điện thoại Việt Nam phải bắt đầu bằng 0 và có 10-11 số",
         variant: "destructive",
       });
       return;
@@ -389,7 +469,11 @@ const AdminUsers: React.FC = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          full_name: trimmedFullName,
+          phone: normalizedPhone,
+        }),
       });
 
       const data = await response.json();
@@ -397,19 +481,11 @@ const AdminUsers: React.FC = () => {
       if (data.success) {
         toast({
           title: "Tạo thành công",
-          description: `Đã tạo tài khoản cho ${formData.full_name}`,
+          description: `Đã tạo tài khoản cho ${trimmedFullName}`,
         });
 
         setIsCreateDialogOpen(false);
-        setFormData({
-          email: "",
-          full_name: "",
-          phone: "",
-          dob: "",
-          role_id: 2,
-          password: "",
-          cinema_id: "",
-        });
+        resetFormData();
         fetchUsers(); // Reload
       } else {
         throw new Error(data.message);
@@ -428,6 +504,15 @@ const AdminUsers: React.FC = () => {
 
   // Toggle status (Ban/Unban)
   const handleToggleStatus = async (user: User) => {
+    if (isSelfUser(user)) {
+      toast({
+        title: "Không thể thao tác",
+        description: "Admin không thể tự khóa/mở khóa tài khoản của chính mình",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const newStatus = user.status === "Active" ? "Banned" : "Active";
 
     try {
@@ -464,15 +549,28 @@ const AdminUsers: React.FC = () => {
     }
   };
 
-  // Delete user via API
-  const handleDeleteUser = async (user: User) => {
-    if (!confirm(`Bạn có chắc muốn xóa người dùng ${user.full_name}?`)) {
+  const handleOpenDeleteDialog = (user: User) => {
+    if (isSelfUser(user)) {
+      toast({
+        title: "Không thể thao tác",
+        description: "Admin không thể xóa tài khoản của chính mình",
+        variant: "destructive",
+      });
       return;
     }
 
+    setDeleteTargetUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Delete/lock user via API
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteTargetUser) return;
+
     try {
+      setIsDeletingUser(true);
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_ENDPOINTS.USERS}/${user.id}`, {
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${deleteTargetUser.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -483,10 +581,15 @@ const AdminUsers: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
+        const action = data.data?.action;
         toast({
-          title: "Đã xóa",
-          description: `Đã xóa người dùng ${user.full_name}`,
+          title: action === "locked" ? "Đã khóa tài khoản" : "Đã xóa tài khoản",
+          description:
+            data.data?.message ||
+            `Đã xử lý tài khoản ${deleteTargetUser.full_name}`,
         });
+        setIsDeleteDialogOpen(false);
+        setDeleteTargetUser(null);
         fetchUsers(); // Reload
       } else {
         throw new Error(data.message);
@@ -498,6 +601,8 @@ const AdminUsers: React.FC = () => {
           error instanceof Error ? error.message : "Không thể xóa người dùng",
         variant: "destructive",
       });
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -581,7 +686,7 @@ const AdminUsers: React.FC = () => {
             />
             Làm mới
           </Button>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Button onClick={handleOpenCreateDialog}>
             <UserPlus className="w-4 h-4 mr-2" />
             Thêm Người Dùng
           </Button>
@@ -675,12 +780,20 @@ const AdminUsers: React.FC = () => {
                 placeholder="Tìm theo tên, email, số điện thoại..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                name="user-search"
                 autoComplete="off"
+                disabled={isUserDialogOpen}
+                readOnly={isUserDialogOpen}
+                tabIndex={isUserDialogOpen ? -1 : 0}
+                className="pl-10"
               />
             </div>
 
-            <Select value={filterRole} onValueChange={setFilterRole}>
+            <Select
+              value={filterRole}
+              onValueChange={setFilterRole}
+              disabled={isUserDialogOpen}
+            >
               <SelectTrigger className="w-full md:w-[180px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Vai trò" />
@@ -695,7 +808,11 @@ const AdminUsers: React.FC = () => {
               </SelectContent>
             </Select>
 
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select
+              value={filterStatus}
+              onValueChange={setFilterStatus}
+              disabled={isUserDialogOpen}
+            >
               <SelectTrigger className="w-full md:w-[180px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Trạng thái" />
@@ -825,6 +942,7 @@ const AdminUsers: React.FC = () => {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleToggleStatus(user)}
+                            disabled={isSelfUser(user)}
                           >
                             {user.status === "Active" ? (
                               <>
@@ -839,7 +957,8 @@ const AdminUsers: React.FC = () => {
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDeleteUser(user)}
+                            onClick={() => handleOpenDeleteDialog(user)}
+                            disabled={isSelfUser(user)}
                             className="text-red-600"
                           >
                             <Trash className="w-4 h-4 mr-2" />
@@ -856,8 +975,66 @@ const AdminUsers: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) {
+            setDeleteTargetUser(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Xác nhận xử lý tài khoản
+            </DialogTitle>
+            <DialogDescription>
+              {deleteTargetUser
+                ? `Bạn sắp xử lý tài khoản ${deleteTargetUser.full_name} (${deleteTargetUser.email}).`
+                : "Bạn sắp xử lý tài khoản này."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border bg-muted/40 p-3 text-sm leading-relaxed">
+            Nếu tài khoản chưa có giao dịch/đặt vé, hệ thống sẽ xóa tài khoản.
+            Nếu tài khoản đã phát sinh giao dịch hoặc đặt vé, hệ thống sẽ tự động chuyển sang khóa tài khoản để bảo toàn dữ liệu.
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeleteTargetUser(null);
+              }}
+              disabled={isDeletingUser}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteUser}
+              disabled={isDeletingUser}
+            >
+              {isDeletingUser ? "Đang xử lý..." : "Xác nhận"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit User Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setSelectedUser(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Chỉnh Sửa Người Dùng</DialogTitle>
@@ -875,6 +1052,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, full_name: e.target.value })
                 }
+                autoComplete="off"
               />
             </div>
 
@@ -886,7 +1064,12 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
+                maxLength={11}
+                autoComplete="off"
               />
+              <p className="text-xs text-muted-foreground">
+                Số điện thoại Việt Nam: bắt đầu bằng 0, gồm 10-11 số.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -898,6 +1081,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, dob: e.target.value })
                 }
+                autoComplete="off"
               />
             </div>
 
@@ -991,7 +1175,10 @@ const AdminUsers: React.FC = () => {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setSelectedUser(null);
+              }}
             >
               Hủy
             </Button>
@@ -1001,7 +1188,16 @@ const AdminUsers: React.FC = () => {
       </Dialog>
 
       {/* Create User Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <Dialog
+        open={isCreateDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (open) {
+            setSelectedUser(null);
+            resetFormData();
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Thêm Người Dùng Mới</DialogTitle>
@@ -1048,6 +1244,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, full_name: e.target.value })
                 }
+                autoComplete="off"
               />
             </div>
 
@@ -1060,11 +1257,16 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
+                maxLength={11}
+                autoComplete="off"
               />
+              <p className="text-xs text-muted-foreground">
+                Số điện thoại Việt Nam: bắt đầu bằng 0, gồm 10-11 số.
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-dob">Ngày Sinh</Label>
+              <Label htmlFor="create-dob">Ngày Sinh *</Label>
               <Input
                 id="create-dob"
                 type="date"
@@ -1072,7 +1274,11 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, dob: e.target.value })
                 }
+                autoComplete="off"
               />
+              <p className="text-xs text-muted-foreground">
+                Mật khẩu mặc định sẽ là ngày sinh theo định dạng ddmmyyyy.
+              </p>
             </div>
 
             <div className="space-y-2">

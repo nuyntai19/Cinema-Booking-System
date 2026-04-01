@@ -76,10 +76,16 @@ class AuthController {
             }
             
             $email = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
+            $phone = preg_replace('/\D+/', '', (string)$data['phone']);
+            $fullName = trim((string)$data['fullName']);
             
             // Validate email format
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 return Response::error('Email không hợp lệ', 400);
+            }
+
+            if ($fullName === '') {
+                return Response::error('Họ tên không được để trống', 400);
             }
             
             // Kiểm tra email đã tồn tại chưa
@@ -88,8 +94,12 @@ class AuthController {
             }
             
             // Validate phone
-            if (!preg_match('/^[0-9]{10,11}$/', $data['phone'])) {
-                return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
+            if (!preg_match('/^0\d{9,10}$/', $phone)) {
+                return Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
+            }
+
+            if ($this->userProfileModel->existsByPhone($phone)) {
+                return Response::error('Số điện thoại đã được sử dụng', 409);
             }
             
             // Validate phone uniqueness
@@ -99,12 +109,6 @@ class AuthController {
             
             // Validate DOB
             $dob = new DateTime($data['dob']);
-            $today = new DateTime();
-            $age = $today->diff($dob)->y;
-            
-            if ($age < 13) {
-                return Response::error('Bạn phải đủ 13 tuổi để đăng ký', 400);
-            }
             
             // Validate password
             if (strlen($data['password']) < 6) {
@@ -113,6 +117,9 @@ class AuthController {
             
             // Generate 6-digit verification code
             $verificationCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            $data['phone'] = $phone;
+            $data['fullName'] = $fullName;
             
             // Lưu code vào file (expire sau 5 phút)
             $codes = $this->getVerificationCodes();
@@ -180,9 +187,18 @@ class AuthController {
             
             // Code hợp lệ - Tạo tài khoản
             $userData = $verification['data'];
+            $phone = preg_replace('/\D+/', '', (string)($userData['phone'] ?? ''));
             
             // Hash password
             $passwordHash = password_hash($userData['password'], PASSWORD_BCRYPT, ['cost' => 10]);
+
+            if (!preg_match('/^0\d{9,10}$/', $phone)) {
+                return Response::error('Số điện thoại Việt Nam không hợp lệ (bắt đầu bằng 0, gồm 10-11 số)', 400);
+            }
+
+            if ($this->userProfileModel->existsByPhone($phone)) {
+                return Response::error('Số điện thoại đã được sử dụng', 409);
+            }
             
             // Tạo user
             $userId = $this->userModel->create([
@@ -200,7 +216,7 @@ class AuthController {
             $profileCreated = $this->userProfileModel->create([
                 'user_id' => $userId,
                 'full_name' => $userData['fullName'],
-                'phone' => $userData['phone'],
+                'phone' => $phone,
                 'dob' => $userData['dob'],
                 'membership_id' => 1 // Bronze (default)
             ]);
