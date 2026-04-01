@@ -447,4 +447,27 @@ class Showtime
 
         return $startDateTime->format('Y-m-d H:i:s');
     }
+
+    /**
+     * Lấy số lượng ghế đã bán hoặc đang giữ
+     * @param int $id
+     * @return int
+     */
+    public function getSoldSeatsCount($id)
+    {
+        try {
+            $sql = "SELECT COUNT(DISTINCT t.seat_id) as cnt
+                    FROM tickets t
+                    JOIN bookings b ON t.booking_id = b.id
+                    WHERE b.showtime_id = :id AND t.status IN ('HOLDING', 'SOLD')";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return (int) ($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("Showtime getSoldSeatsCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
 }

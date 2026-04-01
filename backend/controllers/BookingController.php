@@ -76,7 +76,7 @@ class BookingController extends BaseController {
         }
 
         try {
-            // Check under 16 age limit for late night movies
+            // Check under 13 and under 16 age limits for late night movies
             if ($userId) {
                 $stmt = $this->db->prepare("SELECT dob FROM user_profiles WHERE user_id = :uid LIMIT 1");
                 $stmt->execute([':uid' => $userId]);
@@ -98,16 +98,24 @@ class BookingController extends BaseController {
                         $endHour = (int)$startObj->format('H');
                         $endMinute = (int)$startObj->format('i');
                         
-                        $isAfter23 = ($endHour >= 23 && $endMinute > 0) || ($endHour >= 0 && $endHour < 6);
+                        $totalMinsOfDay = $endHour * 60 + $endMinute;
+                        if ($endHour >= 0 && $endHour < 6) {
+                            $totalMinsOfDay += 24 * 60;
+                        }
                         
-                        if ($isAfter23) {
-                            $dob = new DateTime($profile['dob']);
-                            $now = new DateTime();
-                            $age = $now->diff($dob)->y;
-                            
-                            if ($age < 16) {
-                                Response::forbidden('Theo quy định, người dưới 16 tuổi không được phép xem phim có suất chiếu kết thúc sau 23h.');
-                            }
+                        $dob = new DateTime($profile['dob']);
+                        $now = new DateTime();
+                        $age = $now->diff($dob)->y;
+                        
+                        $limit22 = 22 * 60;
+                        $limit23 = 23 * 60;
+                        
+                        if ($age < 13 && $totalMinsOfDay > $limit22) {
+                            Response::forbidden('Theo quy định, người dưới 13 tuổi không được phép xem phim có suất chiếu kết thúc sau 22h.');
+                        }
+                        
+                        if ($age < 16 && $totalMinsOfDay > $limit23) {
+                            Response::forbidden('Theo quy định, người dưới 16 tuổi không được phép xem phim có suất chiếu kết thúc sau 23h.');
                         }
                     }
                 }

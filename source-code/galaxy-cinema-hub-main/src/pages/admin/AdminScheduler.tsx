@@ -157,6 +157,7 @@ const AdminScheduler: React.FC = () => {
   const [moviesList, setMoviesList] = useState<BackendMovie[]>([]);
   const [cinemasList, setCinemasList] = useState<BackendCinema[]>([]);
   const [hallsList, setHallsList] = useState<BackendHall[]>([]);
+  const [editHallsList, setEditHallsList] = useState<BackendHall[]>([]);
   const [loadingHalls, setLoadingHalls] = useState(false);
   const [loading, setLoading] = useState(true);
   const [autoGenerating, setAutoGenerating] = useState(false);
@@ -446,6 +447,26 @@ const AdminScheduler: React.FC = () => {
     loadHalls();
   }, [formData.cinemaId]);
 
+  // Load halls for edit modal
+  useEffect(() => {
+    if (!selectedShowtime?.cinemaId) {
+      setEditHallsList([]);
+      return;
+    }
+    const loadEditHalls = async () => {
+      try {
+        const res = await apiCall<{
+          success: boolean;
+          data: { halls: BackendHall[] };
+        }>(API_ENDPOINTS.CINEMA_HALLS(Number(selectedShowtime.cinemaId)));
+        setEditHallsList(res.data?.halls || []);
+      } catch {
+        setEditHallsList([]);
+      }
+    };
+    loadEditHalls();
+  }, [selectedShowtime?.cinemaId]);
+
   // Clear errors when form data changes
   useEffect(() => {
     setConflictError(null);
@@ -704,6 +725,14 @@ const AdminScheduler: React.FC = () => {
   };
 
   const handleEdit = (showtime: Showtime) => {
+    if (showtime.availableSeats < showtime.totalSeats) {
+      toast({
+        title: "Không thể chỉnh sửa",
+        description: "Suất chiếu này đã có vé được khách hàng giữ hoặc mua.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSelectedShowtime(showtime);
     setIsEditDialogOpen(true);
   };
@@ -718,6 +747,7 @@ const AdminScheduler: React.FC = () => {
             movie_id: Number(selectedShowtime.movieId),
             start_time: startTime,
             base_price: selectedShowtime.price,
+            cinema_hall_id: Number(selectedShowtime.hallId),
           }),
         });
         toast({
@@ -1781,16 +1811,29 @@ const AdminScheduler: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-room">Phòng</Label>
-                  <Input
-                    id="edit-room"
-                    value={selectedShowtime.room}
-                    onChange={(e) =>
+                  <Select
+                    value={selectedShowtime.hallId}
+                    onValueChange={(value) => {
+                      const selectedHall = editHallsList.find((h) => String(h.id) === value);
                       setSelectedShowtime({
                         ...selectedShowtime,
-                        room: e.target.value,
-                      })
-                    }
-                  />
+                        hallId: value,
+                        room: selectedHall?.name || "",
+                        totalSeats: selectedHall?.total_seats || selectedShowtime.totalSeats,
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="edit-room">
+                      <SelectValue placeholder="Chọn phòng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editHallsList.map((hall) => (
+                        <SelectItem key={hall.id} value={String(hall.id)}>
+                          {hall.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-date">Ngày Chiếu</Label>
@@ -1842,12 +1885,7 @@ const AdminScheduler: React.FC = () => {
                     id="edit-total-seats"
                     type="number"
                     value={selectedShowtime.totalSeats}
-                    onChange={(e) =>
-                      setSelectedShowtime({
-                        ...selectedShowtime,
-                        totalSeats: Number(e.target.value),
-                      })
-                    }
+                    disabled
                   />
                 </div>
               </div>

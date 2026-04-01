@@ -415,18 +415,34 @@ const MovieDetailPage: React.FC = () => {
       return;
     }
 
-    // CHECK UNDER 16 LAW
+    // CHECK UNDER 13 AND UNDER 16 LAWS
     if (showtime.start_time) {
       const startObj = new Date(showtime.start_time.replace(" ", "T"));
       const endObj = new Date(startObj.getTime() + movie.duration * 60000);
       const endHour = endObj.getHours();
       const endMinute = endObj.getMinutes();
       
-      const isAfter23 = (endHour >= 23 && endMinute > 0) || (endHour >= 0 && endHour < 6);
+      let totalMinsOfDay = endHour * 60 + endMinute;
+      // If the movie ends in the early morning of the next day (00:00 - 05:59)
+      if (endHour >= 0 && endHour < 6) {
+        totalMinsOfDay += 24 * 60;
+      }
       
-      if (isAfter23 && user.dob) {
+      if (user.dob) {
         const age = (Date.now() - new Date(user.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-        if (age < 16) {
+        const limit22 = 22 * 60; // 22:00
+        const limit23 = 23 * 60; // 23:00
+
+        if (age < 13 && totalMinsOfDay > limit22) {
+          toast({
+            title: "Không thể chọn suất chiếu này",
+            description: "Theo quy định, trẻ dưới 13 tuổi không được xem phim kết thúc sau 22h.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (age < 16 && totalMinsOfDay > limit23) {
           toast({
             title: "Không thể chọn suất chiếu này",
             description: "Theo quy định, trẻ dưới 16 tuổi không được xem phim kết thúc sau 23h.",

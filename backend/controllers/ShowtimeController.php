@@ -299,6 +299,12 @@ class ShowtimeController
                 return Response::error('Không tìm thấy suất chiếu', 404);
             }
 
+            // Kiểm tra xem đã có người mua hoặc giữ vé chưa
+            $soldSeatsCount = $this->showtimeModel->getSoldSeatsCount($id);
+            if ($soldSeatsCount > 0) {
+                return Response::error('Không thể cập nhật suất chiếu này vì đã có vé được khách hàng giữ chỗ hoặc mua', 409);
+            }
+
             $input = json_decode(file_get_contents('php://input'), true);
 
             if (empty($input)) {
