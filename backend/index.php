@@ -293,6 +293,8 @@ $router->post('/api/concessions/import', 'ConcessionController@import'); // Admi
 $router->put('/api/concessions/:id', 'ConcessionController@update'); // Admin
 $router->delete('/api/concessions/:id', 'ConcessionController@delete'); // Admin
 $router->post('/api/concessions/:id/upload-image', 'ConcessionController@uploadImage'); // Admin - Upload concession image
+$router->post('/api/concessions/:id/inventory', 'ConcessionController@updateInventory'); // Admin/Manager - Update inventory cho rạp
+
 
 // ============================================
 // REVIEW ROUTES

@@ -96,6 +96,8 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/concessions/${id}/upload-image`,
   CONCESSION_UPLOAD_IMAGE_FROM_URL: (id: number) =>
     `${API_BASE_URL}/api/concessions/${id}/upload-image-from-url`,
+  ADMIN_CONCESSION_INVENTORY: (id: number) =>
+    `${API_BASE_URL}/api/concessions/${id}/inventory`,
 
   // Reviews
   MOVIE_REVIEWS_LIST: (movieId: number) =>

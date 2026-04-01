@@ -56,7 +56,13 @@ interface Concession {
   image_url: string | null;
   category: string | null;
   is_available: boolean;
+  inventory_quantity?: number | null;
   created_at?: string;
+}
+
+interface Cinema {
+  id: number;
+  name: string;
 }
 
 const IMAGE_FALLBACK_TEMPLATE =
@@ -76,19 +82,45 @@ const AdminConcessions: React.FC = () => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [concessions, setConcessions] = useState<Concession[]>([]);
+  const [cinemas, setCinemas] = useState<Cinema[]>([]);
+  const [selectedCinemaId, setSelectedCinemaId] = useState<string>("all");
+  
+  const [isInventoryDialogOpen, setIsInventoryDialogOpen] = useState(false);
+  const [inventoryQuantity, setInventoryQuantity] = useState<number>(0);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<Concession | null>(null);
+
+  // Fetch cinemas
+  useEffect(() => {
+    fetchCinemas();
+  }, []);
+
+  const fetchCinemas = async () => {
+    try {
+      const response = await apiCall<{ success: boolean; data: { cinemas: Cinema[] } }>(API_ENDPOINTS.CINEMAS);
+      if (response.success && response.data && response.data.cinemas) {
+        setCinemas(response.data.cinemas);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy danh sách rạp:", error);
+    }
+  };
 
   // Fetch concessions from API
   useEffect(() => {
     fetchConcessions();
-  }, []);
+  }, [selectedCinemaId]);
 
   const fetchConcessions = async () => {
     try {
       setLoading(true);
+      const url = selectedCinemaId !== "all" 
+        ? `${API_ENDPOINTS.CONCESSIONS}?cinema_id=${selectedCinemaId}`
+        : API_ENDPOINTS.CONCESSIONS;
+        
       const response = await apiCall<{
         success: boolean;
         data: Concession[];
-      }>(API_ENDPOINTS.CONCESSIONS, {
+      }>(url, {
         method: "GET",
       });
       if (response.success && response.data) {
@@ -259,6 +291,42 @@ const AdminConcessions: React.FC = () => {
 
     return matchesSearch && matchesCategory;
   });
+
+  const handleEditInventory = (item: Concession) => {
+    setSelectedInventoryItem(item);
+    setInventoryQuantity(item.inventory_quantity ?? 0);
+    setIsInventoryDialogOpen(true);
+  };
+
+  const handleUpdateInventory = async () => {
+    if (!selectedInventoryItem || selectedCinemaId === "all") return;
+    try {
+      setLoading(true);
+      await apiCall(API_ENDPOINTS.ADMIN_CONCESSION_INVENTORY(selectedInventoryItem.id), {
+        method: "POST",
+        body: JSON.stringify({
+          cinema_id: parseInt(selectedCinemaId),
+          quantity: inventoryQuantity,
+        }),
+      });
+      toast({
+        title: "Thành công",
+        description: `Đã cập nhật tồn kho cho ${selectedInventoryItem.name}`,
+      });
+      setIsInventoryDialogOpen(false);
+      fetchConcessions();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể cập nhật tồn kho";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEditItem = (item: Concession) => {
     setSelectedItem(item);
@@ -552,6 +620,20 @@ const AdminConcessions: React.FC = () => {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
+            <Select value={selectedCinemaId} onValueChange={setSelectedCinemaId}>
+              <SelectTrigger className="w-full md:w-[250px]">
+                <SelectValue placeholder="Chọn rạp để xem/nhập kho" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả rạp (Quản lý chung)</SelectItem>
+                {cinemas.map((c) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -613,18 +695,26 @@ const AdminConcessions: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-2">
                   <span className="text-xl font-bold text-primary">
                     {Number(item.price).toLocaleString("vi-VN")}đ
                   </span>
-                  <Badge
-                    variant={item.is_available ? "default" : "destructive"}
-                  >
+                  <Badge variant={item.is_available ? "default" : "destructive"}>
                     {item.is_available ? "Còn hàng" : "Hết hàng"}
                   </Badge>
                 </div>
 
-                <div className="flex gap-2">
+                {selectedCinemaId !== "all" && (
+                  <div className="flex justify-between items-center text-sm border-t pt-2 mt-2">
+                    <span className="text-muted-foreground">Tồn kho rạp:</span>
+                    <span className="font-bold flex items-center gap-1">
+                      <Package className="w-4 h-4 text-muted-foreground" />
+                      {item.inventory_quantity !== null && item.inventory_quantity !== undefined ? item.inventory_quantity : 0}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-3">
                   <Button
                     variant="outline"
                     className="flex-1"
@@ -642,6 +732,12 @@ const AdminConcessions: React.FC = () => {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                       <DropdownMenuSeparator />
+                      {selectedCinemaId !== "all" && (
+                        <DropdownMenuItem onClick={() => handleEditInventory(item)}>
+                          <Package className="w-4 h-4 mr-2 text-blue-500" />
+                          <span className="text-blue-500 font-medium">Cập nhật tồn kho</span>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => handleEditItem(item)}>
                         <Edit className="w-4 h-4 mr-2" />
                         Chỉnh sửa
@@ -967,6 +1063,42 @@ const AdminConcessions: React.FC = () => {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               Tạo Sản Phẩm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory Update Dialog */}
+      <Dialog open={isInventoryDialogOpen} onOpenChange={setIsInventoryDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cập Nhật Tồn Kho</DialogTitle>
+            <DialogDescription>
+              Thay đổi số lượng tồn kho cho {selectedInventoryItem?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="inventory-quantity">Số lượng tồn kho mới</Label>
+              <Input
+                id="inventory-quantity"
+                type="number"
+                min="0"
+                value={inventoryQuantity}
+                onChange={(e) => setInventoryQuantity(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsInventoryDialogOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button onClick={handleUpdateInventory} disabled={loading}>
+              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Lưu thay đổi
             </Button>
           </DialogFooter>
         </DialogContent>

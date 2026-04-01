@@ -285,10 +285,12 @@ class ConcessionController
      */
     public function uploadImage($id)
     {
+        AuthMiddleware::authenticate();
+        AuthMiddleware::requireRole(['Admin', 'Manager']);
         try {
             $concession = $this->concessionModel->getById($id);
             if (!$concession) {
-                Response::notFound('Không tìm thấy sản phẩm');
+               Response::notFound('Không tìm thấy sản phẩm');
             }
 
             if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
@@ -348,6 +350,50 @@ class ConcessionController
             ], 'Upload ảnh sản phẩm thành công');
         } catch (Exception $e) {
             Response::serverError('Lỗi upload ảnh: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Cập nhật số lượng tồn kho của một sản phẩm cho một rạp cụ thể (Admin/Manager)
+     * POST /api/concessions/:id/inventory
+     */
+    public function updateInventory($id)
+    {
+        AuthMiddleware::authenticate();
+        AuthMiddleware::requireRole(['Admin', 'Manager']);
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+
+            if (!isset($input['cinema_id']) || !isset($input['quantity'])) {
+                Response::error('Thiếu thông tin rạp (cinema_id) hoặc số lượng (quantity)', 400);
+            }
+
+            $cinemaId = (int)$input['cinema_id'];
+            $quantity = (int)$input['quantity'];
+
+            if ($quantity < 0) {
+                Response::error('Số lượng tồn kho không được nhỏ hơn 0', 400);
+            }
+
+            $concession = $this->concessionModel->getById($id);
+            if (!$concession) {
+                Response::notFound('Không tìm thấy sản phẩm');
+            }
+
+            $success = $this->concessionModel->setInventory($cinemaId, $id, $quantity);
+
+            if ($success) {
+                Response::success([
+                    'concession_id' => (int)$id,
+                    'cinema_id' => $cinemaId,
+                    'quantity' => $quantity
+                ], 'Cập nhật số lượng tồn kho thành công');
+            } else {
+                Response::serverError('Không thể cập nhật số lượng tồn kho (Có thể rạp không tồn tại)');
+            }
+        } catch (Exception $e) {
+            Response::serverError('Lỗi cập nhật tồn kho: ' . $e->getMessage());
         }
     }
 
