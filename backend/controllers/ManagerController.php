@@ -1181,4 +1181,65 @@ class ManagerController extends BaseController
             Response::serverError('Lỗi export: ' . $e->getMessage());
         }
     }
+
+    // ============================================
+    // CONCESSION INVENTORY MANAGEMENT
+    // ============================================
+
+    /**
+     * GET /api/manager/concessions
+     * Danh sách tất cả concessions kèm tồn kho của rạp manager đang quản lý
+     */
+    public function getConcessions(): void
+    {
+        $cinemaId = $this->requireManagerCinema();
+        try {
+            require_once __DIR__ . '/../models/Concession.php';
+            $concessionModel = new Concession();
+            $items = $concessionModel->getAllWithInventory($cinemaId);
+            Response::success(['concessions' => $items, 'cinema_id' => $cinemaId]);
+        } catch (\Exception $e) {
+            Response::serverError('Lỗi lấy danh sách bắp nước: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * POST /api/manager/concessions/:id/inventory
+     * Cập nhật tồn kho của 1 sản phẩm tại rạp
+     * Body: { "quantity": 50 }
+     */
+    public function updateConcessionInventory(int $id): void
+    {
+        $concessionId = $id;
+        $cinemaId = $this->requireManagerCinema();
+        try {
+            $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+            $quantity = isset($input['quantity']) ? (int)$input['quantity'] : null;
+
+            if ($quantity === null || $quantity < 0) {
+                Response::error('Số lượng không hợp lệ (phải >= 0)', 400);
+            }
+
+            // Verify concession exists
+            $check = $this->db->prepare("SELECT id FROM concessions WHERE id = :id");
+            $check->execute([':id' => $concessionId]);
+            if (!$check->fetch()) {
+                Response::notFound('Sản phẩm không tồn tại');
+            }
+
+            require_once __DIR__ . '/../models/Concession.php';
+            $concessionModel = new Concession();
+            $concessionModel->setInventory($cinemaId, $concessionId, $quantity);
+
+            Response::success([
+                'cinema_id'      => $cinemaId,
+                'concession_id'  => $concessionId,
+                'quantity'       => $quantity,
+                'low_stock'      => $quantity < 5,
+            ], 'Cập nhật tồn kho thành công');
+        } catch (\Exception $e) {
+            Response::serverError('Lỗi cập nhật tồn kho: ' . $e->getMessage());
+        }
+    }
 }
+

@@ -259,4 +259,132 @@ class Concession
 
         return $stmt->fetchAll();
     }
+
+    // ====================================================
+    // INVENTORY MANAGEMENT (theo rạp)
+    // ====================================================
+
+    /**
+     * Lấy tồn kho của tất cả sản phẩm theo rạp
+     * @param int $cinemaId
+     * @return array [concession_id => quantity, ...]
+     */
+    public function getInventoryByCinema(int $cinemaId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT concession_id, quantity
+            FROM cinema_concession_inventory
+            WHERE cinema_id = ?
+        ");
+        $stmt->execute([$cinemaId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int)$row['concession_id']] = (int)$row['quantity'];
+        }
+        return $result;
+    }
+
+    /**
+     * Lấy tất cả concessions kèm tồn kho của rạp
+     * @param int $cinemaId
+     * @return array
+     */
+    public function getAllWithInventory(int $cinemaId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.*,
+                   COALESCE(inv.quantity, 0) AS inventory_quantity
+            FROM concessions c
+            LEFT JOIN cinema_concession_inventory inv
+                   ON inv.concession_id = c.id AND inv.cinema_id = :cinema_id
+            ORDER BY c.category, c.name
+        ");
+        $stmt->execute([':cinema_id' => $cinemaId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Lấy available concessions kèm tồn kho của rạp
+     * @param int|null $cinemaId
+     * @return array
+     */
+    public function getAvailableWithInventory(?int $cinemaId = null): array
+    {
+        if (!$cinemaId) {
+            return $this->getAvailable();
+        }
+        $stmt = $this->db->prepare("
+            SELECT c.*,
+                   COALESCE(inv.quantity, 0) AS inventory_quantity
+            FROM concessions c
+            LEFT JOIN cinema_concession_inventory inv
+                   ON inv.concession_id = c.id AND inv.cinema_id = :cinema_id
+            WHERE c.is_available = TRUE
+            ORDER BY c.category, c.name
+        ");
+        $stmt->execute([':cinema_id' => $cinemaId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Thiết lập hoặc cập nhật tồn kho cho 1 sản phẩm tại 1 rạp
+     * @param int $cinemaId
+     * @param int $concessionId
+     * @param int $quantity
+     * @return bool
+     */
+    public function setInventory(int $cinemaId, int $concessionId, int $quantity): bool
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO cinema_concession_inventory (cinema_id, concession_id, quantity)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), updated_at = NOW()
+        ");
+        return $stmt->execute([$cinemaId, $concessionId, $quantity]);
+    }
+
+    /**
+     * Trừ tồn kho khi đặt hàng
+     * @param int $cinemaId
+     * @param int $concessionId
+     * @param int $amount - Số lượng cần trừ
+     * @return bool - false nếu không đủ hàng
+     */
+    public function decreaseInventory(int $cinemaId, int $concessionId, int $amount): bool
+    {
+        // Atomic update + check
+        $stmt = $this->db->prepare("
+            UPDATE cinema_concession_inventory
+            SET quantity = quantity - :amount
+            WHERE cinema_id = :cinema_id
+              AND concession_id = :concession_id
+              AND quantity >= :amount2
+        ");
+        $stmt->execute([
+            ':amount'        => $amount,
+            ':cinema_id'     => $cinemaId,
+            ':concession_id' => $concessionId,
+            ':amount2'       => $amount,
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Lấy tồn kho của 1 sản phẩm tại 1 rạp
+     * @param int $cinemaId
+     * @param int $concessionId
+     * @return int
+     */
+    public function getStock(int $cinemaId, int $concessionId): int
+    {
+        $stmt = $this->db->prepare("
+            SELECT quantity FROM cinema_concession_inventory
+            WHERE cinema_id = ? AND concession_id = ?
+        ");
+        $stmt->execute([$cinemaId, $concessionId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? (int)$row['quantity'] : 0;
+    }
 }
+

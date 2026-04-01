@@ -45,6 +45,7 @@ import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import ManagerShowtimes from "./pages/manager/ManagerShowtimes";
 import ManagerStaff from "./pages/manager/ManagerStaff";
 import ManagerReports from "./pages/manager/ManagerReports";
+import ManagerConcessions from "./pages/manager/ManagerConcessions";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
@@ -152,6 +153,7 @@ const App = () => (
                   <Route path="showtimes" element={<ManagerShowtimes />} />
                   <Route path="staff" element={<ManagerStaff />} />
                   <Route path="reports" element={<ManagerReports />} />
+                  <Route path="concessions" element={<ManagerConcessions />} />
                 </Route>
 
                 {/* Staff Routes */}

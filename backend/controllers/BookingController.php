@@ -121,6 +121,49 @@ class BookingController extends BaseController {
                 }
             }
 
+            // Kiểm tra và trừ tồn kho concession nếu có
+            if (!empty($concessions)) {
+                // Lấy cinema_id từ showtime
+                $stmtCinema = $this->db->prepare("
+                    SELECT c.id as cinema_id
+                    FROM showtimes s
+                    JOIN cinema_halls ch ON ch.id = s.cinema_hall_id
+                    JOIN cinemas c ON c.id = ch.cinema_id
+                    WHERE s.id = :sid LIMIT 1
+                ");
+                $stmtCinema->execute([':sid' => $showtimeId]);
+                $cinemaRow = $stmtCinema->fetch(PDO::FETCH_ASSOC);
+                $cinemaId = $cinemaRow ? (int)$cinemaRow['cinema_id'] : null;
+
+                if ($cinemaId) {
+                    require_once __DIR__ . '/../models/Concession.php';
+                    $concessionModel = new Concession();
+
+                    // Kiểm tra trước (preview - không trừ)
+                    foreach ($concessions as $item) {
+                        $cid = isset($item['concession_id']) ? (int)$item['concession_id'] : 0;
+                        $qty = isset($item['quantity']) ? (int)$item['quantity'] : 0;
+                        if ($cid <= 0 || $qty <= 0) continue;
+
+                        $stock = $concessionModel->getStock($cinemaId, $cid);
+                        if ($stock < $qty) {
+                            $stmtName = $this->db->prepare("SELECT name FROM concessions WHERE id = :id");
+                            $stmtName->execute([':id' => $cid]);
+                            $concessionName = $stmtName->fetchColumn() ?: "Sản phẩm #$cid";
+                            Response::error("\"$concessionName\" đã hết hàng hoặc không đủ số lượng tồn kho. Còn lại: $stock.", 400);
+                        }
+                    }
+
+                    // Trừ tồn kho sau khi kiểm tra
+                    foreach ($concessions as $item) {
+                        $cid = isset($item['concession_id']) ? (int)$item['concession_id'] : 0;
+                        $qty = isset($item['quantity']) ? (int)$item['quantity'] : 0;
+                        if ($cid <= 0 || $qty <= 0) continue;
+                        $concessionModel->decreaseInventory($cinemaId, $cid, $qty);
+                    }
+                }
+            }
+
             $result = $this->bookingService->createBooking(
                 $userId ? (int)$userId : null,
                 (int)$showtimeId,

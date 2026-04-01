@@ -24,7 +24,13 @@ class ConcessionController
     public function index()
     {
         try {
-            $concessions = $this->concessionModel->getAll();
+            $cinemaId = isset($_GET['cinema_id']) ? (int)$_GET['cinema_id'] : null;
+
+            if ($cinemaId) {
+                $concessions = $this->concessionModel->getAllWithInventory($cinemaId);
+            } else {
+                $concessions = $this->concessionModel->getAll();
+            }
 
             Response::success($concessions, 'Lấy danh sách bắp nước thành công');
         } catch (Exception $e) {
@@ -259,7 +265,13 @@ class ConcessionController
     public function getAvailable()
     {
         try {
-            $concessions = $this->concessionModel->getAvailable();
+            $cinemaId = isset($_GET['cinema_id']) ? (int)$_GET['cinema_id'] : null;
+
+            if ($cinemaId) {
+                $concessions = $this->concessionModel->getAvailableWithInventory($cinemaId);
+            } else {
+                $concessions = $this->concessionModel->getAvailable();
+            }
 
             Response::success($concessions, 'Lấy danh sách sản phẩm đang bán thành công');
         } catch (Exception $e) {

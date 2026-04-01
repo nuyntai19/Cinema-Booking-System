@@ -13,13 +13,32 @@ import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useBooking } from "@/contexts/AppContext";
-import { ConcessionItem } from "@/types/cinema";
-import { ConcessionService } from "@/services/concession.service";
-import { Concession } from "@/types/api";
 import { useToast } from "@/hooks/use-toast";
 import { useHoldTimer, formatHoldTime } from "@/hooks/useHoldTimer";
 import { cn } from "@/lib/utils";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
+
+// Local type for items shown in this page
+interface ConcessionDisplayItem {
+  id: string;
+  name: string;
+  nameVi: string;
+  price: number;
+  quantity: number;
+  image: string;
+  inventory_quantity?: number;
+}
+
+// Shape returned by backend
+interface ApiConcession {
+  id: number;
+  name: string;
+  price: number | string;
+  image_url: string | null;
+  category: string | null;
+  is_available: boolean;
+  inventory_quantity?: number;
+}
 
 const ConcessionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -28,11 +47,14 @@ const ConcessionsPage: React.FC = () => {
   const {
     selectedMovie,
     selectedSeats,
+    selectedShowtime,
     concessions: selectedConcessions,
     updateConcession,
   } = useBooking();
+
   const initialSelectedConcessionsRef = useRef(selectedConcessions);
-  const [items, setItems] = useState<ConcessionItem[]>([]);
+
+  const [items, setItems] = useState<ConcessionDisplayItem[]>([]);
   const [movie, setMovie] = useState<{
     id: string;
     title: string;
@@ -40,8 +62,10 @@ const ConcessionsPage: React.FC = () => {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({});
   const [loadingMovie, setLoadingMovie] = useState(true);
 
+  // Load movie info
   useEffect(() => {
     const fetchMovie = async () => {
       if (!selectedMovie) {
@@ -81,34 +105,41 @@ const ConcessionsPage: React.FC = () => {
     fetchMovie();
   }, [selectedMovie]);
 
-  // Fetch available concessions from API
+  // Fetch available concessions (with inventory if cinema known)
   useEffect(() => {
     const fetchConcessions = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await ConcessionService.getAvailable();
+
+        // Get cinema_id from selectedShowtime if available
+        const showtimeData = selectedShowtime as unknown as { cinemaId?: string; cinema_id?: number; id?: string } | null;
+        let cinemaId = showtimeData?.cinemaId || showtimeData?.cinema_id;
+        let url = `${API_ENDPOINTS.CONCESSIONS}/available`;
+        if (cinemaId) {
+          url += `?cinema_id=${cinemaId}`;
+        }
+
+        const response = await apiCall<{
+          success: boolean;
+          data: ApiConcession[];
+        }>(url);
 
         if (response.success && response.data) {
           const selectedMap = new Map(
-            initialSelectedConcessionsRef.current.map((c) => [
-              c.id,
-              c.quantity,
-            ]),
+            initialSelectedConcessionsRef.current.map((c) => [c.id, c.quantity]),
           );
 
-          // Map API data to ConcessionItem format
-          const mappedItems: ConcessionItem[] = (
-            response.data as Concession[]
-          ).map((c) => ({
+          const mappedItems: ConcessionDisplayItem[] = response.data.map((c) => ({
             id: String(c.id),
             name: c.name,
-            nameVi: c.name, // Use same name if no Vietnamese name
+            nameVi: c.name,
             price: Number(c.price) || 0,
             quantity: selectedMap.get(String(c.id)) || 0,
             image: c.image_url
               ? getImageUrl(c.image_url)
               : "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=200",
+            inventory_quantity: c.inventory_quantity,
           }));
           setItems(mappedItems);
         } else {
@@ -130,15 +161,28 @@ const ConcessionsPage: React.FC = () => {
     };
 
     fetchConcessions();
-  }, [toast]);
+  }, [toast, selectedShowtime]);
 
-  const handleQuantityChange = (id: string, delta: number) => {
+  const handleQuantityChange = (
+    id: string,
+    delta: number,
+    inventoryQty?: number,
+  ) => {
     const currentItem = items.find((item) => item.id === id);
-    if (!currentItem) {
-      return;
-    }
+    if (!currentItem) return;
+
+    setInlineErrors((prev) => ({ ...prev, [id]: "" }));
 
     const newQuantity = Math.max(0, currentItem.quantity + delta);
+
+    // Block if out of stock
+    if (delta > 0 && inventoryQty !== undefined && newQuantity > inventoryQty) {
+      setInlineErrors((prev) => ({
+        ...prev,
+        [id]: `Chỉ còn ${inventoryQty} phần`,
+      }));
+      return;
+    }
 
     setItems((prev) =>
       prev.map((item) =>
@@ -163,15 +207,10 @@ const ConcessionsPage: React.FC = () => {
   const seatCodes = selectedSeats.map((s) => `${s.row}${s.number}`);
   const hasConcessionSelected = items.some((item) => item.quantity > 0);
 
-  const handleContinue = () => {
-    navigate("/booking/payment");
-  };
+  const handleContinue = () => navigate("/booking/payment");
+  const handleSkip = () => navigate("/booking/payment");
 
-  const handleSkip = () => {
-    navigate("/booking/payment");
-  };
-
-  // Redirect if no movie/seats selected (must be in useEffect, not during render)
+  // Redirect if no movie/seats selected
   useEffect(() => {
     if (!selectedMovie || selectedSeats.length === 0) {
       navigate("/schedule");
@@ -196,7 +235,7 @@ const ConcessionsPage: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-2xl font-bold flex-1">Combo & Bắp Nước</h1>
+          <h1 className="text-2xl font-bold flex-1">Combo &amp; Bắp Nước</h1>
           {holdTimerActive && (
             <div
               className={cn(
@@ -238,53 +277,80 @@ const ConcessionsPage: React.FC = () => {
                   Hiện không có bắp nước nào
                 </div>
               ) : (
-                items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-card rounded-xl border border-border p-4 flex gap-4 animate-fade-in"
-                  >
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-24 h-24 object-cover rounded-lg"
-                    />
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="font-semibold">{item.nameVi}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {item.name}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-primary">
-                          {item.price.toLocaleString("vi-VN")}đ
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="w-8 h-8"
-                            onClick={() => handleQuantityChange(item.id, -1)}
-                            disabled={item.quantity === 0}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                          <span className="w-8 text-center font-medium">
-                            {item.quantity}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="w-8 h-8"
-                            onClick={() => handleQuantityChange(item.id, 1)}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
+                items.map((item) => {
+                  const inv = item.inventory_quantity;
+                  const isOutOfStock = inv !== undefined && inv <= 0;
+                  const isLowStock = inv !== undefined && inv > 0 && inv < 5;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`bg-card rounded-xl border p-4 flex gap-4 animate-fade-in ${
+                        isOutOfStock ? "opacity-60 border-red-300" : "border-border"
+                      }`}
+                    >
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-24 h-24 object-cover rounded-lg"
+                      />
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="font-semibold">{item.nameVi}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {item.name}
+                          </p>
+                          {isOutOfStock ? (
+                            <p className="text-xs text-red-500 font-semibold mt-1">
+                              ❌ Hết hàng
+                            </p>
+                          ) : isLowStock ? (
+                            <p className="text-xs text-orange-500 font-bold mt-1">
+                              ⚠️ Sắp hết (còn {inv})
+                            </p>
+                          ) : inv !== undefined ? (
+                            <p className="text-xs text-green-600 font-medium mt-1">
+                              ✓ Tồn kho: {inv}
+                            </p>
+                          ) : null}
                         </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-primary">
+                            {item.price.toLocaleString("vi-VN")}đ
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="w-8 h-8"
+                              onClick={() => handleQuantityChange(item.id, -1, inv)}
+                              disabled={item.quantity === 0}
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <span className="w-8 text-center font-medium">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="w-8 h-8"
+                              onClick={() => handleQuantityChange(item.id, 1, inv)}
+                              disabled={isOutOfStock}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {inlineErrors[item.id] && (
+                          <div className="text-right text-xs text-red-500 font-medium mt-1">
+                            {inlineErrors[item.id]}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -302,7 +368,7 @@ const ConcessionsPage: React.FC = () => {
                     movie?.poster ||
                     "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop"
                   }
-                  alt={movie.title}
+                  alt={movie?.title ?? ""}
                   className="w-12 h-18 object-cover rounded-lg"
                 />
                 <div>

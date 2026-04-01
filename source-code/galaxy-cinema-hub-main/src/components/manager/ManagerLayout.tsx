@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   Building2,
   RefreshCw,
+  Package,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
@@ -64,10 +65,11 @@ const ManagerLayout: React.FC = () => {
   if (!isAuthenticated || !user) return null;
 
   const navItems = [
-    { label: "Dashboard",  path: "/manager",           icon: LayoutDashboard, exact: true },
-    { label: "Lịch Chiếu", path: "/manager/showtimes", icon: Calendar,        exact: false },
-    { label: "Nhân Viên",  path: "/manager/staff",     icon: Users,           exact: false },
-    { label: "Báo Cáo",   path: "/manager/reports",   icon: BarChart3,       exact: false },
+    { label: "Dashboard",   path: "/manager",              icon: LayoutDashboard, exact: true },
+    { label: "Lịch Chiếu",  path: "/manager/showtimes",    icon: Calendar,        exact: false },
+    { label: "Nhân Viên",   path: "/manager/staff",        icon: Users,           exact: false },
+    { label: "Bắp Nước",   path: "/manager/concessions", icon: Package,         exact: false },
+    { label: "Báo Cáo",    path: "/manager/reports",      icon: BarChart3,       exact: false },
   ];
 
   const isActive = (item: typeof navItems[0]) =>

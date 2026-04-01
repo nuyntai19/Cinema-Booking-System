@@ -363,6 +363,9 @@ $router->get('/api/manager/reports/export', 'ManagerController@exportReport');
 // Transactions (for Excel/PDF export)
 $router->get('/api/manager/transactions', 'ManagerController@getTransactions');
 $router->get('/api/manager/transactions/export-details', 'ManagerController@getTransactionsExportDetails');
+// Concessions inventory (Manager)
+$router->get('/api/manager/concessions', 'ManagerController@getConcessions');
+$router->post('/api/manager/concessions/:id/inventory', 'ManagerController@updateConcessionInventory');
 
 // Run router
 $router->run();

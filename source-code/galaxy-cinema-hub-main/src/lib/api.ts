@@ -163,6 +163,11 @@ export const API_ENDPOINTS = {
   MANAGER_REPORT_EXPORT: `${API_BASE_URL}/api/manager/reports/export`,
   MANAGER_TRANSACTIONS: `${API_BASE_URL}/api/manager/transactions`,
   MANAGER_TRANSACTIONS_EXPORT_DETAILS: `${API_BASE_URL}/api/manager/transactions/export-details`,
+  MANAGER_CONCESSIONS: `${API_BASE_URL}/api/manager/concessions`,
+  MANAGER_CONCESSION_INVENTORY: (id: number) =>
+    `${API_BASE_URL}/api/manager/concessions/${id}/inventory`,
+  CONCESSIONS_AVAILABLE_BY_CINEMA: (cinemaId: number) =>
+    `${API_BASE_URL}/api/concessions/available?cinema_id=${cinemaId}`,
 };
 
 // Helper function for API calls

@@ -108,6 +108,7 @@ interface ConcessionItem {
   price: number;
   image_url?: string;
   description?: string;
+  inventory_quantity?: number;
 }
 
 interface SelectedConcession {
@@ -185,6 +186,7 @@ const StaffPOS: React.FC = () => {
     SelectedConcession[]
   >([]);
   const [loadingConcessions, setLoadingConcessions] = useState(false);
+  const [concessionErrors, setConcessionErrors] = useState<Record<number, string>>({});
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -290,10 +292,14 @@ const StaffPOS: React.FC = () => {
     const fetchConcessions = async () => {
       setLoadingConcessions(true);
       try {
+        const url = user?.cinema_id 
+          ? API_ENDPOINTS.CONCESSIONS_AVAILABLE_BY_CINEMA(Number(user.cinema_id))
+          : API_ENDPOINTS.CONCESSIONS;
+          
         const response = await apiCall<{
           success: boolean;
           data: ConcessionItem[];
-        }>(API_ENDPOINTS.CONCESSIONS);
+        }>(url);
 
         setConcessions(response.data || []);
       } catch (error) {
@@ -305,7 +311,7 @@ const StaffPOS: React.FC = () => {
     };
 
     void fetchConcessions();
-  }, []);
+  }, [user?.cinema_id]);
 
   useEffect(() => {
     const fetchGuestHistory = async () => {
@@ -523,9 +529,28 @@ const StaffPOS: React.FC = () => {
   const handleAddConcession = (concession: ConcessionItem) => {
     const normalizedPrice = Number(concession.price) || 0;
     const normalizedName = getConcessionLabel(concession.name, concession.id);
+    const inv = concession.inventory_quantity;
+
+    setConcessionErrors((prev) => ({ ...prev, [concession.id]: "" }));
+
+    if (inv !== undefined && inv <= 0) {
+      toast({
+        title: "Hết hàng",
+        description: "Sản phẩm này đã hết hàng.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setSelectedConcessions((prev) => {
       const existing = prev.find((c) => c.id === concession.id);
+      const currentQty = existing ? existing.quantity : 0;
+      
+      if (inv !== undefined && currentQty >= inv) {
+        setConcessionErrors((prevErrors) => ({ ...prevErrors, [concession.id]: `Chỉ còn ${inv} phần` }));
+        return prev;
+      }
+
       if (existing) {
         return prev.map((c) =>
           c.id === concession.id ? { ...c, quantity: c.quantity + 1 } : c,
@@ -551,10 +576,19 @@ const StaffPOS: React.FC = () => {
     concessionId: number,
     quantity: number,
   ) => {
+    setConcessionErrors((prev) => ({ ...prev, [concessionId]: "" }));
     if (quantity <= 0) {
       handleRemoveConcession(concessionId);
       return;
     }
+
+    const concession = concessions.find((c) => c.id === concessionId);
+    const inv = concession?.inventory_quantity;
+    if (inv !== undefined && quantity > inv) {
+      setConcessionErrors((prevErrors) => ({ ...prevErrors, [concessionId]: `Chỉ còn ${inv} phần` }));
+      return;
+    }
+
     setSelectedConcessions((prev) =>
       prev.map((c) => (c.id === concessionId ? { ...c, quantity } : c)),
     );
@@ -1437,9 +1471,17 @@ const StaffPOS: React.FC = () => {
                         <p className="font-medium text-gray-900 line-clamp-1">
                           {getConcessionLabel(concession.name, concession.id)}
                         </p>
-                        <p className="text-purple-700">
-                          {formatVND(Number(concession.price))}
-                        </p>
+                        <div className="flex justify-between items-center text-purple-700">
+                          <span>{formatVND(Number(concession.price))}</span>
+                          {concession.inventory_quantity !== undefined && (
+                            <span className={cn(
+                              "text-xs ml-1 font-semibold",
+                              concession.inventory_quantity <= 0 ? "text-red-600" : (concession.inventory_quantity < 5 ? "text-orange-500" : "text-gray-500")
+                            )}>
+                              (Tồn: {concession.inventory_quantity})
+                            </span>
+                          )}
+                        </div>
                         {selected && (
                           <div className="flex items-center gap-1 mt-1">
                             <button
@@ -1471,6 +1513,11 @@ const StaffPOS: React.FC = () => {
                             >
                               +
                             </button>
+                          </div>
+                        )}
+                        {concessionErrors[concession.id] && (
+                          <div className="text-xs text-red-500 font-semibold mt-1">
+                            {concessionErrors[concession.id]}
                           </div>
                         )}
                       </div>
