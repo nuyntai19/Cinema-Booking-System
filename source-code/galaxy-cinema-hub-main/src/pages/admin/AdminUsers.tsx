@@ -676,6 +676,7 @@ const AdminUsers: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
+                autoComplete="off"
               />
             </div>
 
@@ -910,6 +911,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
+                autoComplete="new-password"
               />
             </div>
 
@@ -1019,6 +1021,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                autoComplete="off"
               />
             </div>
 
@@ -1032,6 +1035,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
+                autoComplete="new-password"
               />
             </div>
 

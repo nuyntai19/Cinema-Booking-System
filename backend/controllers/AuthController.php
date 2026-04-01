@@ -92,6 +92,11 @@ class AuthController {
                 return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
             }
             
+            // Validate phone uniqueness
+            if ($this->userProfileModel->findByPhone($data['phone'])) {
+                return Response::error('Số điện thoại đã được sử dụng', 409);
+            }
+            
             // Validate DOB
             $dob = new DateTime($data['dob']);
             $today = new DateTime();

@@ -366,9 +366,12 @@ const MovieDetailPage: React.FC = () => {
   }
 
   // Prefer real dates that have showtimes. Fallback to next 7 days if no data yet.
+  const todayStr = getLocalDateString(new Date());
   const dates =
     availableDates.length > 0
-      ? availableDates.map((value) => {
+      ? availableDates
+          .filter(value => value >= todayStr)
+          .map((value) => {
           const d = new Date(`${value}T00:00:00`);
           return {
             value,
@@ -401,7 +404,7 @@ const MovieDetailPage: React.FC = () => {
       return;
     }
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       toast({
         title: "Vui lòng đăng nhập",
         description:
@@ -410,6 +413,28 @@ const MovieDetailPage: React.FC = () => {
       });
       navigate("/login");
       return;
+    }
+
+    // CHECK UNDER 16 LAW
+    if (showtime.start_time) {
+      const startObj = new Date(showtime.start_time.replace(" ", "T"));
+      const endObj = new Date(startObj.getTime() + movie.duration * 60000);
+      const endHour = endObj.getHours();
+      const endMinute = endObj.getMinutes();
+      
+      const isAfter23 = (endHour >= 23 && endMinute > 0) || (endHour >= 0 && endHour < 6);
+      
+      if (isAfter23 && user.dob) {
+        const age = (Date.now() - new Date(user.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        if (age < 16) {
+          toast({
+            title: "Không thể chọn suất chiếu này",
+            description: "Theo quy định, trẻ dưới 16 tuổi không được xem phim kết thúc sau 23h.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
     }
 
     // Check age restriction

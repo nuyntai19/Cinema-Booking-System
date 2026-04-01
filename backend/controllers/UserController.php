@@ -218,6 +218,11 @@ class UserController
                 return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
             }
 
+            // Check phone exists
+            if ($this->userProfileModel->findByPhone($data['phone'])) {
+                return Response::error('Số điện thoại đã được sử dụng', 409);
+            }
+
             // Hash password
             $passwordHash = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 10]);
 
@@ -511,8 +516,15 @@ class UserController
             }
 
             // Validate phone nếu có
-            if (isset($data['phone']) && !preg_match('/^[0-9]{10,11}$/', $data['phone'])) {
-                return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
+            if (isset($data['phone'])) {
+                if (!preg_match('/^[0-9]{10,11}$/', $data['phone'])) {
+                    return Response::error('Số điện thoại không hợp lệ (10-11 số)', 400);
+                }
+                
+                $existingPhone = $this->userProfileModel->findByPhone($data['phone']);
+                if ($existingPhone && $existingPhone['user_id'] != $id) {
+                    return Response::error('Số điện thoại đã được sử dụng bởi người dùng khác', 409);
+                }
             }
 
             // Validate DOB nếu có

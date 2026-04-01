@@ -76,6 +76,43 @@ class BookingController extends BaseController {
         }
 
         try {
+            // Check under 16 age limit for late night movies
+            if ($userId) {
+                $stmt = $this->db->prepare("SELECT dob FROM user_profiles WHERE user_id = :uid LIMIT 1");
+                $stmt->execute([':uid' => $userId]);
+                $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($profile && !empty($profile['dob'])) {
+                    $stmtST = $this->db->prepare("
+                        SELECT s.start_time, m.duration_minutes 
+                        FROM showtimes s 
+                        JOIN movies m ON s.movie_id = m.id 
+                        WHERE s.id = :sid
+                    ");
+                    $stmtST->execute([':sid' => $showtimeId]);
+                    $stCheck = $stmtST->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($stCheck) {
+                        $startObj = new DateTime($stCheck['start_time']);
+                        $startObj->modify("+{$stCheck['duration_minutes']} minutes");
+                        $endHour = (int)$startObj->format('H');
+                        $endMinute = (int)$startObj->format('i');
+                        
+                        $isAfter23 = ($endHour >= 23 && $endMinute > 0) || ($endHour >= 0 && $endHour < 6);
+                        
+                        if ($isAfter23) {
+                            $dob = new DateTime($profile['dob']);
+                            $now = new DateTime();
+                            $age = $now->diff($dob)->y;
+                            
+                            if ($age < 16) {
+                                Response::forbidden('Theo quy định, người dưới 16 tuổi không được phép xem phim có suất chiếu kết thúc sau 23h.');
+                            }
+                        }
+                    }
+                }
+            }
+
             $result = $this->bookingService->createBooking(
                 $userId ? (int)$userId : null,
                 (int)$showtimeId,

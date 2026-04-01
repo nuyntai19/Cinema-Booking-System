@@ -92,6 +92,24 @@ class UserProfile {
     }
     
     /**
+     * Lấy profile theo số điện thoại
+     */
+    public function findByPhone($phone) {
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE phone = :phone LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':phone', $phone);
+            $stmt->execute();
+            
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+            
+        } catch (PDOException $e) {
+            error_log("UserProfile FindByPhone Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Tính tuổi từ ngày sinh
      */
     public function calculateAge($dob) {

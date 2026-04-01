@@ -456,6 +456,18 @@ class MovieController
                 }
             }
 
+            // Business rule: Không chuyển status sang Ended nếu còn suất chiếu tương lai
+            $currentStatus = $existingMovie['status'];
+            $newStatus = $input['status'] ?? $currentStatus;
+            
+            if ($newStatus === 'Ended' && $currentStatus !== 'Ended') {
+                $futureCount = $this->movieModel->countFutureShowtimes($id);
+                if ($futureCount > 0) {
+                    return Response::error("Không thể chuyển trạng thái sang 'Ended' vì còn $futureCount suất chiếu trong tương lai. Vui lòng hủy các suất chiếu trước.", 409);
+                }
+            }
+
+
             // Validate genre_ids if provided
             if (isset($input['genre_ids']) && is_array($input['genre_ids'])) {
                 foreach ($input['genre_ids'] as $genreId) {
