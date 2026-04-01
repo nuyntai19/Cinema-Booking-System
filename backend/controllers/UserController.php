@@ -229,17 +229,15 @@ class UserController
                 return Response::error('Số điện thoại đã được sử dụng', 409);
             }
 
-            // Hash password
-            $password = trim((string)($data['password'] ?? ''));
-            if ($password === '') {
-                return Response::error('Mật khẩu không được để trống', 400);
+            // Default password = DOB in ddmmyyyy format
+            try {
+                $dob = new DateTime($data['dob']);
+                $defaultPassword = $dob->format('dmY');
+            } catch (Exception $e) {
+                return Response::error('Ngày sinh không hợp lệ', 400);
             }
 
-            if (mb_strlen($password, 'UTF-8') < 6) {
-                return Response::error('Mật khẩu phải có ít nhất 6 ký tự', 400);
-            }
-
-            $passwordHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 10]);
+            $passwordHash = password_hash($defaultPassword, PASSWORD_BCRYPT, ['cost' => 10]);
 
             // Create user
             $userId = $this->userModel->create([
