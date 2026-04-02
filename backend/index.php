@@ -137,6 +137,18 @@ $router->post('/api/users/:id/upload-avatar', 'UserController@uploadAvatar'); //
 // Role routes
 $router->get('/api/roles', 'RoleController@index'); // Get all roles
 
+// Permission routes (Admin only)
+$router->get('/api/permissions', 'PermissionController@index'); // List all permissions
+$router->post('/api/permissions', 'PermissionController@create'); // Create permission
+$router->put('/api/permissions/:id', 'PermissionController@update'); // Update permission
+$router->delete('/api/permissions/:id', 'PermissionController@delete'); // Delete permission
+
+// Role permission routes (Admin only)
+$router->get('/api/roles/:roleId/permissions', 'PermissionController@getRolePermissions'); // Get role's permissions
+$router->post('/api/roles/:roleId/permissions', 'PermissionController@assignPermission'); // Assign permission to role
+$router->delete('/api/roles/:roleId/permissions/:permissionId', 'PermissionController@revokePermission'); // Revoke permission
+$router->put('/api/roles/:roleId/permissions/sync', 'PermissionController@syncPermissions'); // Sync all permissions
+
 // ============================================
 // SETTINGS ROUTES
 // ============================================

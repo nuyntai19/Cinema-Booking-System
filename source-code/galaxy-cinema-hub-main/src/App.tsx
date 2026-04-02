@@ -40,6 +40,8 @@ import AdminReviews from "./pages/admin/AdminReviews";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminSeatManagement from "./pages/admin/AdminSeatManagement";
+import AdminPermissions from "./pages/admin/AdminPermissions";
+import AdminRolePermissions from "./pages/admin/AdminRolePermissions";
 import ManagerLayout from "./components/manager/ManagerLayout";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import ManagerShowtimes from "./pages/manager/ManagerShowtimes";
@@ -145,6 +147,8 @@ const App = () => (
                   />
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="seats" element={<AdminSeatManagement />} />
+                  <Route path="permissions" element={<AdminPermissions />} />
+                  <Route path="role-permissions" element={<AdminRolePermissions />} />
                 </Route>
 
                 {/* Manager Routes */}
