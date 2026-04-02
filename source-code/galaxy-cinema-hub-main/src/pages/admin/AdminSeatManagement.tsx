@@ -625,7 +625,7 @@ const AdminSeatManagement: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Quản Lý Chỗ Ngồi</h1>
+          <h1 className="text-3xl font-bold text-black dark:text-black">Quản Lý Chỗ Ngồi</h1>
           <p className="text-muted-foreground">
             {isManagerMode
               ? "Quản lý sơ đồ ghế cho các phòng chiếu thuộc rạp của bạn"

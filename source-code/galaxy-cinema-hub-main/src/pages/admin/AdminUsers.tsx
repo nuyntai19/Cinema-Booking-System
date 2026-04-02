@@ -84,7 +84,6 @@ interface Pagination {
 
 const getDefaultFormData = () => ({
   email: "",
-  password: "",
   full_name: "",
   phone: "",
   dob: "",
@@ -310,7 +309,6 @@ const AdminUsers: React.FC = () => {
     setSelectedUser(user);
     setFormData({
       email: user.email,
-      password: "",
       full_name: user.full_name,
       phone: user.phone || "",
       dob: user.dob || "",
@@ -1086,20 +1084,6 @@ const AdminUsers: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-password">Mật Khẩu Mới</Label>
-              <Input
-                id="edit-password"
-                type="password"
-                placeholder="Để trống nếu không đổi (tối thiểu 6 ký tự)"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="edit-role">Vai Trò</Label>
               <Select
                 value={formData.role_id.toString()}
@@ -1218,20 +1202,6 @@ const AdminUsers: React.FC = () => {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 autoComplete="off"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="create-password">Mật Khẩu *</Label>
-              <Input
-                id="create-password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                autoComplete="new-password"
               />
             </div>
 
