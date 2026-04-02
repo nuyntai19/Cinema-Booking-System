@@ -338,14 +338,20 @@ class AdminController extends BaseController {
 
             if ($q !== '') {
                 $where[] = "(
-                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q
-                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q
-                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q
-                    OR LOWER(COALESCE(u.email, '')) LIKE :q
-                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q
-                    OR LOWER(COALESCE(m.title, '')) LIKE :q
+                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q1
+                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q2
+                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q3
+                    OR LOWER(COALESCE(u.email, '')) LIKE :q4
+                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q5
+                    OR LOWER(COALESCE(m.title, '')) LIKE :q6
                 )";
-                $params[':q'] = '%' . mb_strtolower($q, 'UTF-8') . '%';
+                $qVal = '%' . mb_strtolower($q, 'UTF-8') . '%';
+                $params[':q1'] = $qVal;
+                $params[':q2'] = $qVal;
+                $params[':q3'] = $qVal;
+                $params[':q4'] = $qVal;
+                $params[':q5'] = $qVal;
+                $params[':q6'] = $qVal;
             }
 
             if (in_array($status, ['success', 'pending', 'failed', 'refunded'], true)) {
@@ -506,14 +512,20 @@ class AdminController extends BaseController {
 
             if ($q !== '') {
                 $where[] = "(
-                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q
-                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q
-                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q
-                    OR LOWER(COALESCE(u.email, '')) LIKE :q
-                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q
-                    OR LOWER(COALESCE(m.title, '')) LIKE :q
+                    LOWER(COALESCE(t.transaction_code, '')) LIKE :q1
+                    OR LOWER(COALESCE(b.booking_code, '')) LIKE :q2
+                    OR LOWER(COALESCE(up.full_name, pc.name, CONCAT('user #', COALESCE(b.user_id, 0)))) LIKE :q3
+                    OR LOWER(COALESCE(u.email, '')) LIKE :q4
+                    OR LOWER(COALESCE(pc.phone, '')) LIKE :q5
+                    OR LOWER(COALESCE(m.title, '')) LIKE :q6
                 )";
-                $params[':q'] = '%' . mb_strtolower($q, 'UTF-8') . '%';
+                $qVal = '%' . mb_strtolower($q, 'UTF-8') . '%';
+                $params[':q1'] = $qVal;
+                $params[':q2'] = $qVal;
+                $params[':q3'] = $qVal;
+                $params[':q4'] = $qVal;
+                $params[':q5'] = $qVal;
+                $params[':q6'] = $qVal;
             }
 
             if (in_array($status, ['success', 'pending', 'failed', 'refunded'], true)) {

@@ -287,30 +287,31 @@ const StaffPOS: React.FC = () => {
     void fetchShowtimes();
   }, [selectedDate, toast, user?.cinema_id]);
 
+  const loadConcessions = async () => {
+    setLoadingConcessions(true);
+    try {
+      const url = user?.cinema_id 
+        ? API_ENDPOINTS.CONCESSIONS_AVAILABLE_BY_CINEMA(Number(user.cinema_id))
+        : API_ENDPOINTS.CONCESSIONS;
+        
+      const response = await apiCall<{
+        success: boolean;
+        data: ConcessionItem[];
+      }>(url);
+
+      setConcessions(response.data || []);
+    } catch (error) {
+      console.error("Error loading concessions:", error);
+      setConcessions([]);
+    } finally {
+      setLoadingConcessions(false);
+    }
+  };
+
   // Load concessions on mount
   useEffect(() => {
-    const fetchConcessions = async () => {
-      setLoadingConcessions(true);
-      try {
-        const url = user?.cinema_id 
-          ? API_ENDPOINTS.CONCESSIONS_AVAILABLE_BY_CINEMA(Number(user.cinema_id))
-          : API_ENDPOINTS.CONCESSIONS;
-          
-        const response = await apiCall<{
-          success: boolean;
-          data: ConcessionItem[];
-        }>(url);
-
-        setConcessions(response.data || []);
-      } catch (error) {
-        console.error("Error loading concessions:", error);
-        setConcessions([]);
-      } finally {
-        setLoadingConcessions(false);
-      }
-    };
-
-    void fetchConcessions();
+    void loadConcessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.cinema_id]);
 
   useEffect(() => {
@@ -379,6 +380,7 @@ const StaffPOS: React.FC = () => {
         if (selectedShowtime) {
           await loadSeatMap(selectedShowtime);
         }
+        await loadConcessions();
       } catch (error) {
         console.error("Error completing QR payment:", error);
         paymentHandledRef.current = false; // Allow retry
@@ -873,7 +875,9 @@ const StaffPOS: React.FC = () => {
         setSelectedSeatIds([]);
         setCashConfirmed(false);
         setQrPayment(null);
+        setSelectedConcessions([]);
         await loadSeatMap(selectedShowtime);
+        await loadConcessions();
       }
     } catch (error) {
       const message =
@@ -1248,7 +1252,7 @@ const StaffPOS: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-600">
                         {guestCustomer.phone} • {guestCustomer.total_bookings}{" "}
-                        lần mua vé
+                        lần mua vé tại quầy
                       </p>
                       {guestCustomer.has_account && (
                         <p className="text-xs text-emerald-700 mt-1">
