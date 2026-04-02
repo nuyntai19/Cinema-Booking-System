@@ -113,6 +113,7 @@ class TicketController
      */
     public function index()
     {
+        AuthMiddleware::requirePermission('tickets.view_all');
         try {
             // Get query parameters for pagination
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
@@ -132,6 +133,7 @@ class TicketController
      */
     public function getByCode($code)
     {
+        AuthMiddleware::requirePermission('tickets.view_own');
         try {
             $ticket = $this->ticketModel->getByCode($code);
 
@@ -151,6 +153,7 @@ class TicketController
      */
     public function getByBooking($bookingId)
     {
+        AuthMiddleware::requirePermission('tickets.view_own');
         try {
             $tickets = $this->ticketModel->getByBooking($bookingId);
 
@@ -167,13 +170,8 @@ class TicketController
      */
     public function check()
     {
+        AuthMiddleware::requirePermission('tickets.scan');
         try {
-            // Authenticate to get staff info
-            try {
-                AuthMiddleware::authenticate();
-            } catch (Exception $authEx) {
-                // Allow check without auth but cinema validation won't work
-            }
 
             $input = json_decode(file_get_contents('php://input'), true);
 
@@ -261,7 +259,7 @@ class TicketController
     public function approveEntry()
     {
         try {
-            AuthMiddleware::requireStaff();
+            AuthMiddleware::requirePermission('tickets.approve_entry');
 
             $input = json_decode(file_get_contents('php://input'), true);
             if (!isset($input['code'])) {
@@ -358,8 +356,8 @@ class TicketController
      */
     public function scanHistory()
     {
+        AuthMiddleware::requirePermission('tickets.scan');
         try {
-            AuthMiddleware::requireStaff();
 
             $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 50;
             $offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
@@ -394,6 +392,7 @@ class TicketController
      */
     public function markAsUsed($id)
     {
+        AuthMiddleware::requirePermission('tickets.approve_entry');
         try {
             $ticket = $this->ticketModel->getById($id);
 
@@ -423,6 +422,7 @@ class TicketController
      */
     public function refund($id)
     {
+        AuthMiddleware::requirePermission('tickets.view_own');
         try {
             $ticket = $this->ticketModel->getById($id);
 
@@ -468,6 +468,7 @@ class TicketController
      */
     public function sendEmail($id)
     {
+        AuthMiddleware::requirePermission('tickets.view_own');
         try {
             $ticket = $this->ticketModel->getById($id);
 

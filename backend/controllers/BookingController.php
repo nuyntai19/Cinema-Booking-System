@@ -12,7 +12,7 @@ class BookingController extends BaseController {
     }
 
     public function index() {
-        AuthMiddleware::requireRole(['Admin', 'Manager']);
+        AuthMiddleware::requirePermission('bookings.view_all');
 
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : Config::$items_per_page;
@@ -29,7 +29,7 @@ class BookingController extends BaseController {
     }
 
     public function show($id) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.view_own');
 
         $booking = $this->bookingService->getBookingDetails($id);
         if (!$booking) {
@@ -42,7 +42,7 @@ class BookingController extends BaseController {
     }
 
     public function create() {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.create');
 
         $data = self::getRequestData();
         $seatIds = $this->extractSeatIds($data);
@@ -187,7 +187,7 @@ class BookingController extends BaseController {
     }
 
     public function confirm($id) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.create');
 
         $booking = $this->bookingService->getBookingById($id);
         if (!$booking) {
@@ -209,7 +209,7 @@ class BookingController extends BaseController {
     }
 
     public function cancel($id) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.cancel');
 
         $booking = $this->bookingService->getBookingById($id);
         if (!$booking) {
@@ -231,8 +231,7 @@ class BookingController extends BaseController {
     }
 
     public function refund($id) {
-        AuthMiddleware::authenticate();
-        AuthMiddleware::requireRole(['Admin', 'Manager']);
+        AuthMiddleware::requirePermission('bookings.refund');
 
         $booking = $this->bookingService->getBookingById($id);
         if (!$booking) {
@@ -252,7 +251,8 @@ class BookingController extends BaseController {
     }
 
     public function getUserBookings($userId) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.view_own');
+        AuthMiddleware::requirePermission('transactions.view_own');
 
         $this->authorizeUserId((int)$userId);
 
@@ -275,7 +275,7 @@ class BookingController extends BaseController {
     }
 
     public function getPosPaymentHistory() {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.pos');
 
         $authRole = $_REQUEST['auth_user_role'] ?? null;
         if (!in_array($authRole, ['Admin', 'Manager', 'Staff'], true)) {
@@ -307,14 +307,14 @@ class BookingController extends BaseController {
     }
 
     public function getBookingsByShowtime($showtimeId) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.view_all');
 
         $bookings = $this->bookingService->getBookingsByShowtime((int)$showtimeId);
 
         Response::success($bookings);
     }
     public function getBookingByUserAndShowtime($userId, $showtimeId) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.view_own');
 
         $this->authorizeUserId((int)$userId);
 
@@ -323,7 +323,7 @@ class BookingController extends BaseController {
         Response::success($booking);
     }
     public function update($id) {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('bookings.update');
 
         $booking = $this->bookingService->getBookingById($id);
         if (!$booking) {

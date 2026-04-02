@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../models/Promotion.php';
 require_once __DIR__ . '/../core/Response.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 
 class PromotionController {
     private $model;
@@ -10,6 +11,7 @@ class PromotionController {
     }
 
     public function index() {
+        AuthMiddleware::requirePermission('promotions.view');
         $filters = [];
         $q = $_GET ?? [];
         if (isset($q['active'])) $filters['active'] = filter_var($q['active'], FILTER_VALIDATE_BOOLEAN);
@@ -19,12 +21,14 @@ class PromotionController {
     }
 
     public function show($id) {
+        AuthMiddleware::requirePermission('promotions.view');
         $p = $this->model->getById($id);
         if (!$p) return Response::error('Promotion not found', 404);
         return Response::success(['promotion' => $p]);
     }
 
     public function create() {
+        AuthMiddleware::requirePermission('promotions.create');
         try {
             $data = json_decode(file_get_contents('php://input'), true);
             $id = $this->model->create($data);
@@ -36,6 +40,7 @@ class PromotionController {
     }
 
     public function update($id) {
+        AuthMiddleware::requirePermission('promotions.update');
         try {
             $data = json_decode(file_get_contents('php://input'), true);
             
@@ -61,6 +66,7 @@ class PromotionController {
     }
 
     public function delete($id) {
+        AuthMiddleware::requirePermission('promotions.delete');
         // Hard delete the promotion from database. This will also cascade to user_vouchers
         // because the foreign key in `user_vouchers` is defined with ON DELETE CASCADE.
         $ok = $this->model->delete($id);
@@ -69,6 +75,7 @@ class PromotionController {
     }
 
     public function getActive() {
+        AuthMiddleware::requirePermission('promotions.view');
         return Response::success(['promotions' => $this->model->getActive()]);
     }
 }

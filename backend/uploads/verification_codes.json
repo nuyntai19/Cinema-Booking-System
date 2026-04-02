@@ -1,1 +1,13 @@
-[]
+{
+    "arn@gmail.com": {
+        "code": "471165",
+        "data": {
+            "email": "arn@gmail.com",
+            "fullName": "NGUYEN HUU TRI",
+            "phone": "0704159759",
+            "dob": "2012-06-02",
+            "password": "password"
+        },
+        "expires_at": 1775114971
+    }
+}

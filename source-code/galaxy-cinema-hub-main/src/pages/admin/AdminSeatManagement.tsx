@@ -279,9 +279,7 @@ const AdminSeatManagement: React.FC = () => {
       ? API_ENDPOINTS.MANAGER_CINEMA_HALLS
       : API_ENDPOINTS.CINEMA_HALLS(Number(selectedCinemaId));
 
-    apiCall<{ success: boolean; data: { halls: BackendHall[] } }>(
-      hallsEndpoint,
-    )
+    apiCall<{ success: boolean; data: { halls: BackendHall[] } }>(hallsEndpoint)
       .then((res) => {
         const h = res.data?.halls || [];
         setHalls(h);
@@ -496,7 +494,9 @@ const AdminSeatManagement: React.FC = () => {
       }
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Có thể phòng đang có suất chiếu sắp tới";
+        error instanceof Error
+          ? error.message
+          : "Có thể phòng đang có suất chiếu sắp tới";
       toast({
         title: "Lỗi lưu sơ đồ",
         description: errorMessage,
@@ -603,7 +603,9 @@ const AdminSeatManagement: React.FC = () => {
       }
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Phòng có thể đang có suất chiếu";
+        error instanceof Error
+          ? error.message
+          : "Phòng có thể đang có suất chiếu";
       toast({
         title: "Không thể xóa",
         description: errorMessage,
@@ -625,7 +627,9 @@ const AdminSeatManagement: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-black dark:text-black">Quản Lý Chỗ Ngồi</h1>
+          <h1 className="text-3xl font-bold text-black dark:text-black">
+            Quản Lý Chỗ Ngồi
+          </h1>
           <p className="text-muted-foreground">
             {isManagerMode
               ? "Quản lý sơ đồ ghế cho các phòng chiếu thuộc rạp của bạn"
@@ -734,7 +738,9 @@ const AdminSeatManagement: React.FC = () => {
 
       {/* Editor Area */}
       {selectedHallId ? (
-        <div className="grid lg:grid-cols-[1fr_280px] gap-6 items-start">
+        <div
+          className={cn("grid gap-6 items-start", "lg:grid-cols-[1fr_280px]")}
+        >
           {/* Matrix */}
           <Card>
             <CardHeader className="pb-2">
@@ -778,7 +784,7 @@ const AdminSeatManagement: React.FC = () => {
                               onMouseDown={() => handleCellDown(rIdx, cIdx)}
                               onMouseEnter={() => handleCellEnter(rIdx, cIdx)}
                               className={cn(
-                                "w-8 h-8 rounded border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all",
+                                "w-8 h-8 rounded border flex items-center justify-center text-[10px] font-bold transition-all cursor-pointer",
                                 seatTypeGridColor[typeId] ??
                                   seatTypeGridColor[0],
                                 isSelected && SELECTED_COLOR,

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 -- ============================================
 
 -- MODULE: MOVIES
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('movies.view', 'Xem danh sách phim', 'Xem danh sách và chi tiết phim', 'movies'),
 ('movies.create', 'Tạo phim', 'Thêm phim mới vào hệ thống', 'movies'),
 ('movies.update', 'Cập nhật phim', 'Chỉnh sửa thông tin phim', 'movies'),
@@ -45,7 +45,7 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('movies.import', 'Import phim hàng loạt', 'Import nhiều phim cùng lúc', 'movies');
 
 -- MODULE: USERS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('users.view_all', 'Xem tất cả users', 'Xem danh sách tất cả người dùng', 'users'),
 ('users.create', 'Tạo user', 'Tạo tài khoản người dùng mới', 'users'),
 ('users.update_all', 'Cập nhật tất cả users', 'Chỉnh sửa thông tin bất kỳ user nào', 'users'),
@@ -54,14 +54,14 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('users.view_own', 'Xem profile cá nhân', 'Xem và chỉnh sửa profile của chính mình', 'users');
 
 -- MODULE: CINEMAS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('cinemas.view', 'Xem danh sách rạp', 'Xem thông tin các rạp chiếu', 'cinemas'),
 ('cinemas.create', 'Tạo rạp', 'Thêm rạp chiếu mới', 'cinemas'),
 ('cinemas.update', 'Cập nhật rạp', 'Chỉnh sửa thông tin rạp', 'cinemas'),
 ('cinemas.delete', 'Xóa rạp', 'Xóa rạp khỏi hệ thống', 'cinemas');
 
 -- MODULE: HALLS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('halls.view', 'Xem phòng chiếu', 'Xem thông tin phòng chiếu', 'halls'),
 ('halls.create', 'Tạo phòng chiếu', 'Thêm phòng chiếu mới', 'halls'),
 ('halls.update', 'Cập nhật phòng chiếu', 'Chỉnh sửa thông tin phòng', 'halls'),
@@ -69,7 +69,7 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('halls.manage_layout', 'Quản lý layout ghế', 'Thiết lập sơ đồ ghế ngồi', 'halls');
 
 -- MODULE: SHOWTIMES
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('showtimes.view', 'Xem suất chiếu', 'Xem lịch chiếu phim', 'showtimes'),
 ('showtimes.create', 'Tạo suất chiếu', 'Thêm suất chiếu mới', 'showtimes'),
 ('showtimes.update', 'Cập nhật suất chiếu', 'Chỉnh sửa lịch chiếu', 'showtimes'),
@@ -77,7 +77,7 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('showtimes.auto_generate', 'Tự động tạo suất chiếu', 'Tạo lịch chiếu tự động', 'showtimes');
 
 -- MODULE: BOOKINGS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('bookings.view_own', 'Xem booking cá nhân', 'Xem các booking của chính mình', 'bookings'),
 ('bookings.view_all', 'Xem tất cả bookings', 'Xem tất cả bookings trong hệ thống', 'bookings'),
 ('bookings.create', 'Tạo booking', 'Đặt vé mới', 'bookings'),
@@ -87,34 +87,34 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('bookings.pos', 'Bán vé POS', 'Bán vé tại quầy', 'bookings');
 
 -- MODULE: TICKETS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('tickets.view_own', 'Xem vé cá nhân', 'Xem vé của chính mình', 'tickets'),
 ('tickets.view_all', 'Xem tất cả vé', 'Xem tất cả vé trong hệ thống', 'tickets'),
 ('tickets.scan', 'Scan vé', 'Scan QR code vé tại cổng', 'tickets'),
 ('tickets.approve_entry', 'Duyệt vào cổng', 'Cho phép khách vào rạp', 'tickets');
 
 -- MODULE: TRANSACTIONS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('transactions.view_own', 'Xem giao dịch cá nhân', 'Xem lịch sử giao dịch của mình', 'transactions'),
 ('transactions.view_all', 'Xem tất cả giao dịch', 'Xem tất cả giao dịch', 'transactions'),
 ('transactions.process', 'Xử lý thanh toán', 'Xử lý các giao dịch thanh toán', 'transactions');
 
 -- MODULE: REPORTS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('reports.dashboard', 'Xem dashboard', 'Xem bảng điều khiển thống kê', 'reports'),
 ('reports.revenue', 'Báo cáo doanh thu', 'Xem báo cáo doanh thu', 'reports'),
 ('reports.occupancy', 'Báo cáo công suất', 'Xem báo cáo tỷ lệ lấp đầy', 'reports'),
 ('reports.export', 'Export báo cáo', 'Xuất báo cáo ra file', 'reports');
 
 -- MODULE: PROMOTIONS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('promotions.view', 'Xem khuyến mãi', 'Xem danh sách khuyến mãi', 'promotions'),
 ('promotions.create', 'Tạo khuyến mãi', 'Tạo chương trình khuyến mãi', 'promotions'),
 ('promotions.update', 'Cập nhật khuyến mãi', 'Chỉnh sửa khuyến mãi', 'promotions'),
 ('promotions.delete', 'Xóa khuyến mãi', 'Xóa khuyến mãi', 'promotions');
 
 -- MODULE: CONCESSIONS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('concessions.view', 'Xem đồ ăn/nước', 'Xem menu đồ ăn nước', 'concessions'),
 ('concessions.create', 'Tạo món mới', 'Thêm món ăn/nước mới', 'concessions'),
 ('concessions.update', 'Cập nhật món', 'Chỉnh sửa thông tin món', 'concessions'),
@@ -122,15 +122,19 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 ('concessions.import', 'Import hàng loạt', 'Import nhiều món cùng lúc', 'concessions');
 
 -- MODULE: REVIEWS
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('reviews.view', 'Xem đánh giá', 'Xem đánh giá phim', 'reviews'),
+('reviews.view_all', 'Xem tất cả đánh giá', 'Xem tất cả đánh giá (Admin)', 'reviews'),
 ('reviews.create', 'Viết đánh giá', 'Viết đánh giá phim', 'reviews'),
 ('reviews.update_own', 'Sửa đánh giá của mình', 'Chỉnh sửa đánh giá đã viết', 'reviews'),
 ('reviews.delete_any', 'Xóa bất kỳ đánh giá', 'Xóa đánh giá của người khác', 'reviews'),
+('reviews.delete_own', 'Xóa đánh giá của mình', 'Xóa đánh giá do chính mình viết', 'reviews'),
+('reviews.approve', 'Duyệt đánh giá', 'Duyệt đánh giá phim', 'reviews'),
+('reviews.reject', 'Từ chối đánh giá', 'Từ chối đánh giá phim', 'reviews'),
 ('reviews.report', 'Report đánh giá', 'Báo cáo đánh giá vi phạm', 'reviews');
 
 -- MODULE: SYSTEM
-INSERT INTO permissions (name, display_name, description, module) VALUES
+INSERT IGNORE INTO permissions (name, display_name, description, module) VALUES
 ('system.settings', 'Quản lý cấu hình', 'Thay đổi cấu hình hệ thống', 'system'),
 ('system.permissions', 'Quản lý quyền hạn', 'Quản lý permissions và gán cho roles', 'system'),
 ('system.roles', 'Quản lý roles', 'Tạo/sửa/xóa roles', 'system');
@@ -140,7 +144,7 @@ INSERT INTO permissions (name, display_name, description, module) VALUES
 -- ============================================
 
 -- GUEST (ID=1) - Chỉ xem thông tin công khai
-INSERT INTO role_permissions (role_id, permission_id) 
+INSERT IGNORE INTO role_permissions (role_id, permission_id) 
 SELECT 1, id FROM permissions WHERE name IN (
     'movies.view',
     'cinemas.view',
@@ -151,7 +155,7 @@ SELECT 1, id FROM permissions WHERE name IN (
 );
 
 -- MEMBER (ID=2) - Thêm quyền đặt vé, đánh giá
-INSERT INTO role_permissions (role_id, permission_id)
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 2, id FROM permissions WHERE name IN (
     -- Inherit from Guest
     'movies.view',
@@ -165,15 +169,15 @@ SELECT 2, id FROM permissions WHERE name IN (
     'bookings.view_own',
     'bookings.create',
     'bookings.cancel',
-    'tickets.view_own',
     'transactions.view_own',
+    'transactions.process',
     'reviews.create',
     'reviews.update_own',
-    'reviews.report'
+    'reviews.delete_own'
 );
 
 -- STAFF (ID=3) - Thêm quyền POS, scan vé
-INSERT INTO role_permissions (role_id, permission_id)
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 3, id FROM permissions WHERE name IN (
     -- Inherit from Member
     'movies.view',
@@ -197,7 +201,7 @@ SELECT 3, id FROM permissions WHERE name IN (
 );
 
 -- MANAGER (ID=4) - Thêm quyền quản lý suất chiếu, báo cáo
-INSERT INTO role_permissions (role_id, permission_id)
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 4, id FROM permissions WHERE name IN (
     -- Inherit from Staff (all)
     'movies.view',
@@ -235,19 +239,15 @@ SELECT 4, id FROM permissions WHERE name IN (
     'reports.revenue',
     'reports.occupancy',
     'reports.export',
-    'reviews.delete_any'
+    'reviews.view_all',
+    'reviews.delete_any',
+    'reviews.approve',
+    'reviews.reject'
 );
 
 -- ADMIN (ID=5) - Toàn quyền
-INSERT INTO role_permissions (role_id, permission_id)
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 5, id FROM permissions;
-
--- ============================================
--- INDEXES và CONSTRAINTS
--- ============================================
-
--- Đảm bảo performance khi query permissions của role
-CREATE INDEX idx_role_permissions_lookup ON role_permissions(role_id, permission_id);
 
 -- ============================================
 -- VIEWS (Optional - để query dễ hơn)

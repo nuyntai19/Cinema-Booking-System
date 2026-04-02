@@ -491,14 +491,16 @@ class UserController
     public function getProfile($id)
     {
         try {
-            $currentUserId = $this->getCurrentUserId();
+            AuthMiddleware::requirePermission('users.view_own');
+            $currentUserId = $_REQUEST['auth_user_id'] ?? null;
 
             if (!$currentUserId) {
                 return Response::error('Chưa đăng nhập', 401);
             }
 
             // Chỉ được xem profile của mình (trừ admin)
-            if (!$this->isAdmin() && $currentUserId != $id) {
+            $roleId = (int)($_REQUEST['auth_role_id'] ?? 0);
+            if ($roleId !== 5 && $currentUserId != $id) {
                 return Response::error('Không có quyền truy cập', 403);
             }
 
@@ -529,14 +531,16 @@ class UserController
     public function updateProfile($id)
     {
         try {
-            $currentUserId = $this->getCurrentUserId();
+            AuthMiddleware::requirePermission('users.view_own');
+            $currentUserId = $_REQUEST['auth_user_id'] ?? null;
 
             if (!$currentUserId) {
                 return Response::error('Chưa đăng nhập', 401);
             }
 
             // Chỉ được update profile của mình (trừ khi là admin)
-            if (!$this->isAdmin() && $currentUserId != $id) {
+            $roleId = (int)($_REQUEST['auth_role_id'] ?? 0);
+            if ($roleId !== 5 && $currentUserId != $id) {
                 return Response::error('Không có quyền truy cập', 403);
             }
 
@@ -612,7 +616,8 @@ class UserController
     public function changePassword($id)
     {
         try {
-            $currentUserId = $this->getCurrentUserId();
+            AuthMiddleware::requirePermission('users.view_own');
+            $currentUserId = $_REQUEST['auth_user_id'] ?? null;
 
             if (!$currentUserId) {
                 return Response::error('Chưa đăng nhập', 401);
@@ -680,7 +685,8 @@ class UserController
     public function uploadAvatar($id)
     {
         try {
-            $currentUserId = $this->getCurrentUserId();
+            AuthMiddleware::requirePermission('users.view_own');
+            $currentUserId = $_REQUEST['auth_user_id'] ?? null;
 
             if (!$currentUserId) {
                 return Response::error('Chưa đăng nhập', 401);

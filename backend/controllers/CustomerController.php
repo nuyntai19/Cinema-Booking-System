@@ -2,6 +2,7 @@
 
 require_once(__DIR__ . '/../models/POSCustomer.php');
 require_once(__DIR__ . '/../core/Response.php');
+require_once(__DIR__ . '/../middleware/AuthMiddleware.php');
 
 class CustomerController {
     private $posCustomerModel;
@@ -23,6 +24,7 @@ class CustomerController {
      * }
      */
     public function lookupOrCreate() {
+        AuthMiddleware::requirePermission('bookings.pos');
         try {
             $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
@@ -57,6 +59,7 @@ class CustomerController {
      * Lấy thông tin khách vãng lai theo SĐT
      */
     public function getByPhone($phone = null) {
+        AuthMiddleware::requirePermission('bookings.pos');
         try {
             if (!$phone) {
                 $phone = $_GET['phone'] ?? null;
@@ -90,6 +93,7 @@ class CustomerController {
      * Lấy thông tin khách vãng lai theo ID
      */
     public function getById($id = null) {
+        AuthMiddleware::requirePermission('bookings.pos');
         try {
             if (!$id) {
                 $id = $_GET['id'] ?? null;
@@ -119,6 +123,7 @@ class CustomerController {
      * Lấy thống kê khách vãng lai
      */
     public function getStats() {
+        AuthMiddleware::requirePermission('bookings.pos');
         try {
             $stats = $this->posCustomerModel->getStats();
             return Response::success([
@@ -135,12 +140,7 @@ class CustomerController {
      */
     public function getBookingHistory($id = null) {
         try {
-            AuthMiddleware::authenticate();
-
-            $authRole = $_REQUEST['auth_user_role'] ?? null;
-            if (!in_array($authRole, ['Admin', 'Manager', 'Staff'], true)) {
-                return Response::forbidden('Insufficient permissions');
-            }
+            AuthMiddleware::requirePermission('bookings.pos');
 
             if (empty($id)) {
                 return Response::error('Vui lòng cung cấp ID khách', 400);

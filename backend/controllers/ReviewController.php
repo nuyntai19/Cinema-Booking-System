@@ -75,10 +75,7 @@ class ReviewController {
      */
     public function index() {
         try {
-            // Check permission
-            if (!$this->isManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('reviews.view_all');
             
             // Get query parameters
             $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -124,6 +121,8 @@ class ReviewController {
      */
     public function getByMovie($movieId) {
         try {
+            AuthMiddleware::requirePermission('reviews.view');
+
             if (!$movieId || !is_numeric($movieId)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
@@ -170,6 +169,8 @@ class ReviewController {
      */
     public function create() {
         try {
+            AuthMiddleware::requirePermission('reviews.create');
+
             // Check if user is logged in
             $user = $this->getCurrentUser();
             if (!$user) {
@@ -238,6 +239,8 @@ class ReviewController {
      */
     public function update($id) {
         try {
+            AuthMiddleware::requirePermission('reviews.update_own');
+
             // Check if user is logged in
             $user = $this->getCurrentUser();
             if (!$user) {
@@ -309,6 +312,8 @@ class ReviewController {
      */
     public function delete($id) {
         try {
+            AuthMiddleware::authenticate();
+
             // Check if user is logged in
             $user = $this->getCurrentUser();
             if (!$user) {
@@ -327,10 +332,11 @@ class ReviewController {
             
             // Check ownership or manager permission
             $isOwner = $review['user_id'] == $user['user_id'];
-            $isManagerRole = $this->isManager();
             
-            if (!$isOwner && !$isManagerRole) {
-                return Response::error('Bạn không có quyền xóa review này', 403);
+            if ($isOwner) {
+                AuthMiddleware::requirePermission('reviews.delete_own');
+            } else {
+                AuthMiddleware::requirePermission('reviews.delete_any');
             }
             
             // Delete review
@@ -358,10 +364,7 @@ class ReviewController {
      */
     public function approve($id) {
         try {
-            // Check permission
-            if (!$this->isManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('reviews.approve');
             
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID review không hợp lệ', 400);
@@ -401,10 +404,7 @@ class ReviewController {
      */
     public function reject($id) {
         try {
-            // Check permission
-            if (!$this->isManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('reviews.reject');
             
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID review không hợp lệ', 400);
@@ -444,6 +444,8 @@ class ReviewController {
      */
     public function report($id) {
         try {
+            AuthMiddleware::requirePermission('reviews.report');
+
             // Check if user is logged in
             $user = $this->getCurrentUser();
             if (!$user) {

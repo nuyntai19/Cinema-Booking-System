@@ -5,6 +5,7 @@ require_once __DIR__ . '/../models/Showtime.php';
 require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../utils/JWT.php';
 require_once __DIR__ . '/../config/Config.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 
 /**
  * CinemaController
@@ -286,11 +287,11 @@ class CinemaController
     /**
      * GET /api/cinemas/:id/showtimes
      * Lấy suất chiếu của cinema
-     * Public access
      */
     public function getShowtimes($id)
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             $cinema = $this->cinemaModel->getById($id);
             if (!$cinema) {
                 return Response::error('Không tìm thấy rạp', 404);

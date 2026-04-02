@@ -15,7 +15,7 @@ class TransactionController extends BaseController
 
     public function create()
     {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('transactions.process');
 
         $data = self::getRequestData();
         $bookingId = $data['booking_id'] ?? null;
@@ -47,7 +47,7 @@ class TransactionController extends BaseController
 
     public function getByBooking($bookingId)
     {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('transactions.view_own');
 
         $booking = $this->transactionService->getBookingById((int) $bookingId);
         if (!$booking) {
@@ -149,7 +149,7 @@ class TransactionController extends BaseController
 
     public function getHistory($userId)
     {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('transactions.view_own');
 
         self::authorizeUserId((int) $userId);
 
@@ -190,7 +190,7 @@ class TransactionController extends BaseController
 
     private function createPayment($gateway)
     {
-        AuthMiddleware::authenticate();
+        AuthMiddleware::requirePermission('transactions.process');
 
         $data = self::getRequestData();
         $bookingId = $data['booking_id'] ?? null;

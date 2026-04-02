@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Phone, Navigation, Clock, Star, Loader, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  MapPin,
+  Phone,
+  Navigation,
+  Clock,
+  Star,
+  Loader,
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,12 +90,13 @@ const CinemasPage: React.FC = () => {
 
   // Extract unique cities from actual cinemas data
   const availableCities = Array.from(
-    new Set(cinemas.map(extractCity).filter((city): city is string => !!city))
+    new Set(cinemas.map(extractCity).filter((city): city is string => !!city)),
   ).sort();
 
-  const suggestedCities = availableCities.filter((city) =>
-    normalizeText(city).startsWith(normalizeText(searchQuery)) ||
-    normalizeText(city).includes(normalizeText(searchQuery)) // dự phòng trường hợp gõ chữ thường
+  const suggestedCities = availableCities.filter(
+    (city) =>
+      normalizeText(city).startsWith(normalizeText(searchQuery)) ||
+      normalizeText(city).includes(normalizeText(searchQuery)), // dự phòng trường hợp gõ chữ thường
   );
 
   const filteredCinemas = selectedCity
@@ -94,7 +106,7 @@ const CinemasPage: React.FC = () => {
   const totalPages = Math.ceil(filteredCinemas.length / ITEMS_PER_PAGE);
   const paginatedCinemas = filteredCinemas.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    currentPage * ITEMS_PER_PAGE,
   );
 
   const handleSelectCity = (city: string) => {
@@ -286,9 +298,15 @@ const CinemasPage: React.FC = () => {
                     <Button
                       className="flex-1"
                       variant="default"
+                      onClick={() => navigate(`/cinema/${cinema.id}`)}
+                    >
+                      Xem chi tiết
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => navigate("/schedule")}
                     >
-                      Xem lịch chiếu
+                      Lịch chiếu
                     </Button>
                     <Button
                       variant="outline"
@@ -337,7 +355,9 @@ const CinemasPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>

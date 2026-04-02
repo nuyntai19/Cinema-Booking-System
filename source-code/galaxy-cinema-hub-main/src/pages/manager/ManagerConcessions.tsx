@@ -62,7 +62,9 @@ const ManagerConcessions: React.FC = () => {
   const [items, setItems] = useState<ConcessionWithInventory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [editItem, setEditItem] = useState<ConcessionWithInventory | null>(null);
+  const [editItem, setEditItem] = useState<ConcessionWithInventory | null>(
+    null,
+  );
   const [editQuantity, setEditQuantity] = useState<number>(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,7 +82,8 @@ const ManagerConcessions: React.FC = () => {
     } catch (err: unknown) {
       toast({
         title: "Lỗi",
-        description: err instanceof Error ? err.message : "Không thể tải danh sách",
+        description:
+          err instanceof Error ? err.message : "Không thể tải danh sách",
         variant: "destructive",
       });
     } finally {
@@ -161,8 +164,12 @@ const ManagerConcessions: React.FC = () => {
             <AlertTriangle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-500">{lowStockItems}</div>
-            <p className="text-xs text-muted-foreground">Dưới {LOW_STOCK_THRESHOLD} sản phẩm</p>
+            <div className="text-2xl font-bold text-orange-500">
+              {lowStockItems}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Dưới {LOW_STOCK_THRESHOLD} sản phẩm
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -171,7 +178,9 @@ const ManagerConcessions: React.FC = () => {
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{outOfStockItems}</div>
+            <div className="text-2xl font-bold text-red-500">
+              {outOfStockItems}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -246,11 +255,13 @@ const ManagerConcessions: React.FC = () => {
                         </span>
                       ) : isLowStock ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                          <AlertTriangle className="w-3 h-3" /> Còn {item.inventory_quantity}
+                          <AlertTriangle className="w-3 h-3" /> Còn{" "}
+                          {item.inventory_quantity}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                          <CheckCircle className="w-3 h-3" /> Tồn kho: {item.inventory_quantity}
+                          <CheckCircle className="w-3 h-3" /> Tồn kho:{" "}
+                          {item.inventory_quantity}
                         </span>
                       )}
                     </div>
@@ -285,7 +296,9 @@ const ManagerConcessions: React.FC = () => {
                   type="number"
                   min={0}
                   value={editQuantity}
-                  onChange={(e) => setEditQuantity(Math.max(0, Number(e.target.value)))}
+                  onChange={(e) =>
+                    setEditQuantity(Math.max(0, Number(e.target.value)))
+                  }
                   className={
                     editQuantity < LOW_STOCK_THRESHOLD
                       ? "border-red-400 focus-visible:ring-red-400"

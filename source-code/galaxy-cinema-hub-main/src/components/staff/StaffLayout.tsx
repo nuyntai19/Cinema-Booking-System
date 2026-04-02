@@ -7,6 +7,7 @@ import {
   User,
   History,
   ReceiptText,
+  Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,15 @@ const StaffLayout: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <NotificationDropdown />
+              <Link to="/">
+                <Button
+                  variant="ghost"
+                  className="text-white hover:text-white hover:bg-white/10"
+                >
+                  <Home className="w-5 h-5 mr-2" />
+                  Giao diện khách hàng
+                </Button>
+              </Link>
               <Button
                 variant="ghost"
                 className="text-white hover:text-white hover:bg-white/10"

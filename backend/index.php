@@ -356,6 +356,7 @@ $router->get('/api/manager/dashboard/revenue', 'ManagerController@getDashboardRe
 $router->get('/api/manager/dashboard/upcoming-shows', 'ManagerController@getUpcomingShows');
 // Cinema info
 $router->get('/api/manager/cinema/info', 'ManagerController@getCinemaInfo');
+$router->put('/api/manager/cinema/info', 'ManagerController@updateCinemaInfo');
 $router->get('/api/manager/cinema/halls', 'ManagerController@getCinemaHalls');
 // Movies (for scheduling)
 $router->get('/api/manager/movies/available', 'ManagerController@getAvailableMovies');

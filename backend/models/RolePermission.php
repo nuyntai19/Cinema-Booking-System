@@ -146,13 +146,13 @@ class RolePermission
                 $params = [];
 
                 foreach ($permissionIds as $index => $permissionId) {
-                    $values[] = "(:role_id, :perm_$index)";
-                    $params[":perm_$index"] = $permissionId;
+                    $values[] = "(:role_$index, :perm_$index)";
+                    $params[":role_$index"] = (int)$roleId;
+                    $params[":perm_$index"] = (int)$permissionId;
                 }
 
                 $insertQuery .= implode(', ', $values);
                 $insertStmt = $this->db->prepare($insertQuery);
-                $insertStmt->bindParam(':role_id', $roleId, PDO::PARAM_INT);
 
                 foreach ($params as $key => $value) {
                     $insertStmt->bindValue($key, $value, PDO::PARAM_INT);

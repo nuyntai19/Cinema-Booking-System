@@ -13,6 +13,9 @@ import {
   Building2,
   RefreshCw,
   Package,
+  Home,
+  MessageSquare,
+  Receipt,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
@@ -50,9 +53,10 @@ const ManagerLayout: React.FC = () => {
   // Load cinema info for header
   const loadCinema = useCallback(async () => {
     try {
-      const res = await apiCall<{ success: boolean; data: { cinema: CinemaInfo } }>(
-        API_ENDPOINTS.MANAGER_CINEMA_INFO
-      );
+      const res = await apiCall<{
+        success: boolean;
+        data: { cinema: CinemaInfo };
+      }>(API_ENDPOINTS.MANAGER_CINEMA_INFO);
       if (res.success) setCinemaInfo(res.data.cinema);
     } catch {
       // silent fail
@@ -72,23 +76,73 @@ const ManagerLayout: React.FC = () => {
   }, [user, setTheme]);
 
   // Close mobile sidebar on route change
-  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   if (!isAuthenticated || !user) return null;
 
   const navItems = [
-    { label: "Dashboard", path: "/manager", icon: LayoutDashboard, exact: true },
-    { label: "Lịch Chiếu", path: "/manager/showtimes", icon: Calendar, exact: false },
+    {
+      label: "Dashboard",
+      path: "/manager",
+      icon: LayoutDashboard,
+      exact: true,
+    },
+    {
+      label: "Cập Nhật Rạp",
+      path: "/manager/cinema",
+      icon: Building2,
+      exact: false,
+    },
+    {
+      label: "Quản Lý Phim",
+      path: "/manager/movies",
+      icon: Film,
+      exact: false,
+    },
+    {
+      label: "Lịch Chiếu",
+      path: "/manager/showtimes",
+      icon: Calendar,
+      exact: false,
+    },
     { label: "Chỗ Ngồi", path: "/manager/seats", icon: Armchair, exact: false },
     { label: "Nhân Viên", path: "/manager/staff", icon: Users, exact: false },
-    { label: "Bắp Nước", path: "/manager/concessions", icon: Package, exact: false },
-    { label: "Báo Cáo", path: "/manager/reports", icon: BarChart3, exact: false },
+    {
+      label: "Bắp Nước",
+      path: "/manager/concessions",
+      icon: Package,
+      exact: false,
+    },
+    {
+      label: "Đánh Giá",
+      path: "/manager/reviews",
+      icon: MessageSquare,
+      exact: false,
+    },
+    {
+      label: "Giao Dịch",
+      path: "/manager/transactions",
+      icon: Receipt,
+      exact: false,
+    },
+    {
+      label: "Báo Cáo",
+      path: "/manager/reports",
+      icon: BarChart3,
+      exact: false,
+    },
   ];
 
-  const isActive = (item: typeof navItems[0]) =>
-    item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
+  const isActive = (item: (typeof navItems)[0]) =>
+    item.exact
+      ? location.pathname === item.path
+      : location.pathname.startsWith(item.path);
 
-  const handleLogout = () => { logout(); };
+  const handleLogout = () => {
+    logout();
+  };
 
   // Sidebar content
   const SidebarContent = () => (
@@ -102,7 +156,9 @@ const ManagerLayout: React.FC = () => {
             </div>
             <div>
               <span className="font-bold text-gray-800 text-sm">Galaxy</span>
-              <span className="font-light text-orange-500 text-sm ml-1">Manager</span>
+              <span className="font-light text-orange-500 text-sm ml-1">
+                Manager
+              </span>
             </div>
           </Link>
         )}
@@ -115,7 +171,12 @@ const ManagerLayout: React.FC = () => {
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex w-7 h-7 items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-all"
         >
-          <ChevronLeft className={cn("w-4 h-4 transition-transform duration-300", collapsed && "rotate-180")} />
+          <ChevronLeft
+            className={cn(
+              "w-4 h-4 transition-transform duration-300",
+              collapsed && "rotate-180",
+            )}
+          />
         </button>
         <button
           onClick={() => setMobileOpen(false)}
@@ -130,9 +191,13 @@ const ManagerLayout: React.FC = () => {
         <div className="mx-3 mt-4 p-3 rounded-xl bg-orange-50 border border-orange-100">
           <div className="flex items-center gap-2">
             <Building2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-            <span className="text-xs font-semibold text-orange-600 truncate">{cinemaInfo.name}</span>
+            <span className="text-xs font-semibold text-orange-600 truncate">
+              {cinemaInfo.name}
+            </span>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5 truncate pl-5">{cinemaInfo.address}</p>
+          <p className="text-xs text-gray-400 mt-0.5 truncate pl-5">
+            {cinemaInfo.address}
+          </p>
         </div>
       )}
 
@@ -149,7 +214,7 @@ const ManagerLayout: React.FC = () => {
                     "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
                     active
                       ? "bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-md shadow-orange-200"
-                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-100",
                   )}
                 >
                   {active && (
@@ -158,7 +223,9 @@ const ManagerLayout: React.FC = () => {
                   <item.icon
                     className={cn(
                       "w-4 h-4 shrink-0 transition-all",
-                      active ? "text-white" : "text-gray-400 group-hover:text-gray-700"
+                      active
+                        ? "text-white"
+                        : "text-gray-400 group-hover:text-gray-700",
                     )}
                   />
                   {!collapsed && (
@@ -184,16 +251,31 @@ const ManagerLayout: React.FC = () => {
               {(user.name || user.email || "M").charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{user.name || "Manager"}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate">
+                {user.name || "Manager"}
+              </p>
               <p className="text-xs text-gray-400 truncate">{user.email}</p>
             </div>
           </div>
         )}
+        <Link to="/">
+          <button
+            className={cn(
+              "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all duration-200 mb-1",
+              collapsed && "justify-center",
+            )}
+          >
+            <Home className="w-4 h-4 shrink-0" />
+            {!collapsed && (
+              <span className="text-sm font-medium">Giao diện khách hàng</span>
+            )}
+          </button>
+        </Link>
         <button
           onClick={handleLogout}
           className={cn(
             "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200",
-            collapsed && "justify-center"
+            collapsed && "justify-center",
           )}
         >
           <LogOut className="w-4 h-4 shrink-0" />
@@ -218,7 +300,7 @@ const ManagerLayout: React.FC = () => {
         className={cn(
           "hidden lg:flex flex-col transition-all duration-300 ease-in-out",
           "bg-white border-r border-gray-200 shadow-sm",
-          collapsed ? "w-16" : "w-64"
+          collapsed ? "w-16" : "w-64",
         )}
       >
         <SidebarContent />
@@ -230,7 +312,7 @@ const ManagerLayout: React.FC = () => {
           "fixed top-0 left-0 z-40 h-full flex flex-col w-72 lg:hidden",
           "bg-white border-r border-gray-200 shadow-lg",
           "transition-transform duration-300 ease-in-out",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <SidebarContent />
@@ -253,9 +335,13 @@ const ManagerLayout: React.FC = () => {
             {cinemaInfo ? (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200">
                 <Building2 className="w-3.5 h-3.5 text-orange-500" />
-                <span className="text-sm font-semibold text-orange-600">{cinemaInfo.name}</span>
+                <span className="text-sm font-semibold text-orange-600">
+                  {cinemaInfo.name}
+                </span>
                 <span className="text-xs text-gray-400 hidden md:block">·</span>
-                <span className="text-xs text-gray-400 hidden md:block">{cinemaInfo.hall_count} phòng chiếu</span>
+                <span className="text-xs text-gray-400 hidden md:block">
+                  {cinemaInfo.hall_count} phòng chiếu
+                </span>
               </div>
             ) : (
               <div className="h-8 w-40 rounded-lg bg-gray-100 animate-pulse" />

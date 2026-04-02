@@ -9,6 +9,7 @@ require_once __DIR__ . '/../models/Movie.php';
 require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../utils/JWT.php';
 require_once __DIR__ . '/../config/Config.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 
 /**
  * ShowtimeController
@@ -108,11 +109,11 @@ class ShowtimeController
     /**
      * GET /api/showtimes
      * Lấy danh sách suất chiếu
-     * Public access
      */
     public function index()
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
             $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
 
@@ -150,11 +151,11 @@ class ShowtimeController
     /**
      * GET /api/showtimes/:id
      * Chi tiết suất chiếu
-     * Public access
      */
     public function show($id)
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             $showtime = $this->showtimeModel->getById($id);
 
             if (!$showtime) {
@@ -180,9 +181,7 @@ class ShowtimeController
     public function create()
     {
         try {
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('showtimes.create');
 
             $input = json_decode(file_get_contents('php://input'), true);
 
@@ -290,9 +289,7 @@ class ShowtimeController
     public function update($id)
     {
         try {
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('showtimes.update');
 
             $showtime = $this->showtimeModel->getById($id);
             if (!$showtime) {
@@ -381,9 +378,7 @@ class ShowtimeController
     public function delete($id)
     {
         try {
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('showtimes.delete');
 
             $showtime = $this->showtimeModel->getById($id);
             if (!$showtime) {
@@ -409,11 +404,11 @@ class ShowtimeController
     /**
      * GET /api/showtimes/:id/seats
      * Lấy danh sách ghế trống cho suất chiếu
-     * Public access
      */
     public function getAvailableSeats($id)
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             $showtime = $this->showtimeModel->getById($id);
             if (!$showtime) {
                 return Response::error('Không tìm thấy suất chiếu', 404);
@@ -459,11 +454,11 @@ class ShowtimeController
     /**
      * GET /api/showtimes/:id/seat-map
      * Sơ đồ ghế đầy đủ với trạng thái từng ghế
-     * Public access
      */
     public function getSeatMap($id)
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             $showtime = $this->showtimeModel->getById($id);
             if (!$showtime) {
                 return Response::error('Không tìm thấy suất chiếu', 404);
@@ -567,7 +562,7 @@ class ShowtimeController
     public function holdSeats($id)
     {
         try {
-            AuthMiddleware::authenticate();
+            AuthMiddleware::requirePermission('bookings.create');
             $userId = $_REQUEST['auth_user_id'] ?? null;
             if (!$userId) {
                 return Response::error('Unauthorized', 401);
@@ -618,7 +613,7 @@ class ShowtimeController
     public function releaseSeats($id)
     {
         try {
-            AuthMiddleware::authenticate();
+            AuthMiddleware::requirePermission('bookings.create');
             $userId = $_REQUEST['auth_user_id'] ?? null;
             if (!$userId) {
                 return Response::error('Unauthorized', 401);
@@ -797,9 +792,7 @@ class ShowtimeController
     public function autoGenerate()
     {
         try {
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('showtimes.auto_generate');
 
             $input = json_decode(file_get_contents('php://input'), true) ?: [];
 

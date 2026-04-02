@@ -7,6 +7,7 @@ require_once __DIR__ . '/../models/Concession.php';
 require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../utils/Validator.php';
 require_once __DIR__ . '/../utils/CloudinaryUploader.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 
 class ConcessionController
 {
@@ -23,6 +24,7 @@ class ConcessionController
      */
     public function index()
     {
+        AuthMiddleware::requirePermission('concessions.view');
         try {
             $cinemaId = isset($_GET['cinema_id']) ? (int)$_GET['cinema_id'] : null;
 
@@ -44,6 +46,7 @@ class ConcessionController
      */
     public function show($id)
     {
+        AuthMiddleware::requirePermission('concessions.view');
         try {
             $concession = $this->concessionModel->getById($id);
 
@@ -64,6 +67,7 @@ class ConcessionController
      */
     public function create()
     {
+        AuthMiddleware::requirePermission('concessions.create');
         try {
             $input = json_decode(file_get_contents('php://input'), true);
 
@@ -110,6 +114,7 @@ class ConcessionController
      */
     public function import()
     {
+        AuthMiddleware::requirePermission('concessions.import');
         try {
             $input = json_decode(file_get_contents('php://input'), true);
 
@@ -167,6 +172,7 @@ class ConcessionController
      */
     public function update($id)
     {
+        AuthMiddleware::requirePermission('concessions.update');
         try {
             $concession = $this->concessionModel->getById($id);
 
@@ -229,6 +235,7 @@ class ConcessionController
      */
     public function delete($id)
     {
+        AuthMiddleware::requirePermission('concessions.delete');
         try {
             $concession = $this->concessionModel->getById($id);
 
@@ -264,6 +271,7 @@ class ConcessionController
      */
     public function getAvailable()
     {
+        AuthMiddleware::requirePermission('concessions.view');
         try {
             $cinemaId = isset($_GET['cinema_id']) ? (int)$_GET['cinema_id'] : null;
 

@@ -91,6 +91,9 @@ class MovieController
     public function index()
     {
         try {
+            // Kiểm tra permission động
+            AuthMiddleware::requirePermission('movies.view');
+
             // Get query parameters
             $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
@@ -131,6 +134,8 @@ class MovieController
     public function show($id)
     {
         try {
+            AuthMiddleware::requirePermission('movies.view');
+
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
@@ -151,11 +156,11 @@ class MovieController
     /**
      * GET /api/movies/{id}/showtimes
      * Lấy suất chiếu của phim
-     * Public access
      */
     public function getShowtimes($id)
     {
         try {
+            AuthMiddleware::requirePermission('showtimes.view');
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
             }
@@ -191,6 +196,7 @@ class MovieController
      */
     public function getReviews($id)
     {
+        AuthMiddleware::requirePermission('reviews.view');
         try {
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
@@ -238,9 +244,7 @@ class MovieController
     {
         try {
             // Check permission
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('movies.create');
 
             // Get request body
             $input = json_decode(file_get_contents('php://input'), true);
@@ -327,9 +331,7 @@ class MovieController
     public function import()
     {
         try {
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('movies.import');
 
             $input = json_decode(file_get_contents('php://input'), true);
 
@@ -404,9 +406,7 @@ class MovieController
     {
         try {
             // Check permission
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('movies.update');
 
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
@@ -505,10 +505,8 @@ class MovieController
     public function delete($id)
     {
         try {
-            // Check permission - Only Admin can delete
-            if (!$this->isAdmin()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            // Check permission
+            AuthMiddleware::requirePermission('movies.delete');
 
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);
@@ -555,9 +553,7 @@ class MovieController
     {
         try {
             // Check permission
-            if (!$this->isAdminOrManager()) {
-                return Response::error('Không có quyền truy cập', 403);
-            }
+            AuthMiddleware::requirePermission('movies.upload_poster');
 
             if (!$id || !is_numeric($id)) {
                 return Response::error('ID phim không hợp lệ', 400);

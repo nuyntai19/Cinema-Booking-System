@@ -10,6 +10,8 @@ import {
   ChevronRight,
   Send,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -84,6 +86,7 @@ interface ReviewStats {
 
 interface Review {
   id: string;
+  userId: number;
   userName: string;
   userAvatar: string;
   rating: number;
@@ -147,6 +150,7 @@ const MovieDetailPage: React.FC = () => {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -313,6 +317,7 @@ const MovieDetailPage: React.FC = () => {
         // Map backend reviews to frontend format
         const mappedReviews = response.data.reviews.map((r) => ({
           id: r.id.toString(),
+          userId: r.user_id,
           userName: r.full_name || r.email.split("@")[0],
           userAvatar:
             r.avatar ||
@@ -370,16 +375,16 @@ const MovieDetailPage: React.FC = () => {
   const dates =
     availableDates.length > 0
       ? availableDates
-          .filter(value => value >= todayStr)
+          .filter((value) => value >= todayStr)
           .map((value) => {
-          const d = new Date(`${value}T00:00:00`);
-          return {
-            value,
-            dayName: d.toLocaleDateString("vi-VN", { weekday: "short" }),
-            day: d.getDate(),
-            month: d.getMonth() + 1,
-          };
-        })
+            const d = new Date(`${value}T00:00:00`);
+            return {
+              value,
+              dayName: d.toLocaleDateString("vi-VN", { weekday: "short" }),
+              day: d.getDate(),
+              month: d.getMonth() + 1,
+            };
+          })
       : Array.from({ length: 7 }, (_, i) => {
           const d = new Date();
           d.setDate(d.getDate() + i);
@@ -421,22 +426,25 @@ const MovieDetailPage: React.FC = () => {
       const endObj = new Date(startObj.getTime() + movie.duration * 60000);
       const endHour = endObj.getHours();
       const endMinute = endObj.getMinutes();
-      
+
       let totalMinsOfDay = endHour * 60 + endMinute;
       // If the movie ends in the early morning of the next day (00:00 - 05:59)
       if (endHour >= 0 && endHour < 6) {
         totalMinsOfDay += 24 * 60;
       }
-      
+
       if (user.dob) {
-        const age = (Date.now() - new Date(user.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        const age =
+          (Date.now() - new Date(user.dob).getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25);
         const limit22 = 22 * 60; // 22:00
         const limit23 = 23 * 60; // 23:00
 
         if (age < 13 && totalMinsOfDay > limit22) {
           toast({
             title: "Không thể chọn suất chiếu này",
-            description: "Theo quy định, trẻ dưới 13 tuổi không được xem phim kết thúc sau 22h.",
+            description:
+              "Theo quy định, trẻ dưới 13 tuổi không được xem phim kết thúc sau 22h.",
             variant: "destructive",
           });
           return;
@@ -445,7 +453,8 @@ const MovieDetailPage: React.FC = () => {
         if (age < 16 && totalMinsOfDay > limit23) {
           toast({
             title: "Không thể chọn suất chiếu này",
-            description: "Theo quy định, trẻ dưới 16 tuổi không được xem phim kết thúc sau 23h.",
+            description:
+              "Theo quy định, trẻ dưới 16 tuổi không được xem phim kết thúc sau 23h.",
             variant: "destructive",
           });
           return;
@@ -511,24 +520,34 @@ const MovieDetailPage: React.FC = () => {
         success: boolean;
         message: string;
         data?: { review_id: number };
-      }>(API_ENDPOINTS.CREATE_REVIEW, {
-        method: "POST",
-        body: JSON.stringify({
-          movie_id: parseInt(id!),
-          rating: rating,
-          comment: reviewText.trim(),
-        }),
-      });
+      }>(
+        editingReviewId
+          ? API_ENDPOINTS.REVIEW_DETAIL(parseInt(editingReviewId))
+          : API_ENDPOINTS.CREATE_REVIEW,
+        {
+          method: editingReviewId ? "PUT" : "POST",
+          body: JSON.stringify({
+            movie_id: parseInt(id!),
+            rating: rating,
+            comment: reviewText.trim(),
+          }),
+        },
+      );
 
       if (response.success) {
         toast({
-          title: "Gửi đánh giá thành công",
-          description: "Đánh giá của bạn đang được xem xét. Cảm ơn bạn!",
+          title: editingReviewId
+            ? "Cập nhật đánh giá thành công"
+            : "Gửi đánh giá thành công",
+          description: editingReviewId
+            ? "Đánh giá của bạn đã được cập nhật."
+            : "Đánh giá của bạn đang được xem xét. Cảm ơn bạn!",
         });
 
         // Reset form
         setRating(0);
         setReviewText("");
+        setEditingReviewId(null);
 
         // Refresh reviews list without full page reload
         fetchReviews();
@@ -545,6 +564,44 @@ const MovieDetailPage: React.FC = () => {
         error instanceof Error
           ? error.message
           : "Không thể gửi đánh giá. Vui lòng thử lại sau.";
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!confirm("Bạn có chắc muốn xóa đánh giá này?")) return;
+
+    try {
+      const response = await apiCall<{ success: boolean; message: string }>(
+        API_ENDPOINTS.REVIEW_DETAIL(parseInt(reviewId)),
+        { method: "DELETE" },
+      );
+
+      if (response.success) {
+        toast({
+          title: "Xóa đánh giá thành công",
+          description: "Đánh giá của bạn đã được xóa.",
+        });
+        if (editingReviewId === reviewId) {
+          setEditingReviewId(null);
+          setRating(0);
+          setReviewText("");
+        }
+        fetchReviews();
+      } else {
+        toast({
+          title: "Không thể xóa đánh giá",
+          description: response.message || "Đã có lỗi xảy ra",
+          variant: "destructive",
+        });
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Không thể xóa đánh giá.";
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -923,10 +980,30 @@ const MovieDetailPage: React.FC = () => {
 
             {/* Write Review Form */}
             {isAuthenticated ? (
-              <div className="bg-card rounded-xl border border-border p-6 mb-6">
-                <h3 className="font-bold text-lg mb-4">
-                  Viết đánh giá của bạn
-                </h3>
+              <div
+                id="review-form"
+                className="bg-card rounded-xl border border-border p-6 mb-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-lg">
+                    {editingReviewId
+                      ? "Sửa đánh giá của bạn"
+                      : "Viết đánh giá của bạn"}
+                  </h3>
+                  {editingReviewId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingReviewId(null);
+                        setRating(0);
+                        setReviewText("");
+                      }}
+                    >
+                      Hủy sửa
+                    </Button>
+                  )}
+                </div>
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
@@ -952,7 +1029,7 @@ const MovieDetailPage: React.FC = () => {
                     disabled={rating === 0 || !reviewText.trim()}
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Gửi đánh giá
+                    {editingReviewId ? "Cập nhật đánh giá" : "Gửi đánh giá"}
                   </Button>
                 </div>
               </div>
@@ -1009,6 +1086,38 @@ const MovieDetailPage: React.FC = () => {
                           >
                             👍 Hữu ích ({review.helpful})
                           </Button>
+                          {user && String(review.userId) === user.id && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs h-8 text-muted-foreground hover:text-primary"
+                                onClick={() => {
+                                  setEditingReviewId(review.id);
+                                  setRating(review.rating);
+                                  setReviewText(review.comment);
+                                  window.scrollTo({
+                                    top:
+                                      document.getElementById("review-form")
+                                        ?.offsetTop ?? 0,
+                                    behavior: "smooth",
+                                  });
+                                }}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" />
+                                Sửa đánh giá
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs h-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteReview(review.id)}
+                              >
+                                <Trash2 className="w-3 h-3 mr-1" />
+                                Xóa
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -76,6 +76,7 @@ class ManagerController extends BaseController
     public function getDashboardStats(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.dashboard');
         $today = date('Y-m-d');
 
         try {
@@ -166,6 +167,7 @@ class ManagerController extends BaseController
     public function getDashboardRevenue(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.dashboard');
         try {
             $stmt = $this->db->prepare("
                 SELECT DATE(t.created_at) AS revenue_date,
@@ -204,6 +206,7 @@ class ManagerController extends BaseController
     public function getUpcomingShows(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.dashboard');
         try {
             $stmt = $this->db->prepare("
                 SELECT s.id, m.title AS movie_title, h.name AS hall_name,
@@ -235,6 +238,7 @@ class ManagerController extends BaseController
     public function getCinemaInfo(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        // No granular permission needed — scoped to manager's own cinema
         try {
             $stmt = $this->db->prepare("
                 SELECT c.*, COUNT(h.id) AS hall_count
@@ -250,9 +254,61 @@ class ManagerController extends BaseController
         }
     }
 
+    /**
+     * PUT /api/manager/cinema/info
+     * Cập nhật thông tin rạp mà manager đang quản lý
+     */
+    public function updateCinemaInfo(): void
+    {
+        $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('cinemas.update');
+
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!$data) {
+                Response::badRequest('Dữ liệu không hợp lệ');
+                return;
+            }
+
+            $allowed = ['name', 'address', 'street', 'district', 'city', 'hotline', 'lat', 'lng'];
+            $fields = [];
+            $params = [':cid' => $cinemaId];
+
+            foreach ($allowed as $field) {
+                if (array_key_exists($field, $data)) {
+                    $fields[] = "$field = :$field";
+                    $params[":$field"] = $data[$field];
+                }
+            }
+
+            if (empty($fields)) {
+                Response::badRequest('Không có trường nào để cập nhật');
+                return;
+            }
+
+            $sql = "UPDATE cinemas SET " . implode(', ', $fields) . " WHERE id = :cid";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+
+            // Return updated cinema info
+            $stmt = $this->db->prepare("
+                SELECT c.*, COUNT(h.id) AS hall_count
+                FROM cinemas c LEFT JOIN cinema_halls h ON h.cinema_id = c.id
+                WHERE c.id = :cid GROUP BY c.id
+            ");
+            $stmt->execute([':cid' => $cinemaId]);
+            $cinema = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            Response::success(['cinema' => $cinema], 'Cập nhật thông tin rạp thành công');
+        } catch (\Exception $e) {
+            Response::serverError($e->getMessage());
+        }
+    }
+
     public function getCinemaHalls(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('halls.view');
         try {
             $stmt = $this->db->prepare("
                 SELECT h.*, COUNT(s.id) AS seat_count
@@ -271,6 +327,7 @@ class ManagerController extends BaseController
     public function getAvailableMovies(): void
     {
         AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('movies.view');
         try {
             $stmt = $this->db->query("
                 SELECT id, title, duration_minutes AS duration, age_rating, poster_url, status, release_date
@@ -291,6 +348,7 @@ class ManagerController extends BaseController
     public function getShowtimes(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('showtimes.view');
         try {
             $date     = trim($_GET['date'] ?? '');
             $hallId   = isset($_GET['hall_id']) ? (int)$_GET['hall_id'] : 0;
@@ -357,6 +415,7 @@ class ManagerController extends BaseController
     public function createShowtime(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('showtimes.create');
         try {
             $input = json_decode(file_get_contents('php://input'), true) ?: [];
 
@@ -415,6 +474,7 @@ class ManagerController extends BaseController
     public function updateShowtime(int $id): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('showtimes.update');
         try {
             $check = $this->db->prepare("
                 SELECT s.id, s.start_time, s.end_time, s.cinema_hall_id, s.movie_id
@@ -492,6 +552,7 @@ class ManagerController extends BaseController
     public function deleteShowtime(int $id): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('showtimes.delete');
         try {
             $check = $this->db->prepare("
                 SELECT s.id FROM showtimes s
@@ -836,6 +897,7 @@ class ManagerController extends BaseController
     public function getRevenueReport(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.revenue');
         try {
             $from    = trim($_GET['from'] ?? date('Y-m-01'));
             $to      = trim($_GET['to'] ?? date('Y-m-d'));
@@ -874,6 +936,7 @@ class ManagerController extends BaseController
     public function getOccupancyReport(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.occupancy');
         try {
             $date = trim($_GET['date'] ?? date('Y-m-d'));
 
@@ -937,6 +1000,7 @@ class ManagerController extends BaseController
     public function getTransactions(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('transactions.view_all');
         try {
             $q = trim((string)($_GET['q'] ?? ''));
             $status = strtolower(trim((string)($_GET['status'] ?? '')));
@@ -1052,6 +1116,7 @@ class ManagerController extends BaseController
     public function getTransactionsExportDetails(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('transactions.view_all');
         try {
             $dateFrom = trim((string)($_GET['date_from'] ?? ''));
             $dateTo = trim((string)($_GET['date_to'] ?? ''));
@@ -1153,6 +1218,7 @@ class ManagerController extends BaseController
     public function exportReport(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('reports.export');
         try {
             $type = trim($_GET['type'] ?? 'revenue');
             $from = trim($_GET['from'] ?? date('Y-m-01'));
@@ -1220,6 +1286,7 @@ class ManagerController extends BaseController
     public function getConcessions(): void
     {
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('concessions.view');
         try {
             require_once __DIR__ . '/../models/Concession.php';
             $concessionModel = new Concession();
@@ -1239,6 +1306,7 @@ class ManagerController extends BaseController
     {
         $concessionId = $id;
         $cinemaId = $this->requireManagerCinema();
+        AuthMiddleware::requirePermission('concessions.update');
         try {
             $input    = json_decode(file_get_contents('php://input'), true) ?: [];
             $quantity = isset($input['quantity']) ? (int)$input['quantity'] : null;

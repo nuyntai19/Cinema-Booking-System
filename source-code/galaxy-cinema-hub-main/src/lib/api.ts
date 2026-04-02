@@ -149,6 +149,7 @@ export const API_ENDPOINTS = {
   MANAGER_DASHBOARD_REVENUE: `${API_BASE_URL}/api/manager/dashboard/revenue`,
   MANAGER_DASHBOARD_UPCOMING: `${API_BASE_URL}/api/manager/dashboard/upcoming-shows`,
   MANAGER_CINEMA_INFO: `${API_BASE_URL}/api/manager/cinema/info`,
+  MANAGER_CINEMA_UPDATE: `${API_BASE_URL}/api/manager/cinema/info`,
   MANAGER_CINEMA_HALLS: `${API_BASE_URL}/api/manager/cinema/halls`,
   MANAGER_MOVIES_AVAILABLE: `${API_BASE_URL}/api/manager/movies/available`,
   MANAGER_SHOWTIMES: `${API_BASE_URL}/api/manager/showtimes`,

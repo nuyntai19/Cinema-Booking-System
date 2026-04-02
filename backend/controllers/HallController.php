@@ -77,7 +77,7 @@ class HallController
      */
     public function show($id)
     {
-        AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('halls.view');
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)
@@ -94,7 +94,7 @@ class HallController
      */
     public function create()
     {
-        AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('halls.create');
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['cinema_id']) || empty($input['name'])) {
@@ -115,7 +115,7 @@ class HallController
      */
     public function update($id)
     {
-        AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('halls.update');
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)
@@ -136,7 +136,7 @@ class HallController
      */
     public function delete($id)
     {
-        AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('halls.delete');
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)
@@ -164,7 +164,7 @@ class HallController
      */
     public function saveLayout($id)
     {
-        AuthMiddleware::requireManager();
+        AuthMiddleware::requirePermission('halls.manage_layout');
 
         $hall = $this->hallModel->getById($id);
         if (!$hall)

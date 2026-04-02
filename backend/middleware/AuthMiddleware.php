@@ -99,4 +99,65 @@ class AuthMiddleware {
     public static function requireStaff() {
         self::requireRole(['Admin', 'Manager', 'Staff']);
     }
+
+    /**
+     * Kiểm tra permission động dựa trên bảng role_permissions
+     * Nếu user chưa đăng nhập → mặc định là Guest (role_id=1)
+     * Nếu đã đăng nhập → lấy role_id từ JWT
+     */
+    public static function requirePermission($permissionName) {
+        $roleId = 1; // Default: Guest
+
+        // Thử lấy token, nếu có thì lấy role_id
+        $headers = getallheaders();
+        $token = null;
+        if (isset($headers['Authorization'])) {
+            if (preg_match('/Bearer\s+(.*)$/i', $headers['Authorization'], $matches)) {
+                $token = $matches[1];
+            }
+        }
+
+        if ($token) {
+            try {
+                $decoded = JWT::decode($token, Config::$jwt_secret);
+                $roleId = is_array($decoded)
+                    ? (int)($decoded['role_id'] ?? 1)
+                    : (int)($decoded->role_id ?? 1);
+                // Cũng set auth info cho các middleware phía sau
+                $userId = is_array($decoded) ? ($decoded['user_id'] ?? null) : ($decoded->user_id ?? null);
+                $role = is_array($decoded) ? ($decoded['role'] ?? null) : ($decoded->role ?? null);
+                $_REQUEST['auth_user_id'] = $userId ? (int)$userId : null;
+                $_REQUEST['auth_user_role_id'] = $roleId;
+                $_REQUEST['auth_user_role'] = self::resolveRoleName($role, $roleId);
+            } catch (Exception $e) {
+                // Token không hợp lệ → coi là Guest
+                $roleId = 1;
+            }
+        }
+
+        // Query bảng role_permissions để kiểm tra
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare(
+                "SELECT COUNT(*) FROM role_permissions rp
+                 INNER JOIN permissions p ON rp.permission_id = p.id
+                 WHERE rp.role_id = :role_id AND p.name = :perm_name"
+            );
+            $stmt->bindParam(':role_id', $roleId, PDO::PARAM_INT);
+            $stmt->bindParam(':perm_name', $permissionName, PDO::PARAM_STR);
+            $stmt->execute();
+
+            if ((int)$stmt->fetchColumn() === 0) {
+                http_response_code(403);
+                echo json_encode([
+                    'success' => false,
+                    'message' => "Bạn không có quyền thực hiện hành động này ($permissionName)"
+                ]);
+                exit;
+            }
+        } catch (PDOException $e) {
+            error_log("requirePermission Error: " . $e->getMessage());
+            // Nếu lỗi DB thì cho qua để không block hoàn toàn
+        }
+    }
 }

@@ -26,6 +26,7 @@ const Header: React.FC = () => {
     { label: "Phim", path: "/movies" },
     { label: "Rạp", path: "/cinemas" },
     { label: "Khuyến Mãi", path: "/promotions" },
+    { label: "Bắp Nước", path: "/concessions" },
   ];
 
   const handleSearch = (e: React.FormEvent) => {

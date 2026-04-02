@@ -20,6 +20,8 @@ import SchedulePage from "./pages/SchedulePage";
 import MoviesPage from "./pages/CinemasPage";
 import CinemasListPage from "./pages/CinemasListPage";
 import PromotionsPage from "./pages/PromotionsPage";
+import ConcessionMenuPage from "./pages/ConcessionMenuPage";
+import CinemaDetailPage from "./pages/CinemaDetailPage";
 import SeatSelectionPage from "./pages/booking/SeatSelectionPage";
 import ConcessionsPage from "./pages/booking/ConcessionsPage";
 import PaymentPage from "./pages/booking/PaymentPage";
@@ -48,6 +50,10 @@ import ManagerShowtimes from "./pages/manager/ManagerShowtimes";
 import ManagerStaff from "./pages/manager/ManagerStaff";
 import ManagerReports from "./pages/manager/ManagerReports";
 import ManagerConcessions from "./pages/manager/ManagerConcessions";
+import ManagerMovies from "./pages/manager/ManagerMovies";
+import ManagerCinema from "./pages/manager/ManagerCinema";
+import ManagerReviews from "./pages/manager/ManagerReviews";
+import ManagerTransactions from "./pages/manager/ManagerTransactions";
 import StaffLayout from "./components/staff/StaffLayout";
 import StaffScanner from "./pages/staff/StaffScanner";
 import StaffPOS from "./pages/staff/StaffPOS";
@@ -68,13 +74,28 @@ const SettingsLoader = () => {
         );
         if (res.success && res.data) {
           const dbConfig = res.data;
-          if (dbConfig.curfew_u13) systemConfig.curfewTimeU13 = dbConfig.curfew_u13.substring(0, 5);
-          if (dbConfig.curfew_u16) systemConfig.curfewTimeU16 = dbConfig.curfew_u16.substring(0, 5);
-          if (dbConfig.min_vietnamese_quota) systemConfig.minVietnameseQuota = Number(dbConfig.min_vietnamese_quota);
-          if (dbConfig.seat_hold_duration) systemConfig.seatHoldDuration = Math.max(1, Math.floor(Number(dbConfig.seat_hold_duration) / 60));
-          if (dbConfig.cleanup_duration) systemConfig.defaultCleanupDuration = Number(dbConfig.cleanup_duration);
-          if (dbConfig.loyalty_points_rate) systemConfig.loyaltyPointsRate = Number(dbConfig.loyalty_points_rate);
-          
+          if (dbConfig.curfew_u13)
+            systemConfig.curfewTimeU13 = dbConfig.curfew_u13.substring(0, 5);
+          if (dbConfig.curfew_u16)
+            systemConfig.curfewTimeU16 = dbConfig.curfew_u16.substring(0, 5);
+          if (dbConfig.min_vietnamese_quota)
+            systemConfig.minVietnameseQuota = Number(
+              dbConfig.min_vietnamese_quota,
+            );
+          if (dbConfig.seat_hold_duration)
+            systemConfig.seatHoldDuration = Math.max(
+              1,
+              Math.floor(Number(dbConfig.seat_hold_duration) / 60),
+            );
+          if (dbConfig.cleanup_duration)
+            systemConfig.defaultCleanupDuration = Number(
+              dbConfig.cleanup_duration,
+            );
+          if (dbConfig.loyalty_points_rate)
+            systemConfig.loyaltyPointsRate = Number(
+              dbConfig.loyalty_points_rate,
+            );
+
           console.log("System config loaded from DB:", systemConfig);
         }
       } catch (error) {
@@ -116,6 +137,8 @@ const App = () => (
                 <Route path="/movies" element={<MoviesPage />} />
                 <Route path="/cinemas" element={<CinemasListPage />} />
                 <Route path="/promotions" element={<PromotionsPage />} />
+                <Route path="/concessions" element={<ConcessionMenuPage />} />
+                <Route path="/cinema/:id" element={<CinemaDetailPage />} />
                 <Route path="/movie/:id" element={<MovieDetailPage />} />
                 <Route path="/booking/seats" element={<SeatSelectionPage />} />
                 <Route
@@ -148,17 +171,27 @@ const App = () => (
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="seats" element={<AdminSeatManagement />} />
                   <Route path="permissions" element={<AdminPermissions />} />
-                  <Route path="role-permissions" element={<AdminRolePermissions />} />
+                  <Route
+                    path="role-permissions"
+                    element={<AdminRolePermissions />}
+                  />
                 </Route>
 
                 {/* Manager Routes */}
                 <Route path="/manager" element={<ManagerLayout />}>
                   <Route index element={<ManagerDashboard />} />
+                  <Route path="cinema" element={<ManagerCinema />} />
+                  <Route path="movies" element={<ManagerMovies />} />
                   <Route path="showtimes" element={<ManagerShowtimes />} />
                   <Route path="seats" element={<AdminSeatManagement />} />
                   <Route path="staff" element={<ManagerStaff />} />
                   <Route path="reports" element={<ManagerReports />} />
                   <Route path="concessions" element={<ManagerConcessions />} />
+                  <Route path="reviews" element={<ManagerReviews />} />
+                  <Route
+                    path="transactions"
+                    element={<ManagerTransactions />}
+                  />
                 </Route>
 
                 {/* Staff Routes */}
