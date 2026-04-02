@@ -1079,6 +1079,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, dob: e.target.value })
                 }
+                max={new Date().toISOString().split("T")[0]}
                 autoComplete="off"
               />
             </div>
@@ -1244,6 +1245,7 @@ const AdminUsers: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, dob: e.target.value })
                 }
+                max={new Date().toISOString().split("T")[0]}
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
