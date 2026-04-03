@@ -197,6 +197,42 @@ class PermissionController
     }
 
     // ============================================
+    // TOGGLE ACTIVE (KHÓA/MỞ KHÓA)
+    // ============================================
+
+    /**
+     * PUT /api/permissions/:id/toggle-active
+     * Khóa/mở khóa permission
+     * Authorization: Admin only
+     */
+    public function toggleActive($id)
+    {
+        try {
+            AuthMiddleware::requireAdmin();
+
+            $permission = $this->permissionModel->getById($id);
+            if (!$permission) {
+                return Response::error('Không tìm thấy permission', 404);
+            }
+
+            $updated = $this->permissionModel->toggleActive($id);
+
+            if (!$updated) {
+                return Response::error('Không thể cập nhật trạng thái', 500);
+            }
+
+            $status = $updated['is_active'] ? 'mở khóa' : 'khóa';
+            return Response::success([
+                'permission' => $updated,
+                'message' => "Đã {$status} permission: {$updated['display_name']}"
+            ]);
+
+        } catch (Exception $e) {
+            return Response::error('Lỗi hệ thống: ' . $e->getMessage(), 500);
+        }
+    }
+
+    // ============================================
     // ROLE PERMISSIONS MANAGEMENT
     // ============================================
 

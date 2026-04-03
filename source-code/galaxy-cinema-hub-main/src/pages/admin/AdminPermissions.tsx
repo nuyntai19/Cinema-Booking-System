@@ -4,7 +4,8 @@ import {
   Plus,
   Search,
   Edit,
-  Trash2,
+  Lock,
+  Unlock,
   Loader2,
   AlertCircle,
   CheckCircle,
@@ -72,7 +73,7 @@ const AdminPermissions: React.FC = () => {
   const [selectedModule, setSelectedModule] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [selectedPermission, setSelectedPermission] =
     useState<Permission | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -188,29 +189,28 @@ const AdminPermissions: React.FC = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedPermission) return;
-
+  const handleToggleActive = async (permission: Permission) => {
     try {
-      setSubmitting(true);
-      await permissionsService.deletePermission(selectedPermission.id);
+      setTogglingId(permission.id);
+      await permissionsService.togglePermissionActive(permission.id);
+      const status = permission.is_active ? "khóa" : "mở khóa";
       toast({
         title: "Thành công",
-        description: "Đã xóa permission",
+        description: `Đã ${status} permission: ${permission.display_name}`,
       });
-      setShowDeleteDialog(false);
-      setSelectedPermission(null);
       loadPermissions();
     } catch (error: unknown) {
       const msg =
-        error instanceof Error ? error.message : "Không thể xóa permission";
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật trạng thái";
       toast({
         title: "Lỗi",
         description: msg,
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      setTogglingId(null);
     }
   };
 
@@ -223,11 +223,6 @@ const AdminPermissions: React.FC = () => {
       module: permission.module,
     });
     setShowEditDialog(true);
-  };
-
-  const openDeleteDialog = (permission: Permission) => {
-    setSelectedPermission(permission);
-    setShowDeleteDialog(true);
   };
 
   const resetForm = () => {
@@ -383,7 +378,12 @@ const AdminPermissions: React.FC = () => {
                     </TableRow>
                   ) : (
                     filteredPermissions.map((permission) => (
-                      <TableRow key={permission.id}>
+                      <TableRow
+                        key={permission.id}
+                        className={
+                          !permission.is_active ? "opacity-50 bg-muted/30" : ""
+                        }
+                      >
                         <TableCell className="font-mono text-xs">
                           {permission.id}
                         </TableCell>
@@ -415,9 +415,21 @@ const AdminPermissions: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openDeleteDialog(permission)}
+                              onClick={() => handleToggleActive(permission)}
+                              disabled={togglingId === permission.id}
+                              title={
+                                permission.is_active
+                                  ? "Khóa permission"
+                                  : "Mở khóa permission"
+                              }
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              {togglingId === permission.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : permission.is_active ? (
+                                <Lock className="h-4 w-4 text-amber-500" />
+                              ) : (
+                                <Unlock className="h-4 w-4 text-green-500" />
+                              )}
                             </Button>
                           </div>
                         </TableCell>
@@ -469,11 +481,23 @@ const AdminPermissions: React.FC = () => {
                         .map((permission) => (
                           <div
                             key={permission.id}
-                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent"
+                            className={`flex items-center justify-between p-3 border rounded-lg hover:bg-accent ${
+                              !permission.is_active
+                                ? "opacity-50 bg-muted/30"
+                                : ""
+                            }`}
                           >
                             <div className="flex-1">
                               <div className="font-medium">
                                 {permission.display_name}
+                                {!permission.is_active && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-2 text-xs text-amber-600 border-amber-300"
+                                  >
+                                    Đã khóa
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground font-mono">
                                 {permission.name}
@@ -490,9 +514,21 @@ const AdminPermissions: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => openDeleteDialog(permission)}
+                                onClick={() => handleToggleActive(permission)}
+                                disabled={togglingId === permission.id}
+                                title={
+                                  permission.is_active
+                                    ? "Khóa permission"
+                                    : "Mở khóa permission"
+                                }
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                {togglingId === permission.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : permission.is_active ? (
+                                  <Lock className="h-4 w-4 text-amber-500" />
+                                ) : (
+                                  <Unlock className="h-4 w-4 text-green-500" />
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -672,48 +708,6 @@ const AdminPermissions: React.FC = () => {
             <Button onClick={handleUpdate} disabled={submitting}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Cập Nhật
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              Xác Nhận Xóa
-            </DialogTitle>
-            <DialogDescription>
-              Bạn có chắc chắn muốn xóa permission này không? Hành động này
-              không thể hoàn tác.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedPermission && (
-            <div className="bg-muted p-4 rounded-lg">
-              <div className="text-sm font-medium">
-                {selectedPermission.display_name}
-              </div>
-              <div className="text-xs text-muted-foreground font-mono">
-                {selectedPermission.name}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteDialog(false)}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={submitting}
-            >
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Xóa Permission
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -141,6 +141,7 @@ $router->get('/api/roles', 'RoleController@index'); // Get all roles
 $router->get('/api/permissions', 'PermissionController@index'); // List all permissions
 $router->post('/api/permissions', 'PermissionController@create'); // Create permission
 $router->put('/api/permissions/:id', 'PermissionController@update'); // Update permission
+$router->put('/api/permissions/:id/toggle-active', 'PermissionController@toggleActive'); // Khóa/Mở khóa permission
 $router->delete('/api/permissions/:id', 'PermissionController@delete'); // Delete permission
 
 // Role permission routes (Admin only)

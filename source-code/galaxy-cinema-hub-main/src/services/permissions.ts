@@ -1,4 +1,4 @@
-import { apiCall, API_BASE_URL } from '@/lib/api';
+import { apiCall, API_BASE_URL } from "@/lib/api";
 import type {
   Permission,
   PermissionsResponse,
@@ -7,7 +7,7 @@ import type {
   UpdatePermissionData,
   AssignPermissionData,
   SyncPermissionsData,
-} from '@/types/permission';
+} from "@/types/permission";
 
 const PERMISSIONS_BASE = `${API_BASE_URL}/api/permissions`;
 const ROLES_BASE = `${API_BASE_URL}/api/roles`;
@@ -16,53 +16,60 @@ export const permissionsService = {
   // Get all permissions
   getAllPermissions: async (filters?: { module?: string; search?: string }) => {
     const params = new URLSearchParams();
-    if (filters?.module) params.append('module', filters.module);
-    if (filters?.search) params.append('search', filters.search);
-    
+    if (filters?.module) params.append("module", filters.module);
+    if (filters?.search) params.append("search", filters.search);
+
     const query = params.toString();
     const url = query ? `${PERMISSIONS_BASE}?${query}` : PERMISSIONS_BASE;
-    
+
     return await apiCall<PermissionsResponse>(url);
   },
 
   // Create permission
   createPermission: async (data: CreatePermissionData) => {
-    return await apiCall<{ success: boolean; data: { permission: Permission } }>(
-      PERMISSIONS_BASE,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }
-    );
+    return await apiCall<{
+      success: boolean;
+      data: { permission: Permission };
+    }>(PERMISSIONS_BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
   },
 
   // Update permission
   updatePermission: async (id: number, data: UpdatePermissionData) => {
-    return await apiCall<{ success: boolean; data: { permission: Permission } }>(
-      `${PERMISSIONS_BASE}/${id}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }
-    );
+    return await apiCall<{
+      success: boolean;
+      data: { permission: Permission };
+    }>(`${PERMISSIONS_BASE}/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
   },
 
   // Delete permission
   deletePermission: async (id: number) => {
-    return await apiCall<{ success: boolean }>(
-      `${PERMISSIONS_BASE}/${id}`,
-      {
-        method: 'DELETE',
-      }
-    );
+    return await apiCall<{ success: boolean }>(`${PERMISSIONS_BASE}/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  // Toggle permission active/inactive (khóa/mở khóa)
+  togglePermissionActive: async (id: number) => {
+    return await apiCall<{
+      success: boolean;
+      data: { permission: Permission; message: string };
+    }>(`${PERMISSIONS_BASE}/${id}/toggle-active`, {
+      method: "PUT",
+    });
   },
 
   // Get role permissions
   getRolePermissions: async (roleId: number) => {
     return await apiCall<RolePermissionsResponse>(
-      `${ROLES_BASE}/${roleId}/permissions`
+      `${ROLES_BASE}/${roleId}/permissions`,
     );
   },
 
@@ -71,10 +78,10 @@ export const permissionsService = {
     return await apiCall<{ success: boolean; data: { message: string } }>(
       `${ROLES_BASE}/${roleId}/permissions`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }
+      },
     );
   },
 
@@ -83,8 +90,8 @@ export const permissionsService = {
     return await apiCall<{ success: boolean; data: { message: string } }>(
       `${ROLES_BASE}/${roleId}/permissions/${permissionId}`,
       {
-        method: 'DELETE',
-      }
+        method: "DELETE",
+      },
     );
   },
 
@@ -93,11 +100,10 @@ export const permissionsService = {
     return await apiCall<RolePermissionsResponse>(
       `${ROLES_BASE}/${roleId}/permissions/sync`,
       {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }
+      },
     );
   },
 };
-

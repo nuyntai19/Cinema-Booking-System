@@ -241,14 +241,32 @@ const AdminRolePermissions: React.FC = () => {
       setAllPermissions(allPermsResponse.data.permissions);
       setGroupedPermissions(allPermsResponse.data.grouped);
 
+      // Tính allowed permission IDs cho role hiện tại
+      const allowed = ROLE_ALLOWED_PERMISSIONS[selectedRoleId];
+      let allowedPermIdSet: Set<number>;
+      if (allowed === "all") {
+        allowedPermIdSet = new Set(
+          allPermsResponse.data.permissions.map((p: Permission) => p.id),
+        );
+      } else {
+        const allowedNameSet = new Set(allowed);
+        allowedPermIdSet = new Set(
+          allPermsResponse.data.permissions
+            .filter((p: Permission) => allowedNameSet.has(p.name))
+            .map((p: Permission) => p.id),
+        );
+      }
+
       // Load role's current permissions
       const rolePermsResponse =
         await permissionsService.getRolePermissions(selectedRoleId);
       setRolePermissions(rolePermsResponse.data.permissions);
 
-      // Set selected IDs
+      // Set selected IDs - chỉ giữ những ID nằm trong allowed permissions
       const permIds = new Set(
-        rolePermsResponse.data.permissions.map((p) => p.id),
+        rolePermsResponse.data.permissions
+          .map((p) => p.id)
+          .filter((id) => allowedPermIdSet.has(id)),
       );
       setSelectedPermissionIds(permIds);
       setOriginalPermissionIds(new Set(permIds));

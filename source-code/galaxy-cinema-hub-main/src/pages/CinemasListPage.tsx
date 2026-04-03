@@ -50,7 +50,7 @@ const CinemasPage: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 6;
+  const ITEMS_PER_PAGE = 4;
 
   const normalizeText = (value: string) =>
     value

@@ -30,6 +30,7 @@ CREATE TABLE permissions (
     display_name VARCHAR(255) NOT NULL COMMENT 'Tên hiển thị',
     description TEXT COMMENT 'Mô tả chi tiết',
     module VARCHAR(50) NOT NULL COMMENT 'Module/nhóm (movies, users, bookings, etc)',
+    is_active TINYINT NOT NULL DEFAULT 1 COMMENT 'Trạng thái: 1=Hoạt động, 0=Đã khóa',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),

@@ -153,6 +153,24 @@ class Permission
     }
 
     /**
+     * Khóa/Mở khóa permission (toggle is_active)
+     */
+    public function toggleActive($id)
+    {
+        try {
+            $query = "UPDATE {$this->table} SET is_active = NOT is_active WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+
+            return $this->getById($id);
+        } catch (PDOException $e) {
+            error_log("Permission ToggleActive Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Lấy tất cả modules (nhóm permissions)
      */
     public function getAllModules()

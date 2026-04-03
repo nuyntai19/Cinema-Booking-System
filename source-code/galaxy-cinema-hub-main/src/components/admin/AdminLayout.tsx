@@ -61,7 +61,7 @@ const AdminLayout: React.FC = () => {
     { label: "Giao Dịch", path: "/admin/transactions", icon: CreditCard },
     { label: "Đánh Giá", path: "/admin/reviews", icon: Star },
     { label: "Thông Báo", path: "/admin/notifications", icon: Bell },
-    { label: "Permissions", path: "/admin/permissions", icon: Shield },
+    // { label: "Permissions", path: "/admin/permissions", icon: Shield },
     { label: "Phân Quyền", path: "/admin/role-permissions", icon: UserCog },
     { label: "Cấu Hình", path: "/admin/settings", icon: Settings },
   ];

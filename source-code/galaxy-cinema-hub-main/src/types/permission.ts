@@ -5,6 +5,7 @@ export interface Permission {
   display_name: string;
   description: string;
   module: string;
+  is_active: number;
   created_at: string;
   updated_at: string;
 }
