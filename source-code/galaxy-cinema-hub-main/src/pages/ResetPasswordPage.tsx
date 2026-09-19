@@ -70,7 +70,11 @@ const ResetPasswordPage: React.FC = () => {
       if (data.success) {
         toast({
           title: "Thành công!",
-          description: data.message || "Đặt lại mật khẩu thành công",
+          description:
+            data.data?.message ||
+            (data.message && data.message !== "Success"
+              ? data.message
+              : "Đặt lại mật khẩu thành công"),
         });
 
         // Redirect to login page after 1.5 seconds

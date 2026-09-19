@@ -9,6 +9,7 @@ require __DIR__ . '/../backend/utils/JWT.php';
 $token = JWT::encode([
     'user_id' => 4,
     'role' => 'Member',
+    'role_id' => 2,
     'exp' => time() + 3600,
 ], Config::$jwt_secret);
 

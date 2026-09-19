@@ -9,14 +9,14 @@ SET NAMES utf8mb4;
 -- ============================================
 -- 1. ROLES & MEMBERSHIPS
 -- ============================================
-INSERT INTO roles (name) VALUES
+INSERT IGNORE INTO roles (name) VALUES
 ('Guest'),
 ('Member'),
 ('Staff'),
 ('Manager'),
 ('Admin');
 
-INSERT INTO memberships (rank_name, min_points_required, discount_rate) VALUES
+INSERT IGNORE INTO memberships (rank_name, min_points_required, discount_rate) VALUES
 ('Bronze', 0, 0.00),
 ('Silver', 2000, 5.00),
 ('Gold', 5000, 10.00),
@@ -424,6 +424,64 @@ INSERT INTO loyalty_history (user_id, points_change, type, description, related_
 (4, 18, 'PURCHASE', 'Tích điểm từ booking #1 - MAI', @booking_id);
 
 -- ============================================
+-- 10.1 STAFF-CINEMA, INVENTORY, POS & HOLDING DATA
+-- ============================================
+
+-- Gán staff vào các rạp để test phân quyền theo rạp
+INSERT INTO cinema_staff (cinema_id, user_id) VALUES
+(1, 3),
+(2, 3);
+
+-- Khởi tạo tồn kho đồ ăn theo từng rạp (nếu chưa có)
+INSERT INTO cinema_concession_inventory (cinema_id, concession_id, quantity)
+SELECT c.id, co.id, 80
+FROM cinemas c
+CROSS JOIN concessions co;
+
+-- POS customers (khách vãng lai)
+INSERT INTO pos_customers (phone, name, guest_customer_code, total_bookings, created_by_staff_id) VALUES
+('0911111111', 'Khách Vãng Lai 01', 'GUEST-0001', 1, 3),
+('0922222222', 'Khách Vãng Lai 02', 'GUEST-0002', 0, 3);
+
+-- Booking 2: Khách vãng lai mua vé tại quầy, đã thanh toán
+INSERT INTO bookings (user_id, guest_customer_id, showtime_id, booking_code, total_price, discount_amount, final_price, status) VALUES
+(NULL, 1, 5, 'GXY-2026-POS01', 180000, 0, 180000, 'Paid');
+
+SET @booking_pos = LAST_INSERT_ID();
+
+INSERT INTO tickets (booking_id, seat_id, price, ticket_code, status) VALUES
+(@booking_pos, 57, 90000, CONCAT('GXY-', LPAD(@booking_pos, 6, '0'), '-001'), 'SOLD'),
+(@booking_pos, 58, 90000, CONCAT('GXY-', LPAD(@booking_pos, 6, '0'), '-002'), 'SOLD');
+
+INSERT INTO transactions (booking_id, payment_method, amount, transaction_code, status) VALUES
+(@booking_pos, 'Cash', 180000, CONCAT('POS-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', @booking_pos), 'Success');
+
+-- Booking 3: User dùng voucher và đang Pending để test timeout/expire flow
+INSERT INTO bookings (user_id, showtime_id, booking_code, user_voucher_id, total_price, discount_amount, final_price, status) VALUES
+(5, 6, 'GXY-2026-PEND1', 2, 200000, 40000, 160000, 'Pending');
+
+SET @booking_pending = LAST_INSERT_ID();
+
+INSERT INTO tickets (booking_id, seat_id, price, ticket_code, status, hold_expires_at) VALUES
+(@booking_pending, 59, 100000, CONCAT('GXY-', LPAD(@booking_pending, 6, '0'), '-001'), 'HOLDING', DATE_ADD(NOW(), INTERVAL 5 MINUTE)),
+(@booking_pending, 60, 100000, CONCAT('GXY-', LPAD(@booking_pending, 6, '0'), '-002'), 'HOLDING', DATE_ADD(NOW(), INTERVAL 5 MINUTE));
+
+-- Seat hold records để test cơ chế giữ ghế
+INSERT INTO seat_holds (showtime_id, seat_id, user_id, expires_at) VALUES
+(6, 59, 5, DATE_ADD(NOW(), INTERVAL 5 MINUTE)),
+(6, 60, 5, DATE_ADD(NOW(), INTERVAL 5 MINUTE));
+
+-- Mark 1 voucher đã dùng để test trạng thái USED
+UPDATE user_vouchers
+SET status = 'USED', used_at = NOW()
+WHERE id = 2;
+
+-- Lịch sử scan vé tại cổng
+INSERT INTO ticket_scan_history (booking_id, ticket_code_input, scanned_by_user_id, scan_result, note) VALUES
+(@booking_id, CONCAT('GXY-', LPAD(@booking_id, 6, '0'), '-001'), 3, 'APPROVED', 'Check-in thành công cổng A'),
+(@booking_pos, CONCAT('GXY-', LPAD(@booking_pos, 6, '0'), '-001'), 3, 'APPROVED', 'Khách POS vào cổng B');
+
+-- ============================================
 -- 11. REVIEWS
 -- ============================================
 INSERT INTO reviews (user_id, movie_id, rating, comment, status) VALUES
@@ -473,4 +531,9 @@ UNION ALL SELECT 'Bookings', COUNT(*) FROM bookings
 UNION ALL SELECT 'Tickets', COUNT(*) FROM tickets
 UNION ALL SELECT 'Promotions', COUNT(*) FROM promotions
 UNION ALL SELECT 'User Vouchers', COUNT(*) FROM user_vouchers
-UNION ALL SELECT 'Loyalty History', COUNT(*) FROM loyalty_history;
+UNION ALL SELECT 'Loyalty History', COUNT(*) FROM loyalty_history
+UNION ALL SELECT 'POS Customers', COUNT(*) FROM pos_customers
+UNION ALL SELECT 'Seat Holds', COUNT(*) FROM seat_holds
+UNION ALL SELECT 'Ticket Scan History', COUNT(*) FROM ticket_scan_history
+UNION ALL SELECT 'Cinema Staff', COUNT(*) FROM cinema_staff
+UNION ALL SELECT 'Concession Inventory', COUNT(*) FROM cinema_concession_inventory;

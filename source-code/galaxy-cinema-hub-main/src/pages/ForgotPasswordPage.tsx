@@ -32,7 +32,10 @@ const ForgotPasswordPage: React.FC = () => {
         toast({
           title: "Thành công!",
           description:
-            data.message || "Mã xác nhận đã được gửi đến email của bạn",
+            data.data?.message ||
+            (data.message && data.message !== "Success"
+              ? data.message
+              : "Mã xác nhận đã được gửi đến email của bạn"),
         });
 
         // Chuyển sang trang reset password với email

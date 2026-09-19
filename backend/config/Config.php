@@ -75,6 +75,32 @@ class Config
         if (!file_exists(self::$upload_path)) {
             mkdir(self::$upload_path, 0777, true);
         }
+
+        // Load SMTP config from environment if available
+        if (getenv('SMTP_ENABLED') !== false) {
+            self::$smtp_enabled = filter_var(getenv('SMTP_ENABLED'), FILTER_VALIDATE_BOOLEAN);
+        }
+        if (getenv('SMTP_HOST')) {
+            self::$smtp_host = getenv('SMTP_HOST');
+        }
+        if (getenv('SMTP_PORT')) {
+            self::$smtp_port = (int)getenv('SMTP_PORT');
+        }
+        if (getenv('SMTP_ENCRYPTION')) {
+            self::$smtp_encryption = getenv('SMTP_ENCRYPTION');
+        }
+        if (getenv('SMTP_USERNAME')) {
+            self::$smtp_username = getenv('SMTP_USERNAME');
+        }
+        if (getenv('SMTP_PASSWORD')) {
+            self::$smtp_password = getenv('SMTP_PASSWORD');
+        }
+        if (getenv('SMTP_FROM_EMAIL')) {
+            self::$smtp_from_email = getenv('SMTP_FROM_EMAIL');
+        }
+        if (getenv('SMTP_FROM_NAME')) {
+            self::$smtp_from_name = getenv('SMTP_FROM_NAME');
+        }
         
         // Define payment gateway constants for PaymentService
         if (!defined('MOMO_PARTNER_CODE')) {
