@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Check, Calendar, MapPin, Clock, Download, Home, Loader2 } from "lucide-react";
+import {
+  Check,
+  Calendar,
+  MapPin,
+  Clock,
+  Download,
+  Home,
+  Loader2,
+  Ticket,
+  Sparkles,
+  ShoppingBag,
+} from "lucide-react";
 import html2canvas from "html2canvas";
+import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { BookingService } from "@/services/booking.service";
 import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api-config";
 
 const BookingSuccessPage: React.FC = () => {
@@ -14,13 +26,18 @@ const BookingSuccessPage: React.FC = () => {
   const { toast } = useToast();
 
   const urlStatus = searchParams.get("status");
-  const hasUrlParams = !location.state && (searchParams.has("booking_id") || searchParams.has("status") || searchParams.has("transaction_code"));
-  const isFailedCallback = hasUrlParams && urlStatus !== null && urlStatus !== "Success";
-  // Khi VNPay/Visa redirect về với status=Success và không có state (popup flow),
-  // đóng popup để main PaymentPage tự detect qua polling/Pusher
+  const hasUrlParams =
+    !location.state &&
+    (searchParams.has("booking_id") ||
+      searchParams.has("status") ||
+      searchParams.has("transaction_code"));
+  const isFailedCallback =
+    hasUrlParams && urlStatus !== null && urlStatus !== "Success";
   const gateway = searchParams.get("gateway");
-  const isGatewaySuccessCallback = hasUrlParams && urlStatus === "Success" && (gateway === "VNPay" || gateway === "Visa");
-
+  const isGatewaySuccessCallback =
+    hasUrlParams &&
+    urlStatus === "Success" &&
+    (gateway === "VNPay" || gateway === "Visa");
 
   useEffect(() => {
     if (isFailedCallback) {
@@ -28,28 +45,31 @@ const BookingSuccessPage: React.FC = () => {
       return;
     }
     if (isGatewaySuccessCallback) {
-      // Nếu đang chạy trong popup window (window.opener = main PaymentPage),
-      // đóng popup để main window tự detect qua polling/Pusher
       if (window.opener && !window.opener.closed) {
         window.close();
         return;
       }
-      // Nếu là main window (không có popup) — redirect sang trang vé
       toast({
         title: "Thanh toán thành công!",
-        description: "Vé đã được xác nhận. Bạn có thể xem vé trong mục Vé của tôi.",
+        description:
+          "Vé đã được xác nhận. Bạn có thể xem vé trong mục Lịch sử đặt vé.",
       });
-      navigate("/profile/my-tickets", { replace: true });
+      navigate("/bookings", { replace: true });
     }
   }, [isFailedCallback, isGatewaySuccessCallback, navigate, toast]);
 
   const [bookingData, setBookingData] = useState<any>(location.state || null);
-  const [isLoading, setIsLoading] = useState(!location.state && searchParams.has("booking_id") && !isFailedCallback && !isGatewaySuccessCallback);
+  const [isLoading, setIsLoading] = useState(
+    !location.state &&
+      searchParams.has("booking_id") &&
+      !isFailedCallback &&
+      !isGatewaySuccessCallback,
+  );
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
       if (location.state) return;
-      
+
       const bookingId = searchParams.get("booking_id");
       if (!bookingId) {
         setIsLoading(false);
@@ -58,7 +78,9 @@ const BookingSuccessPage: React.FC = () => {
 
       try {
         setIsLoading(true);
-        const token = localStorage.getItem("token") || localStorage.getItem("galaxy_cinema_token");
+        const token =
+          localStorage.getItem("token") ||
+          localStorage.getItem("galaxy_cinema_token");
         const headers: HeadersInit = {
           "Content-Type": "application/json",
         };
@@ -66,10 +88,13 @@ const BookingSuccessPage: React.FC = () => {
           headers["Authorization"] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.BOOKINGS.DETAIL(bookingId)}`, {
-          method: "GET",
-          headers,
-        });
+        const response = await fetch(
+          `${API_BASE_URL}${API_ENDPOINTS.BOOKINGS.DETAIL(bookingId)}`,
+          {
+            method: "GET",
+            headers,
+          },
+        );
 
         if (response.ok) {
           const res = await response.json();
@@ -77,27 +102,32 @@ const BookingSuccessPage: React.FC = () => {
             const b = res.data;
             setBookingData({
               bookingCode: b.booking_code,
-              ticketCode: null,
+              ticketCode: b.tickets?.[0]?.ticket_code || null,
               movie: {
                 title: b.movie_title,
-                poster: b.movie_poster || "",
-                backdrop: b.movie_poster || "",
+                poster: b.poster_url || b.movie_poster || "",
+                backdrop: b.poster_url || b.movie_poster || "",
               },
-              seats: b.seats || [],
-              total: b.total_price,
-              discount: 0,
-              promoCode: null,
+              seats: b.tickets || b.seats || [],
+              concessions: b.concessions || [],
+              total: b.final_price || b.total_price,
+              discount: b.discount_amount || 0,
+              promoCode: b.promotion_code || null,
               showtime: {
-                date: b.showtime_date,
-                time: b.showtime_start_time,
+                date: b.start_time
+                  ? b.start_time.split(" ")[0]
+                  : b.showtime_date,
+                time: b.start_time
+                  ? b.start_time.split(" ")[1]?.slice(0, 5)
+                  : b.showtime_start_time,
                 cinema: b.cinema_name,
-                hall: b.hall_name
-              }
+                hall: b.hall_name,
+              },
             });
           }
         }
       } catch (err) {
-         // Let the UI handle missing bookingData seamlessly
+        console.error("Error fetching booking details:", err);
       } finally {
         setIsLoading(false);
       }
@@ -111,6 +141,7 @@ const BookingSuccessPage: React.FC = () => {
     ticketCode,
     movie,
     seats,
+    concessions,
     total,
     discount,
     promoCode,
@@ -124,13 +155,18 @@ const BookingSuccessPage: React.FC = () => {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(activeTicketCode)}`
     : null;
 
+  const getSeatCode = (seat: any, idx: number) => {
+    if (!seat) return `Ghế ${idx + 1}`;
+    if (seat.row_code && seat.number) return `${seat.row_code}${seat.number}`;
+    if (seat.row && seat.number) return `${seat.row}${seat.number}`;
+    if (seat.seat_number) return `${seat.seat_number}`;
+    if (typeof seat === "string") return seat;
+    return seat.id ? `Ghế ${seat.id}` : `Ghế ${idx + 1}`;
+  };
+
   const seatText = Array.isArray(seats)
     ? seats
-        .map((seat: any) =>
-          seat?.row && seat?.number
-            ? `${seat.row}${seat.number}`
-            : seat?.id || "",
-        )
+        .map((seat: any, idx: number) => getSeatCode(seat, idx))
         .filter(Boolean)
         .join(", ")
     : "";
@@ -144,11 +180,14 @@ const BookingSuccessPage: React.FC = () => {
     "";
   const showtimeCinema =
     showtime?.cinema || showtime?.cinema_name || showtime?.cinemaName || "";
+  const showtimeTime = showtime?.time || "";
   const showtimeTimeText =
-    showtime?.time && showtimeHall
-      ? `${showtime.time} - ${showtimeHall}`
-      : showtime?.time || "";
-  const cinemaText = showtimeCinema || "Đang cập nhật";
+    showtimeTime && showtimeHall
+      ? `${showtimeTime} - ${showtimeHall}`
+      : showtimeTime || showtimeHall || "Đang cập nhật";
+  const cinemaText = showtimeCinema || "Galaxy Cinema";
+
+  const concessionsList = Array.isArray(concessions) ? concessions : [];
 
   const waitForImages = async (container: HTMLElement) => {
     const images = Array.from(container.querySelectorAll("img"));
@@ -175,65 +214,79 @@ const BookingSuccessPage: React.FC = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("vi-VN", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
   const buildExportTicketNode = (): HTMLDivElement => {
     const root = document.createElement("div");
     root.style.width = "760px";
-    root.style.padding = "28px";
-    root.style.borderRadius = "24px";
-    root.style.background = "linear-gradient(150deg, #061438, #0b2a66)";
+    root.style.padding = "32px";
+    root.style.borderRadius = "28px";
+    root.style.background = "linear-gradient(150deg, #0b1120, #030712)";
+    root.style.border = "2px solid #f97316";
     root.style.color = "#ffffff";
     root.style.fontFamily = "Segoe UI, Arial, sans-serif";
     root.style.boxSizing = "border-box";
 
     const posterUrl = movie?.backdrop || movie?.poster || "";
     const poster = posterUrl
-      ? `<img src="${posterUrl}" crossorigin="anonymous" style="width:100%;height:220px;object-fit:cover;border-radius:16px;opacity:.82;" />`
+      ? `<img src="${posterUrl}" crossorigin="anonymous" style="width:100%;height:220px;object-fit:cover;border-radius:18px;opacity:.9;" />`
       : "";
     const qr = qrImageUrl
-      ? `<img src="${qrImageUrl}" crossorigin="anonymous" style="width:200px;height:200px;background:#fff;border-radius:14px;padding:12px;" />`
+      ? `<img src="${qrImageUrl}" crossorigin="anonymous" style="width:200px;height:200px;background:#fff;border-radius:16px;padding:12px;" />`
       : "";
 
     const discountHtml =
       Number(discount) > 0
-        ? `<div style="margin-top:12px;font-size:20px;line-height:1.45;color:#54e3a6;">Bạn đã tiết kiệm ${Number(discount).toLocaleString("vi-VN")}đ${promoCode ? ` với mã ${promoCode}` : ""}</div>`
+        ? `<div style="margin-top:12px;font-size:18px;line-height:1.45;color:#f97316;">Bạn đã tiết kiệm ${Number(discount).toLocaleString("vi-VN")}đ${promoCode ? ` với mã ${promoCode}` : ""}</div>`
+        : "";
+
+    const concessionsHtml =
+      concessionsList.length > 0
+        ? `<div style="grid-column:1 / -1;"><span style="color:#94a3b8;">Bắp nước:</span> ${concessionsList.map((c: any) => `${c.quantity || 1}x ${c.name || c.concession_name || "Bắp nước"}`).join(", ")}</div>`
         : "";
 
     root.innerHTML = `
-      <div style="display:flex;gap:24px;align-items:flex-start;">
+      <div style="display:flex;gap:28px;align-items:flex-start;">
         <div style="flex:1;min-width:0;">
           ${poster}
-          <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div style="margin-top:18px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
             <div>
-              <div style="font-size:40px;font-weight:800;line-height:1.2;">${movie?.title || "Vé xem phim"}</div>
-              <div style="margin-top:6px;font-size:21px;color:#b9c6f5;">Mã booking: <span style="font-family:Consolas, monospace;color:#fff;font-weight:700;">${activeTicketCode || "N/A"}</span></div>
+              <div style="font-size:32px;font-weight:900;line-height:1.2;color:#ffffff;">${movie?.title || "Vé xem phim"}</div>
+              <div style="margin-top:6px;font-size:20px;color:#cbd5e1;">Mã booking: <span style="font-family:Consolas, monospace;color:#f97316;font-weight:900;">${activeTicketCode || "N/A"}</span></div>
             </div>
-            <div style="padding:8px 14px;border-radius:999px;background:#19c37d22;border:1px solid #19c37d;font-weight:700;">VÉ HỢP LỆ</div>
+            <div style="padding:8px 16px;border-radius:999px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#10b981;font-weight:800;font-size:15px;letter-spacing:0.5px;">✓ VÉ HỢP LỆ</div>
           </div>
 
-          <div style="margin-top:16px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.28);display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:22px;line-height:1.4;">
-            <div><span style="color:#9fb2ee;">Rạp:</span> ${cinemaText}</div>
-            <div><span style="color:#9fb2ee;">Phòng:</span> ${showtimeHall || "Đang cập nhật"}</div>
-            <div><span style="color:#9fb2ee;">Ngày chiếu:</span> ${showtimeDate ? formatDate(showtimeDate) : formatDate(new Date().toISOString())}</div>
-            <div><span style="color:#9fb2ee;">Suất chiếu:</span> ${showtime?.time || "Đang cập nhật"}</div>
-            <div style="grid-column:1 / -1;"><span style="color:#9fb2ee;">Ghế:</span> ${seatText || "Đang cập nhật"}</div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.28);display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:19px;line-height:1.4;">
+            <div><span style="color:#94a3b8;">Rạp:</span> ${cinemaText}</div>
+            <div><span style="color:#94a3b8;">Suất chiếu:</span> ${showtimeTimeText || "Đang cập nhật"}</div>
+            <div><span style="color:#94a3b8;">Ngày chiếu:</span> ${showtimeDate ? formatDate(showtimeDate) : formatDate(new Date().toISOString())}</div>
+            <div><span style="color:#94a3b8;">Ghế đã chọn:</span> <span style="font-weight:800;color:#f97316;">${seatText || "Đang cập nhật"}</span></div>
+            ${concessionsHtml}
           </div>
 
           ${discountHtml}
 
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);font-size:28px;font-weight:800;color:#ff7a1a;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:22px;color:#d7dff9;font-weight:600;">Tổng thanh toán</span>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);font-size:26px;font-weight:900;color:#f97316;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:19px;color:#e2e8f0;font-weight:700;">Tổng thanh toán:</span>
             <span>${Number(total || 0).toLocaleString("vi-VN")}đ</span>
           </div>
         </div>
-        <div style="width:220px;display:flex;justify-content:center;">
+        <div style="width:220px;display:flex;flex-direction:column;align-items:center;">
           ${qr}
+          <div style="margin-top:12px;font-size:13px;color:#94a3b8;text-align:center;">Quét mã tại cổng soát vé</div>
         </div>
       </div>
     `;
@@ -276,12 +329,12 @@ const BookingSuccessPage: React.FC = () => {
       const imageData = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = imageData;
-      link.download = `ve-${activeTicketCode}.png`;
+      link.download = `galaxy-cinema-${activeTicketCode}.png`;
       link.click();
 
       toast({
         title: "Đã lưu ảnh vé",
-        description: "Ảnh vé đã được tải xuống thiết bị của bạn.",
+        description: "Ảnh vé đã được tải xuống thiết bị của bạn thành công.",
       });
     } catch (error) {
       console.error("Failed to save ticket image:", error);
@@ -298,10 +351,15 @@ const BookingSuccessPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-          <p className="text-white/80">Đang tải thông tin vé...</p>
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070a10] text-slate-900 dark:text-white">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-10 w-10 animate-spin text-orange-500 mb-4" />
+            <p className="text-slate-600 dark:text-zinc-300 font-semibold text-lg">
+              Đang tải thông tin vé...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -310,200 +368,359 @@ const BookingSuccessPage: React.FC = () => {
   if (!activeTicketCode) {
     if (searchParams.get("status") === "Success") {
       return (
-        <div className="min-h-screen bg-gradient-cinema flex items-center justify-center p-4">
-          <div className="w-full max-w-md animate-scale-in text-center">
-            <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center glow-success mb-6">
-              <Check className="w-10 h-10 text-white" />
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070a10] text-slate-900 dark:text-white transition-colors duration-300">
+          <Header />
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="w-full max-w-md text-center p-8 rounded-3xl bg-white/95 dark:bg-zinc-900/80 border border-slate-200/90 dark:border-white/10 shadow-2xl backdrop-blur-xl">
+              <div className="w-20 h-20 mx-auto bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-6">
+                <Check className="w-10 h-10 text-white stroke-[3]" />
+              </div>
+              <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-3">
+                Giao Dịch Thành Công!
+              </h1>
+              <p className="text-slate-600 dark:text-zinc-300 text-base leading-relaxed mb-6">
+                Chân thành cảm ơn quý khách. Vé của bạn đã được xác nhận thành công trên hệ thống.
+              </p>
+              <div className="space-y-3">
+                <Link to="/bookings" className="block">
+                  <Button className="w-full h-12 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-extrabold shadow-lg shadow-orange-500/25">
+                    Xem Lịch Sử Đặt Vé
+                  </Button>
+                </Link>
+                <Link to="/" className="block">
+                  <Button variant="outline" className="w-full h-12 rounded-xl border-slate-200 dark:border-white/10">
+                    Về Trang Chủ
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-4">
-              Giao Dịch Thành Công!
-            </h1>
-            <p className="text-white/80 text-lg leading-relaxed mb-2">
-              Chân thành cảm ơn quý khách.
-            </p>
-            <p className="text-white/70 leading-relaxed mb-2">
-              Chúc quý khách có một trải nghiệm xem phim thật tuyệt vời.
-            </p>
-            <p className="text-white/60 text-sm leading-relaxed">
-              Vui lòng trở về trang trước để xem lịch sử đặt vé. Xin cảm ơn.
-            </p>
           </div>
         </div>
       );
     }
 
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">
-            Không tìm thấy thông tin vé
-          </h1>
-          <Link to="/">
-            <Button>Về trang chủ</Button>
-          </Link>
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070a10] text-slate-900 dark:text-white">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center p-8 rounded-3xl bg-white/95 dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 shadow-xl max-w-md">
+            <h1 className="text-2xl font-bold mb-3 text-slate-900 dark:text-white">
+              Không tìm thấy thông tin vé
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6">
+              Có thể liên kết đã hết hạn hoặc không tìm thấy mã đặt chỗ tương ứng.
+            </p>
+            <Link to="/">
+              <Button className="rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold px-6">
+                Về trang chủ
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-cinema flex items-center justify-center p-4">
-      {/* Glassmorphism Container */}
-      <div className="w-full max-w-md animate-scale-in">
-        {/* Success Header */}
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center glow-success mb-4">
-            <Check className="w-10 h-10 text-white" />
+    <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
+      <Header />
+
+      <main className="flex-1 container max-w-xl mx-auto px-4 py-8 relative flex flex-col items-center">
+        {/* Subtle Ambient Top Glow matching standard cinema pages */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 max-w-5xl h-64 bg-primary/[0.04] blur-3xl pointer-events-none -z-10 rounded-full" />
+
+        {/* Top Header Card: 3-Step Completion Stepper */}
+        <div className="w-full mb-6 rounded-2xl bg-card border border-border p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-6 text-xs sm:text-sm">
+            {/* Step 1: Chọn Ghế (Tech Blue) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-cyan-500 font-bold">
+              <span className="w-6 h-6 rounded-full bg-cyan-500 text-white flex items-center justify-center text-xs font-black shadow-xs">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </span>
+              <span>1. Chọn Ghế</span>
+            </div>
+
+            {/* Connector 1 -> 2: Tech Blue */}
+            <span className="flex-1 max-w-[50px] sm:max-w-[70px] h-[2px] bg-gradient-to-r from-cyan-500 to-sky-500 rounded-full" />
+
+            {/* Step 2: Bắp Nước (Tech Blue) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-sky-500 font-bold">
+              <span className="w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-black shadow-xs">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </span>
+              <span>2. Bắp Nước</span>
+            </div>
+
+            {/* Connector 2 -> 3: Tech Blue transitioning into Galaxy Orange */}
+            <span className="flex-1 max-w-[50px] sm:max-w-[70px] h-[2px] bg-gradient-to-r from-sky-500 via-blue-500 to-primary rounded-full" />
+
+            {/* Step 3: Hoàn Tất (Touch of Galaxy Orange with Cyber Blue Glow ring) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-primary font-extrabold">
+              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-black shadow-xs ring-2 ring-cyan-400/40 animate-pulse">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </span>
+              <span>3. Hoàn Tất</span>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
-            Đặt Vé Thành Công!
-          </h1>
-          <p className="text-white/70">Vé của bạn đã được xác nhận</p>
         </div>
 
-        {/* E-Ticket Card */}
-        <div className="glass-dark rounded-2xl overflow-hidden">
-          {/* Movie Banner */}
-          <div className="relative h-32">
-            <img
-              src={movie?.backdrop || movie?.poster}
-              alt={movie?.title}
-              crossOrigin="anonymous"
-              className="w-full h-full object-cover opacity-50"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-            <div className="absolute bottom-4 left-4 right-4">
-              <h2 className="text-xl font-bold text-white">{movie?.title}</h2>
+        {/* Success Header Message */}
+        <div className="text-center mb-6">
+          <div className="relative inline-block mb-3">
+            <div className="w-20 h-20 mx-auto bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Check className="w-10 h-10 text-white stroke-[3]" />
             </div>
-          </div>
-
-          {/* QR Code */}
-          <div className="flex justify-center py-6">
-            <div className="bg-white rounded-xl p-4 shadow-2xl">
-              {qrImageUrl ? (
-                <img
-                  src={qrImageUrl}
-                  alt="QR vé"
-                  crossOrigin="anonymous"
-                  className="w-32 h-32 object-contain"
-                />
-              ) : null}
-            </div>
-          </div>
-
-          {/* Ticket Code */}
-          <div className="text-center pb-4">
-            <p className="text-white/60 text-sm mb-1">Mã booking</p>
-            <p className="text-white text-xl font-mono font-bold tracking-wider">
-              {activeTicketCode}
-            </p>
-          </div>
-
-          {/* Valid Badge */}
-          <div className="flex justify-center pb-4">
-            <span className="px-4 py-1 bg-green-500/20 border border-green-500 text-green-400 rounded-full text-sm font-semibold glow-success">
-              ✓ VÉ HỢP LỆ
+            <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shadow-xs">
+              <Sparkles className="w-3.5 h-3.5" />
             </span>
           </div>
 
-          {/* Divider */}
-          <div className="relative px-6">
-            <div className="border-t border-dashed border-white/20" />
-            <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gradient-cinema rounded-full" />
-            <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gradient-cinema rounded-full" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+            Đặt Vé Thành Công!
+          </h1>
+          <p className="text-muted-foreground text-sm sm:text-base mt-1">
+            Vé của bạn đã được xác nhận
+          </p>
+        </div>
+
+        {/* Cinema E-Ticket Card - Galaxy Orange Branding */}
+        <div className="w-full rounded-3xl overflow-hidden bg-card border border-border text-card-foreground shadow-lg relative">
+          {/* Movie Banner Header */}
+          <div className="relative h-36 sm:h-44 bg-slate-900 overflow-hidden">
+            <img
+              src={
+                movie?.backdrop ||
+                movie?.poster ||
+                "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=700&h=300&fit=crop"
+              }
+              alt={movie?.title || "Phim"}
+              crossOrigin="anonymous"
+              className="w-full h-full object-cover opacity-65 scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+
+            <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl sm:text-2xl font-black text-white drop-shadow-md break-words whitespace-normal leading-tight">
+                  {movie?.title || "Vé xem phim"}
+                </h2>
+              </div>
+              <Badge className="bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-xs backdrop-blur-xs">
+                ✓ VÉ HỢP LỆ
+              </Badge>
+            </div>
           </div>
 
-          {/* Details */}
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-white/60 text-xs">Rạp</p>
-                <p className="text-white font-medium">{cinemaText}</p>
+          {/* QR Code Section */}
+          <div className="flex flex-col items-center py-6 px-4 bg-muted/20">
+            <div className="bg-white rounded-2xl p-4 shadow-md border border-slate-200">
+              {qrImageUrl ? (
+                <img
+                  src={qrImageUrl}
+                  alt="QR vé xem phim"
+                  crossOrigin="anonymous"
+                  className="w-36 h-36 sm:w-40 sm:h-40 object-contain"
+                />
+              ) : (
+                <div className="w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center bg-slate-100 text-slate-400">
+                  <Ticket className="w-12 h-12" />
+                </div>
+              )}
+            </div>
+
+            {/* Ticket Code Display */}
+            <div className="text-center mt-3.5">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+                Mã booking
+              </p>
+              <p className="text-2xl sm:text-3xl font-mono font-black text-primary tracking-wider">
+                {activeTicketCode}
+              </p>
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold">
+                <span>✓ VÉ HỢP LỆ</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ticket Perforation Tear Line with Semicircle Notches */}
+          <div className="relative my-1">
+            <div className="border-t-2 border-dashed border-border/80 mx-6" />
+            <div className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-background rounded-full border-r border-border" />
+            <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-background rounded-full border-l border-border" />
+          </div>
+
+          {/* Ticket Details Grid (Strictly real data from database) */}
+          <div className="p-5 sm:p-6 space-y-4 text-sm">
+            {/* Cinema Location */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground font-medium">Rạp</p>
+                <p className="font-bold text-foreground break-words">{cinemaText}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-white/60 text-xs">Ngày chiếu</p>
-                <p className="text-white font-medium">
-                  {(showtimeDate
-                    ? new Date(showtimeDate)
-                    : new Date()
-                  ).toLocaleDateString("vi-VN", {
-                    weekday: "long",
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })}
+            {/* Showtime Date */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground font-medium">Ngày chiếu</p>
+                <p className="font-bold text-foreground">
+                  {showtimeDate ? formatDate(showtimeDate) : formatDate(new Date().toISOString())}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-white/60 text-xs">Suất chiếu</p>
-                <p className="text-white font-medium">
+            {/* Showtime Time & Hall */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground font-medium">Suất chiếu</p>
+                <p className="font-bold text-foreground">
                   {showtimeTimeText || "Đang cập nhật"}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 bg-primary rounded flex items-center justify-center text-xs text-white font-bold">
-                {seats?.length}
+            {/* Seats */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <Ticket className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-white/60 text-xs">Ghế</p>
-                <p className="text-white font-medium">
-                  {seatText || "Đang cập nhật"}
-                </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-md bg-primary text-primary-foreground font-black text-xs flex items-center justify-center">
+                    {Array.isArray(seats) ? seats.length : 1}
+                  </span>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Ghế ({Array.isArray(seats) ? seats.length : 1} ghế)
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                  {Array.isArray(seats) && seats.length > 0 ? (
+                    seats.map((s: any, idx: number) => {
+                      const code = getSeatCode(s, idx);
+                      return (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary font-mono font-bold text-xs border border-primary/20"
+                        >
+                          {code}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className="font-bold text-foreground">
+                      {seatText || "Đang cập nhật"}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Total */}
-          <div className="px-6 pb-6">
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-white/70">Tổng thanh toán</span>
-                <span className="text-2xl font-bold text-primary">
-                  {total?.toLocaleString("vi-VN")}đ
-                </span>
+            {/* Concessions Section (Only if user ordered concessions) */}
+            {concessionsList.length > 0 && (
+              <div className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Bắp nước đã chọn
+                  </p>
+                  <div className="space-y-1 mt-1">
+                    {concessionsList.map((c: any, idx: number) => {
+                      const name =
+                        c.name || c.concession_name || c.title || "Bắp nước";
+                      const qty = c.quantity || 1;
+                      return (
+                        <p
+                          key={idx}
+                          className="font-bold text-foreground text-xs sm:text-sm break-words"
+                        >
+                          <span className="text-primary font-extrabold">{qty}x</span>{" "}
+                          {name}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              {discount > 0 && (
-                <p className="text-green-400 text-sm mt-1">
-                  🎉 Bạn đã tiết kiệm {discount.toLocaleString("vi-VN")}đ với mã{" "}
-                  {promoCode}!
-                </p>
-              )}
+            )}
+
+            {/* Total Paid Box - Galaxy Orange Brand Color */}
+            <div className="pt-3 border-t border-border">
+              <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">
+                    Tổng thanh toán
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-extrabold font-mono text-primary drop-shadow-xs">
+                    {Number(total || 0).toLocaleString("vi-VN")}đ
+                  </span>
+                </div>
+                {Number(discount) > 0 && (
+                  <p className="text-xs font-semibold text-emerald-400 mt-1.5 flex items-center gap-1">
+                    <span>🎉 Đã tiết kiệm {Number(discount).toLocaleString("vi-VN")}đ</span>
+                    {promoCode && <span>với mã {promoCode}</span>}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 space-y-3">
+        {/* Action Buttons (Galaxy Orange Main Brand) */}
+        <div className="w-full mt-6 space-y-3">
+          {/* Primary Action: Download ticket image */}
           <Button
             onClick={handleSaveTicketImage}
             disabled={isSavingImage}
-            className="w-full h-12 bg-white text-secondary hover:bg-white/90 font-semibold"
+            className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-sm sm:text-base shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            <Download className="w-5 h-5 mr-2" />
-            {isSavingImage ? "Đang lưu ảnh..." : "Lưu Ảnh Vé"}
+            {isSavingImage ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Đang tạo ảnh vé...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                <span>Lưu Ảnh Vé Về Máy</span>
+              </>
+            )}
           </Button>
-          <Link to="/" className="block">
-            <Button
-              variant="outline"
-              className="w-full h-12 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
-            >
-              <Home className="w-5 h-5 mr-2" />
-              <span>Quay về trang chủ</span>
-            </Button>
-          </Link>
+
+          {/* Secondary Actions Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <Link to="/bookings" className="block">
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl border-border hover:bg-muted text-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <Ticket className="w-4 h-4 text-primary" />
+                <span>Xem Vé Của Tôi</span>
+              </Button>
+            </Link>
+
+            <Link to="/" className="block">
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl border-border hover:bg-muted text-muted-foreground hover:text-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <Home className="w-4 h-4" />
+                <span>Về Trang Chủ</span>
+              </Button>
+            </Link>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

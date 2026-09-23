@@ -27,6 +27,7 @@ class Movie {
             $query = "SELECT m.id, m.title, m.description, m.duration_minutes as duration,
                       m.release_date, m.poster_url, m.trailer_url, m.age_rating,
                       m.origin, m.status, m.director, m.cast, m.created_at, m.updated_at,
+                      (SELECT COUNT(*) FROM showtimes s WHERE s.movie_id = m.id AND s.start_time >= CURDATE()) as active_showtimes_count,
                       GROUP_CONCAT(DISTINCT g.name ORDER BY g.name SEPARATOR ', ') as genres,
                       AVG(r.rating) as avg_rating,
                       COUNT(DISTINCT r.id) as review_count
@@ -144,6 +145,7 @@ class Movie {
             $query = "SELECT m.id, m.title, m.description, m.duration_minutes as duration,
                       m.release_date, m.poster_url, m.trailer_url, m.age_rating,
                       m.origin, m.status, m.director, m.cast, m.created_at, m.updated_at,
+                      (SELECT COUNT(*) FROM showtimes s WHERE s.movie_id = m.id AND s.start_time >= CURDATE()) as active_showtimes_count,
                       GROUP_CONCAT(DISTINCT g.id ORDER BY g.name) as genre_ids,
                       GROUP_CONCAT(DISTINCT g.name ORDER BY g.name SEPARATOR ', ') as genres,
                       AVG(r.rating) as avg_rating,

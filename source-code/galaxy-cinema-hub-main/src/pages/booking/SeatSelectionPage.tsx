@@ -18,9 +18,11 @@ import {
 } from "@/lib/validation";
 import AgeWarningDialog from "@/components/booking/AgeWarningDialog";
 import CurfewWarningDialog from "@/components/booking/CurfewWarningDialog";
+import CinemaSeatIcon from "@/components/booking/CinemaSeatIcon";
 import { Badge } from "@/components/ui/badge";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { BookingService } from "@/services/booking.service";
+import { useTheme } from "@/hooks/use-theme";
 
 interface SeatFromAPI {
   id: number;
@@ -91,6 +93,8 @@ const SeatSelectionPage: React.FC = () => {
   } = useBooking();
 
   const { timeLeft, isActive: holdTimerActive } = useHoldTimer();
+  const { theme } = useTheme();
+  const isLight = theme === "light";
 
   // Helper to safely convert string to AgeRating type
   const normalizeAgeRating = (
@@ -205,11 +209,21 @@ const SeatSelectionPage: React.FC = () => {
     const rows = Object.keys(apiResponse.seat_map).sort();
     return rows.map((rowCode) => {
       return apiResponse.seat_map[rowCode].map((seat) => {
-        const seatTypeLower = seat.seat_type.toLowerCase();
+        const seatTypeLower = (seat.seat_type || "").toLowerCase();
+        const multiplier = Number(seat.price_multiplier) || 1.0;
         let type: "standard" | "vip" | "couple" = "standard";
-        if (seatTypeLower === "vip") type = "vip";
-        else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple")
+
+        // Detect VIP seats: text contains "vip" or price multiplier is between 1.2 and 1.8
+        if (seatTypeLower.includes("vip") || (multiplier > 1.2 && multiplier < 1.9)) {
+          type = "vip";
+        } else if (
+          seatTypeLower.includes("sweetbox") ||
+          seatTypeLower.includes("couple") ||
+          seatTypeLower.includes("đôi") ||
+          multiplier >= 1.9
+        ) {
           type = "couple";
+        }
 
         // Ghế do chính mình giữ → hiển thị available để có thể chọn lại
         let seatStatus:
@@ -370,11 +384,16 @@ const SeatSelectionPage: React.FC = () => {
         const seatIds = new Set<string>();
 
         seatOfBooking.forEach((seat) => {
-          const seatTypeLower = seat.seat_type.toLowerCase();
+          const seatTypeLower = (seat.seat_type || "").toLowerCase();
           let type: "standard" | "vip" | "couple" = "standard";
-          if (seatTypeLower === "vip") type = "vip";
-          else if (seatTypeLower === "sweetbox" || seatTypeLower === "couple")
+          if (seatTypeLower.includes("vip")) type = "vip";
+          else if (
+            seatTypeLower.includes("sweetbox") ||
+            seatTypeLower.includes("couple") ||
+            seatTypeLower.includes("đôi")
+          ) {
             type = "couple";
+          }
 
           const seatId = String(seat.id);
           seatIds.add(seatId);
@@ -527,6 +546,16 @@ const SeatSelectionPage: React.FC = () => {
   const totalPrice = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
   const formatSeatCode = (seat: Seat) => `${seat.row}${seat.number}`;
 
+  // Dynamic price extraction for legend
+  const standardPrice =
+    seatMap.flat().find((s) => s.type === "standard")?.price || 100000;
+  const vipPrice =
+    seatMap.flat().find((s) => s.type === "vip")?.price ||
+    Math.round(standardPrice * 1.5);
+  const couplePrice =
+    seatMap.flat().find((s) => s.type === "couple")?.price ||
+    Math.round(standardPrice * 2.0);
+
   const handleContinue = () => {
     if (selectedSeats.length === 0) {
       toast({
@@ -604,229 +633,378 @@ const SeatSelectionPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070a10] text-slate-900 dark:text-white selection:bg-sky-500 selection:text-white dark:selection:text-black relative overflow-x-hidden transition-colors duration-300">
+      {/* Background Ambient Lighting Effects */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        {/* Top projector ambient glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] bg-gradient-to-b from-sky-500/10 via-purple-500/5 to-transparent blur-3xl opacity-60 dark:opacity-70" />
+        {/* Subtle auditorium floor vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_20%,#f1f5f9_85%)] dark:bg-[radial-gradient(ellipse_at_top,transparent_20%,#05070c_80%)]" />
+      </div>
+
       <Header />
 
-      <main className="flex-1 container mx-auto px-2 md:px-4 py-4 md:py-6">
-        {/* Movie Info & Timer */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mb-4 md:mb-6 p-3 md:p-4 bg-card rounded-xl border border-border">
-          <div className="flex items-center gap-3 md:gap-4">
-            <img
-              src={
-                movie.poster ||
-                (movie.poster_url ? getImageUrl(movie.poster_url) : "")
-              }
-              alt={movie.title}
-              className="w-10 h-15 md:w-12 md:h-18 object-cover rounded-lg"
-            />
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="font-bold text-base md:text-lg">
-                  {movie.title}
-                </h1>
-                <Badge
-                  className={`${getAgeRatingColor(normalizeAgeRating(movie.age_rating || movie.ageRating))} text-white text-xs`}
-                >
-                  {normalizeAgeRating(movie.age_rating || movie.ageRating)}
-                </Badge>
-              </div>
-              <p className="text-xs md:text-sm text-muted-foreground">
-                {selectedShowtime.time} •{" "}
-                {new Date(selectedShowtime.date).toLocaleDateString("vi-VN")}
-              </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                <Shield className="w-3 h-3" />
-                {formatAgeRating(
-                  normalizeAgeRating(movie.age_rating || movie.ageRating),
-                )}
-              </p>
+      <main className="flex-1 flex flex-col items-center justify-between px-3 sm:px-6 py-4 max-w-7xl mx-auto w-full relative z-10">
+        {/* Top Header Card: Booking Stepper, Movie Info & Hold Timer */}
+        <div className="w-full mb-5 rounded-2xl bg-white/90 dark:bg-zinc-900/50 border border-slate-200/90 dark:border-white/10 backdrop-blur-xl p-4 shadow-sm dark:shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          {/* Booking Stepper */}
+          <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4 pb-3 border-b border-slate-200/80 dark:border-white/5 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold">
+              <span className="w-6 h-6 rounded-full bg-sky-500 text-white dark:text-black flex items-center justify-center text-xs font-black shadow-[0_0_12px_rgba(56,189,248,0.7)]">
+                1
+              </span>
+              <span>Chọn Ghế</span>
+            </div>
+            <span className="w-8 sm:w-16 h-[2px] bg-gradient-to-r from-sky-500/80 to-slate-300 dark:to-zinc-700" />
+            <div className="flex items-center gap-2 text-slate-400 dark:text-zinc-500">
+              <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 flex items-center justify-center text-xs font-bold border border-slate-300/80 dark:border-zinc-700">
+                2
+              </span>
+              <span>Bắp Nước</span>
+            </div>
+            <span className="w-8 sm:w-16 h-[2px] bg-slate-200 dark:bg-zinc-800" />
+            <div className="flex items-center gap-2 text-slate-400 dark:text-zinc-500">
+              <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 flex items-center justify-center text-xs font-bold border border-slate-300/80 dark:border-zinc-700">
+                3
+              </span>
+              <span>Thanh Toán</span>
             </div>
           </div>
-          {holdTimerActive && (
-            <div
-              className={cn(
-                "flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-mono text-base md:text-lg font-bold",
-                timeLeft <= 60
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-primary/10 text-primary",
-              )}
-            >
-              <Clock className="w-4 h-4 md:w-5 md:h-5" />
-              {formatHoldTime(timeLeft)}
+
+          {/* Movie Details & Hold Timer */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="relative group shrink-0">
+                <img
+                  src={
+                    movie.poster ||
+                    (movie.poster_url ? getImageUrl(movie.poster_url) : "")
+                  }
+                  alt={movie.title}
+                  className="w-12 h-16 sm:w-14 sm:h-20 object-cover rounded-xl shadow-md border border-slate-200 dark:border-white/15 transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute -inset-1 rounded-xl bg-gradient-to-tr from-sky-500/20 to-purple-500/20 blur -z-10 opacity-70" />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-extrabold text-base sm:text-xl tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
+                    {movie.title}
+                  </h1>
+                  <Badge
+                    className={`${getAgeRatingColor(normalizeAgeRating(movie.age_rating || movie.ageRating))} text-white text-[11px] font-black px-2 py-0.5 rounded-md shadow-sm`}
+                  >
+                    {normalizeAgeRating(movie.age_rating || movie.ageRating)}
+                  </Badge>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30">
+                    IMAX 2D
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-sky-500/10 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-500/30 hidden sm:inline-block">
+                    Dolby Atmos
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 dark:text-zinc-400 mt-1.5 flex-wrap">
+                  <span className="text-sky-600 dark:text-sky-400 font-bold text-sm bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800/40 font-mono">
+                    {selectedShowtime.time}
+                  </span>
+                  <span>•</span>
+                  <span className="text-slate-700 dark:text-zinc-300">
+                    {new Date(selectedShowtime.date).toLocaleDateString("vi-VN", {
+                      weekday: "long",
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    })}
+                  </span>
+                  {selectedShowtime.hall && (
+                    <>
+                      <span>•</span>
+                      <span className="text-slate-800 dark:text-zinc-200 font-semibold">
+                        {selectedShowtime.hall}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Countdown Hold Timer */}
+            {holdTimerActive && (
+              <div
+                className={cn(
+                  "flex items-center gap-2.5 px-4 py-2 rounded-xl font-mono text-sm font-bold border shrink-0 transition-all shadow-md",
+                  timeLeft <= 60
+                    ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-400 dark:border-red-500/40 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+                    : "bg-sky-500/10 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-500/30 shadow-[0_0_20px_rgba(14,165,233,0.15)]",
+                )}
+              >
+                <Clock className="w-4 h-4 animate-spin text-sky-600 dark:text-sky-400" style={{ animationDuration: "8s" }} />
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-zinc-400 uppercase tracking-wider block leading-none mb-0.5 font-sans font-medium">
+                    Thời gian giữ ghế
+                  </span>
+                  <span className="text-base tracking-wider">{formatHoldTime(timeLeft)}</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-[1fr,300px] gap-4 md:gap-6">
-          {/* Seat Map */}
-          <div className="bg-card rounded-xl border border-border p-3 md:p-6">
-            {/* Screen */}
-            <div className="relative mb-6 md:mb-8">
-              <div className="w-4/5 mx-auto h-1.5 md:h-2 bg-gradient-to-b from-primary/50 to-transparent rounded-t-full" />
-              <div className="w-3/5 mx-auto py-1.5 md:py-2 text-center text-xs md:text-sm text-muted-foreground bg-gradient-to-b from-muted to-transparent rounded-b-lg">
-                MÀN HÌNH
-              </div>
-            </div>
+        {/* Theater Auditorium Card (Màn chiếu & Phòng chiếu) */}
+        <div className="w-full flex-1 flex flex-col items-center justify-center relative p-5 sm:p-10 rounded-3xl bg-white dark:bg-gradient-to-b dark:from-[#0e1422]/90 dark:via-[#0a0f19]/95 dark:to-[#070a10] border border-slate-200/90 dark:border-white/10 shadow-lg dark:shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden my-auto backdrop-blur-md">
+          {/* Cinema Screen with Light Beam & Realistic Curved 3D Silver Arc */}
+          <div className="w-full max-w-4xl mx-auto flex flex-col items-center mb-8 sm:mb-12 relative">
+            {/* Top Projector Light Source */}
+            <div className="w-24 h-2 bg-gradient-to-b from-sky-400/80 to-transparent rounded-full blur-[2px] mb-2" />
 
-            {/* Seats */}
-            <div className="flex flex-col items-center gap-1.5 md:gap-2 overflow-x-auto pb-4">
-              {seatMap.map((row, rowIndex) => (
-                <div
-                  key={rowIndex}
-                  className="flex items-center gap-1.5 md:gap-2"
-                >
-                  <span className="w-5 md:w-6 text-center text-xs md:text-sm font-medium text-muted-foreground">
-                    {row[0]?.row}
-                  </span>
-                  <div className="flex gap-0.5 md:gap-1">
-                    {groupSeats(row).map((seat, seatIdx) => {
-                      const isMerged = Array.isArray(seat);
-                      const seats = isMerged ? seat : [seat];
-                      const firstSeat = seats[0];
-                      const isSold = seats.some((s) => s.status === "sold");
-                      const isMaintenance = seats.some(
-                        (s) => s.status === "maintenance",
-                      );
-                      const isHeld = seats.some((s) => s.status === "held");
-                      const isInSelectedSeats = seats.some((s) =>
-                        selectedSeats.find((ss) => ss.id === s.id),
-                      );
-                      const seatNumbers = isMerged
-                        ? `${seats[0].number}-${seats[1].number}`
-                        : firstSeat.number;
-                      const seatIds = isMerged
-                        ? `${seats[0].id},${seats[1].id}`
-                        : firstSeat.id;
-                      const price = isMerged
-                        ? seats[0].price + seats[1].price
-                        : firstSeat.price;
+            <svg viewBox="0 0 900 80" className="w-full max-w-3xl overflow-visible">
+              <defs>
+                {/* Screen ambient projection beam */}
+                <linearGradient id="screenBeamEnhanced" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={isLight ? "rgba(14, 165, 233, 0.22)" : "rgba(56, 189, 248, 0.35)"} />
+                  <stop offset="40%" stopColor={isLight ? "rgba(14, 165, 233, 0.08)" : "rgba(56, 189, 248, 0.12)"} />
+                  <stop offset="100%" stopColor="rgba(56, 189, 248, 0)" />
+                </linearGradient>
 
-                      // Disable only if: sold, maintenance, or held by OTHER user (not in our selectedSeats)
-                      const isDisabled =
-                        isSold ||
-                        isMaintenance ||
-                        (isHeld && !isInSelectedSeats);
+                {/* Silver Screen Metallic Gradient */}
+                <linearGradient id="silverScreenCurve" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={isLight ? "rgba(148, 163, 184, 0.2)" : "rgba(255, 255, 255, 0.1)"} />
+                  <stop offset="12%" stopColor={isLight ? "#38bdf8" : "rgba(255, 255, 255, 0.85)"} />
+                  <stop offset="50%" stopColor={isLight ? "#0284c7" : "#ffffff"} />
+                  <stop offset="88%" stopColor={isLight ? "#38bdf8" : "rgba(255, 255, 255, 0.85)"} />
+                  <stop offset="100%" stopColor={isLight ? "rgba(148, 163, 184, 0.2)" : "rgba(255, 255, 255, 0.1)"} />
+                </linearGradient>
 
-                      return (
-                        <button
-                          key={
-                            isMerged ? `merged-${seats[0].id}` : firstSeat.id
-                          }
-                          onClick={() => handleSeatClick(seat)}
-                          className={cn(
-                            getSeatClass(seat),
-                            !isMerged && "w-6 md:w-8",
-                            "text-[10px] md:text-xs",
-                          )}
-                          title={
-                            isMaintenance
-                              ? "Khu vực không ngồi"
-                              : `${seatIds} - ${price.toLocaleString("vi-VN")}đ`
-                          }
-                        >
-                          {isSold ? (
-                            <X className="w-2 h-2 md:w-3 md:h-3" />
-                          ) : isMaintenance ? null : (
-                            seatNumbers
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="w-5 md:w-6 text-center text-xs md:text-sm font-medium text-muted-foreground">
-                    {row[0]?.row}
-                  </span>
-                </div>
-              ))}
-            </div>
+                {/* Glow bloom filter */}
+                <filter id="screenBloomFilter" x="-20%" y="-40%" width="140%" height="220%">
+                  <feGaussianBlur stdDeviation={isLight ? "3" : "6"} result="glow" />
+                  <feMerge>
+                    <feMergeNode in="glow" />
+                    <feMergeNode in="glow" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
 
-            {/* Legend */}
-            <div className="flex flex-wrap justify-center gap-3 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-border">
-              <div className="flex items-center gap-1.5 md:gap-2">
-                <div className="seat seat-available w-5 h-5 md:w-6 md:h-6" />
-                <span className="text-xs md:text-sm">Trống</span>
-              </div>
-              <div className="flex items-center gap-1.5 md:gap-2">
-                <div className="seat seat-selected w-6 h-6" />
-                <span className="text-sm">Đang chọn</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="seat seat-held w-6 h-6" />
-                <span className="text-sm">Đang giữ</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="seat seat-sold w-6 h-6">
-                  <X className="w-3 h-3" />
-                </div>
-                <span className="text-sm">Đã bán</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="seat seat-vip seat-available w-6 h-6" />
-                <span className="text-sm">VIP</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="seat seat-couple seat-available seat-couple-merged !w-12 !h-5" />
-                <span className="text-sm">Couple</span>
-              </div>
+              {/* Realistic Projector Light Beam Cone */}
+              <path
+                d="M 60 52 Q 450 14 840 52 L 780 78 Q 450 38 120 78 Z"
+                fill="url(#screenBeamEnhanced)"
+              />
+
+              {/* 3D Curved Silver Screen Line */}
+              <path
+                d="M 40 52 Q 450 10 860 52"
+                stroke="url(#silverScreenCurve)"
+                strokeWidth={isLight ? "4" : "5"}
+                strokeLinecap="round"
+                fill="none"
+                filter="url(#screenBloomFilter)"
+              />
+
+              {/* Lower reflection accent line */}
+              <path
+                d="M 80 58 Q 450 24 820 58"
+                stroke={isLight ? "rgba(14, 165, 233, 0.3)" : "rgba(56, 189, 248, 0.4)"}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
+
+            {/* Screen Label & Room Specs */}
+            <div className="flex flex-col items-center gap-1 mt-1 select-none">
+              <span className="text-[12px] font-extrabold tracking-[0.4em] text-slate-700 dark:text-zinc-300 drop-shadow-sm flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping inline-block" />
+                MÀN HÌNH CHÍNH / IMAX SCREEN
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-zinc-500 font-medium tracking-wider">
+                Hệ thống âm thanh vòm Dolby Atmos • Máy chiếu Laser 4K
+              </span>
             </div>
           </div>
 
-          {/* Order Summary */}
-          <div className="bg-card rounded-xl border border-border p-6 h-fit sticky top-20">
-            <h2 className="font-bold text-lg mb-4">Chi Tiết Đặt Vé</h2>
+          {/* Seat Grid Matrix with Left & Right Row Badges */}
+          <div className="flex flex-col items-center gap-2 sm:gap-2.5 overflow-x-auto max-w-full pb-4 px-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-zinc-700">
+            {seatMap.map((row, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="flex items-center gap-2 sm:gap-3"
+              >
+                {/* Left Row Label */}
+                <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-zinc-400 select-none shadow-sm">
+                  {row[0]?.row}
+                </span>
 
-            {selectedSeats.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Chưa chọn ghế nào</p>
+                {/* Seats in Row */}
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  {groupSeats(row).map((seat) => {
+                    const isMerged = Array.isArray(seat);
+                    const seats = isMerged ? seat : [seat];
+                    const firstSeat = seats[0];
+                    const isSold = seats.some((s) => s.status === "sold");
+                    const isMaintenance = seats.some(
+                      (s) => s.status === "maintenance",
+                    );
+                    const isHeld = seats.some((s) => s.status === "held");
+                    const isInSelectedSeats = seats.some((s) =>
+                      selectedSeats.find((ss) => ss.id === s.id),
+                    );
+                    const seatNumbers = isMerged
+                      ? `${seats[0].number}-${seats[1].number}`
+                      : firstSeat.number;
+                    const seatIds = isMerged
+                      ? `${seats[0].id},${seats[1].id}`
+                      : firstSeat.id;
+                    const price = isMerged
+                      ? seats[0].price + seats[1].price
+                      : firstSeat.price;
+
+                    let seatStatus: "available" | "held" | "sold" | "maintenance" | "selected" =
+                      firstSeat.status;
+                    if (isInSelectedSeats) seatStatus = "selected";
+                    else if (isSold) seatStatus = "sold";
+                    else if (isMaintenance) seatStatus = "maintenance";
+                    else if (isHeld) seatStatus = "held";
+
+                    return (
+                      <CinemaSeatIcon
+                        key={isMerged ? `merged-${seats[0].id}` : firstSeat.id}
+                        status={seatStatus}
+                        type={firstSeat.type}
+                        isMerged={isMerged}
+                        isSelected={isInSelectedSeats}
+                        seatNumber={seatNumbers}
+                        onClick={() => handleSeatClick(seat)}
+                        title={
+                          isMaintenance
+                            ? "Khu vực không ngồi"
+                            : `Ghế ${row[0]?.row}${seatNumbers} (${firstSeat.type.toUpperCase()}) - ${price.toLocaleString("vi-VN")}đ`
+                        }
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Right Row Label */}
+                <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-zinc-400 select-none shadow-sm">
+                  {row[0]?.row}
+                </span>
               </div>
-            ) : (
-              <>
-                <div className="space-y-3 mb-6">
-                  {selectedSeats.map((seat) => (
-                    <div
-                      key={seat.id}
-                      className="flex justify-between items-center"
+            ))}
+          </div>
+
+          {/* Seat Legend Bar (Bảng chú thích loại ghế & giá vé) */}
+          <div className="w-full max-w-4xl flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-6 mt-6 border-t border-slate-200/90 dark:border-white/10 text-xs text-slate-700 dark:text-zinc-300">
+            {/* Ghế Thường */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+              <CinemaSeatIcon status="available" type="standard" disabled />
+              <div>
+                <span className="font-semibold block text-slate-800 dark:text-zinc-200">Ghế thường</span>
+                <span className="text-slate-500 dark:text-zinc-400 font-mono text-[11px] font-semibold">
+                  {standardPrice.toLocaleString("vi-VN")}đ
+                </span>
+              </div>
+            </div>
+
+            {/* Ghế VIP */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20">
+              <CinemaSeatIcon status="available" type="vip" disabled />
+              <div>
+                <span className="font-semibold block text-purple-900 dark:text-purple-200">Ghế VIP</span>
+                <span className="text-purple-600 dark:text-purple-300 font-mono text-[11px] font-bold">
+                  {vipPrice.toLocaleString("vi-VN")}đ
+                </span>
+              </div>
+            </div>
+
+            {/* Ghế Đôi / Sweetbox */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20">
+              <CinemaSeatIcon status="available" type="couple" isMerged disabled />
+              <div>
+                <span className="font-semibold block text-rose-900 dark:text-rose-200">Ghế Đôi</span>
+                <span className="text-rose-600 dark:text-rose-300 font-mono text-[11px] font-bold">
+                  {couplePrice.toLocaleString("vi-VN")}đ
+                </span>
+              </div>
+            </div>
+
+            <span className="text-slate-300 dark:text-zinc-700 hidden lg:inline">|</span>
+
+            {/* Đang Chọn */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/25">
+              <CinemaSeatIcon status="available" isSelected disabled />
+              <div>
+                <span className="font-bold block text-sky-800 dark:text-sky-300">Đang chọn</span>
+                <span className="text-sky-600 dark:text-sky-400 font-mono text-[11px]">Đã chọn</span>
+              </div>
+            </div>
+
+            {/* Đã Bán */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/60 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 opacity-70">
+              <CinemaSeatIcon status="sold" disabled />
+              <div>
+                <span className="font-medium block text-slate-500 dark:text-zinc-400">Đã bán</span>
+                <span className="text-slate-400 dark:text-zinc-500 text-[11px]">Không thể chọn</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Floating Order Dock */}
+        <div className="w-full sticky bottom-3 z-40 mt-5 p-4 rounded-2xl bg-white/95 dark:bg-zinc-950/85 border border-slate-200/90 dark:border-white/15 backdrop-blur-2xl shadow-xl dark:shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-400 font-semibold">
+                  Ghế đã chọn:
+                </span>
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/15 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-500/30">
+                  {selectedSeats.length} ghế
+                </span>
+              </div>
+
+              {/* Selected Seat Badges with Quick Remove */}
+              {selectedSeats.length > 0 ? (
+                <div className="flex items-center gap-1.5 flex-wrap max-h-16 overflow-y-auto">
+                  {selectedSeats.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => removeSeat(s.id)}
+                      title="Nhấn để hủy ghế này"
+                      className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-500/15 border border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-200 text-xs font-mono font-bold hover:bg-red-50 dark:hover:bg-red-500/20 hover:border-red-300 dark:hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-300 transition-all cursor-pointer shadow-sm"
                     >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "px-2 py-1 rounded text-xs font-medium",
-                            seat.type === "vip"
-                              ? "bg-purple-100 text-purple-700"
-                              : seat.type === "couple"
-                                ? "bg-pink-100 text-pink-700"
-                                : "bg-muted text-muted-foreground",
-                          )}
-                        >
-                          {seat.type.toUpperCase()}
-                        </span>
-                        <span className="font-medium">
-                          {formatSeatCode(seat)}
-                        </span>
-                      </div>
-                      <span>{seat.price.toLocaleString("vi-VN")}đ</span>
-                    </div>
+                      <span>{formatSeatCode(s)}</span>
+                      <X className="w-3 h-3 group-hover:scale-125 transition-transform" />
+                    </button>
                   ))}
                 </div>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-zinc-500 italic">
+                  Vui lòng chọn ít nhất một ghế ngồi để tiếp tục
+                </p>
+              )}
+            </div>
+          </div>
 
-                <div className="border-t border-border pt-4 mb-4">
-                  <div className="flex justify-between items-center text-lg font-bold">
-                    <span>Tạm tính</span>
-                    <span className="text-primary">
-                      {totalPrice.toLocaleString("vi-VN")}đ
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
+          <div className="flex items-center justify-between md:justify-end gap-5 pt-3 md:pt-0 border-t md:border-t-0 border-slate-200/80 dark:border-white/10">
+            <div className="text-right">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-zinc-400 block font-medium">
+                Tạm tính ({selectedSeats.length} vé)
+              </span>
+              <span className="text-2xl sm:text-3xl font-extrabold font-mono text-sky-600 dark:text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.3)] dark:drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]">
+                {totalPrice.toLocaleString("vi-VN")}đ
+              </span>
+            </div>
 
             <Button
               onClick={handleContinue}
               disabled={selectedSeats.length === 0}
-              className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+              className="h-12 px-8 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-extrabold text-sm sm:text-base shadow-[0_4px_20px_rgba(14,165,233,0.4)] dark:shadow-[0_0_25px_rgba(14,165,233,0.5)] hover:shadow-[0_6px_25px_rgba(14,165,233,0.6)] dark:hover:shadow-[0_0_35px_rgba(14,165,233,0.8)] transition-all active:scale-95 disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Tiếp Tục
+              <span>Tiếp Tục Chọn Bắp Nước</span>
+              <span className="text-lg">→</span>
             </Button>
           </div>
         </div>

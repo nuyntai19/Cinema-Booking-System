@@ -12,6 +12,11 @@ import {
   Ticket,
   Percent,
   BadgeCheck,
+  Loader2,
+  ShieldCheck,
+  Check,
+  ChevronRight,
+  ShoppingBag,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/layout/Header";
@@ -26,6 +31,7 @@ import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
 import { getPusherClient } from "@/lib/pusher";
 import { PaymentMethod } from "@/types/cinema";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 import { BookingService } from "@/services/booking.service";
 import { TicketService } from "@/services/ticket.service";
 import { TransactionService } from "@/services/transacsion.service";
@@ -123,6 +129,7 @@ const PaymentPage: React.FC = () => {
 
   const { timeLeft: holdTimeLeft, isActive: holdTimerActive } = useHoldTimer();
   const { pauseHoldTimer, resumeHoldTimer } = useBooking();
+  const { theme } = useTheme();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("momo");
   const [promoCode, setPromoCode] = useState("");
@@ -499,6 +506,9 @@ const PaymentPage: React.FC = () => {
           ticketCodes,
           movie,
           seats: selectedSeats,
+          concessions: (concessions || []).filter(
+            (c: any) => (c.quantity || 0) > 0,
+          ),
           total: grandTotal,
           discount: discount + membershipDiscountAmount,
           promoCode: discount > 0 ? promoCode : null,
@@ -510,6 +520,22 @@ const PaymentPage: React.FC = () => {
       setShowCancelPaymentConfirm(false);
     };
 
+    const handlePaymentFailed = (msg?: string) => {
+      if (paymentHandledRef.current) return;
+      paymentHandledRef.current = true;
+      setShowQRModal(false);
+      setIsProcessing(false);
+      setShowCancelPaymentConfirm(false);
+      setCurrentBookingId(null);
+      toast({
+        title: "Thanh toán không thành công",
+        description:
+          msg ||
+          "Giao dịch qua cổng thanh toán đã bị từ chối hoặc thất bại. Tồn kho và ưu đãi đã được hoàn trả, bạn có thể thử lại.",
+        variant: "destructive",
+      });
+    };
+
     const pusher = getPusherClient();
     const channelName = `booking.${currentBookingId}`;
     const channel = pusher?.subscribe(channelName);
@@ -517,6 +543,8 @@ const PaymentPage: React.FC = () => {
       const status = (payload?.status || "").toLowerCase();
       if (status === "success") {
         void completeFromGateway();
+      } else if (status === "failed") {
+        handlePaymentFailed("Giao dịch MoMo bị từ chối hoặc thất bại.");
       }
     };
     channel?.bind("payment-status-updated", onPaymentUpdated);
@@ -532,11 +560,13 @@ const PaymentPage: React.FC = () => {
         const txStatus = (tx?.data?.status || "").toLowerCase();
         if (txStatus === "success") {
           void completeFromGateway();
+        } else if (txStatus === "failed") {
+          handlePaymentFailed("Giao dịch thanh toán không thành công.");
         }
       } catch {
         // Ignore intermittent network errors while waiting for callback.
       }
-    }, 4000);
+    }, 3000);
 
     return () => {
       clearInterval(pollTimer);
@@ -959,144 +989,295 @@ const PaymentPage: React.FC = () => {
   }
 
   const paymentMethods = [
-    { value: "momo", label: "Ví MoMo", icon: Smartphone, color: "bg-pink-500" },
-    { value: "atm", label: "VNPay", icon: Building2, color: "bg-blue-500" },
+    {
+      value: "momo",
+      label: "Ví Điện Tử MoMo",
+      subLabel: "Quét mã QR qua ứng dụng MoMo thanh toán tức thì",
+      icon: Smartphone,
+      badge: "Phổ biến",
+      color: "bg-[#a50064] text-white",
+      ringColor: "ring-[#a50064]/20 border-[#a50064]",
+    },
+    {
+      value: "atm",
+      label: "Cổng Thanh Toán VNPAY",
+      subLabel: "Quét mã VNPAY-QR hoặc thẻ ATM / Internet Banking hơn 40 ngân hàng",
+      icon: Building2,
+      badge: "VNPAY-QR",
+      color: "bg-[#005baa] text-white",
+      ringColor: "ring-[#005baa]/20 border-[#005baa]",
+    },
     {
       value: "visa",
-      label: "Visa nội địa",
+      label: "Thẻ Quốc Tế & Thẻ Nội Địa",
+      subLabel: "Hỗ trợ thẻ tín dụng, ghi nợ Visa, MasterCard, JCB",
       icon: CreditCard,
-      color: "bg-purple-500",
+      badge: null,
+      color: "bg-purple-600 text-white",
+      ringColor: "ring-purple-500/20 border-purple-500",
     },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070a10] text-slate-900 dark:text-white selection:bg-sky-500 selection:text-white dark:selection:text-black relative overflow-x-hidden transition-colors duration-300">
+      {/* Background Ambient Lighting Effects */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[350px] bg-gradient-to-b from-sky-500/10 via-purple-500/5 to-transparent blur-3xl opacity-60 dark:opacity-70" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_20%,#f1f5f9_85%)] dark:bg-[radial-gradient(ellipse_at_top,transparent_20%,#05070c_80%)]" />
+      </div>
+
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-6">
-        <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate("/booking/concessions")}
-            className="shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <h1 className="text-2xl font-bold flex-1">Thanh Toán</h1>
-          {holdTimerActive && !showQRModal && (
-            <div
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-base font-bold",
-                holdTimeLeft <= 60
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-primary/10 text-primary",
-              )}
+      <main className="flex-1 container max-w-7xl mx-auto px-3 sm:px-6 py-4 relative z-10 flex flex-col">
+        {/* Top Header Card: Stepper, Movie Summary & Hold Timer */}
+        <div className="w-full mb-6 rounded-2xl bg-white/90 dark:bg-zinc-900/50 border border-slate-200/90 dark:border-white/10 backdrop-blur-xl p-4 sm:p-5 shadow-sm dark:shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          {/* Booking Stepper */}
+          <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4 pb-4 border-b border-slate-200/80 dark:border-white/5 text-xs sm:text-sm">
+            {/* Step 1: Completed */}
+            <button
+              type="button"
+              onClick={() => navigate("/booking/seats")}
+              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:opacity-80 transition-opacity cursor-pointer"
+              title="Nhấn để quay lại sơ đồ chọn ghế"
             >
-              <Clock className="w-4 h-4" />
-              {formatHoldTime(holdTimeLeft)}
+              <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-black shadow-sm">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </span>
+              <span>1. Chọn Ghế</span>
+            </button>
+
+            <span className="w-8 sm:w-16 h-[2px] bg-emerald-500" />
+
+            {/* Step 2: Completed */}
+            <button
+              type="button"
+              onClick={() => navigate("/booking/concessions")}
+              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:opacity-80 transition-opacity cursor-pointer"
+              title="Nhấn để quay lại chọn bắp nước"
+            >
+              <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-black shadow-sm">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </span>
+              <span>2. Bắp Nước</span>
+            </button>
+
+            <span className="w-8 sm:w-16 h-[2px] bg-gradient-to-r from-emerald-500 to-sky-500" />
+
+            {/* Step 3: Active */}
+            <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold">
+              <span className="w-6 h-6 rounded-full bg-sky-500 text-white dark:text-black flex items-center justify-center text-xs font-black shadow-[0_0_12px_rgba(56,189,248,0.7)] animate-pulse">
+                3
+              </span>
+              <span>3. Thanh Toán</span>
             </div>
-          )}
+          </div>
+
+          {/* Movie Details & Countdown Hold Timer */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/booking/concessions")}
+                className="shrink-0 h-10 w-10 rounded-xl border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10"
+                title="Quay lại chọn bắp nước"
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-700 dark:text-white" />
+              </Button>
+
+              <div className="relative group shrink-0">
+                <img
+                  src={
+                    movie?.poster ||
+                    "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop"
+                  }
+                  alt={movie?.title || "Phim"}
+                  className="w-12 h-16 sm:w-14 sm:h-20 object-cover rounded-xl shadow-md border border-slate-200 dark:border-white/15 transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute -inset-1 rounded-xl bg-gradient-to-tr from-sky-500/20 to-purple-500/20 blur -z-10 opacity-70" />
+              </div>
+
+              <div>
+                <h1 className="font-extrabold text-base sm:text-xl tracking-tight text-slate-900 dark:text-white drop-shadow-sm break-words whitespace-normal leading-snug">
+                  {movie?.title || "Đang tải thông tin phim..."}
+                </h1>
+
+                <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 dark:text-zinc-400 mt-1.5 flex-wrap">
+                  {selectedShowtime?.time && (
+                    <span className="text-sky-600 dark:text-sky-400 font-bold text-sm bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800/40 font-mono">
+                      {selectedShowtime.time}
+                    </span>
+                  )}
+                  {selectedShowtime?.date && (
+                    <>
+                      <span>•</span>
+                      <span className="text-slate-700 dark:text-zinc-300">
+                        {new Date(selectedShowtime.date).toLocaleDateString("vi-VN", {
+                          weekday: "long",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </>
+                  )}
+                  {(selectedShowtime?.hall || (selectedShowtime as unknown as { hall_name?: string })?.hall_name) && (
+                    <>
+                      <span>•</span>
+                      <span className="text-slate-800 dark:text-zinc-200 font-semibold">
+                        {selectedShowtime.hall || (selectedShowtime as unknown as { hall_name?: string })?.hall_name}
+                      </span>
+                    </>
+                  )}
+                  <span>•</span>
+                  <span className="font-mono font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-500/20">
+                    {selectedSeats.length} ghế: {seatCodes.join(", ")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Countdown Hold Timer */}
+            {holdTimerActive && !showQRModal && (
+              <div
+                className={cn(
+                  "flex items-center gap-2.5 px-4 py-2 rounded-xl font-mono text-sm font-bold border shrink-0 transition-all shadow-md",
+                  holdTimeLeft <= 60
+                    ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-400 dark:border-red-500/40 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+                    : "bg-sky-500/10 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-500/30 shadow-[0_0_20px_rgba(14,165,233,0.15)]",
+                )}
+              >
+                <Clock className="w-4 h-4 animate-spin text-sky-600 dark:text-sky-400" style={{ animationDuration: "8s" }} />
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-zinc-400 uppercase tracking-wider block leading-none mb-0.5 font-sans font-medium">
+                    Thời gian giữ ghế
+                  </span>
+                  <span className="text-base tracking-wider">{formatHoldTime(holdTimeLeft)}</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-[1fr,400px] gap-6">
-          {/* Payment Methods */}
+        <div className="grid lg:grid-cols-[1fr,380px] gap-6 items-start pb-8">
+          {/* Left Column: Payment Methods, Promo Code & Vouchers */}
           <div className="space-y-6">
-            <div className="bg-card rounded-xl border border-border p-6">
-              <h2 className="font-bold text-lg mb-4">Phương Thức Thanh Toán</h2>
+            {/* Payment Methods Card */}
+            <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/70 border border-slate-200/90 dark:border-white/10 p-5 sm:p-6 shadow-sm backdrop-blur-md">
+              <h2 className="font-extrabold text-base sm:text-lg mb-4 flex items-center gap-2 text-slate-900 dark:text-white">
+                <CreditCard className="w-5 h-5 text-sky-500" />
+                <span>Phương Thức Thanh Toán</span>
+              </h2>
 
               <RadioGroup
                 value={paymentMethod}
                 onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
                 className="space-y-3"
               >
-                {paymentMethods.map((method) => (
-                  <div
-                    key={method.value}
-                    className={cn(
-                      "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all",
-                      paymentMethod === method.value
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50",
-                    )}
-                    onClick={() =>
-                      setPaymentMethod(method.value as PaymentMethod)
-                    }
-                  >
-                    <RadioGroupItem value={method.value} id={method.value} />
+                {paymentMethods.map((method) => {
+                  const isSelected = paymentMethod === method.value;
+                  return (
                     <div
+                      key={method.value}
+                      onClick={() => setPaymentMethod(method.value as PaymentMethod)}
                       className={cn(
-                        "w-10 h-10 rounded-lg flex items-center justify-center",
-                        method.color,
+                        "group relative flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200",
+                        isSelected
+                          ? `bg-sky-50/60 dark:bg-sky-950/20 border-sky-500 shadow-md ring-2 ring-sky-500/20`
+                          : "bg-white/70 dark:bg-zinc-800/40 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20",
                       )}
                     >
-                      <method.icon className="w-5 h-5 text-white" />
+                      <RadioGroupItem value={method.value} id={method.value} className="shrink-0" />
+                      <div
+                        className={cn(
+                          "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                          method.color,
+                        )}
+                      >
+                        <method.icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Label
+                            htmlFor={method.value}
+                            className="cursor-pointer font-bold text-sm sm:text-base text-slate-900 dark:text-white"
+                          >
+                            {method.label}
+                          </Label>
+                          {method.badge && (
+                            <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-500/30 text-[10px] font-black uppercase px-2 py-0.2">
+                              {method.badge}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 break-words whitespace-normal leading-relaxed">
+                          {method.subLabel}
+                        </p>
+                      </div>
                     </div>
-                    <Label
-                      htmlFor={method.value}
-                      className="cursor-pointer font-medium"
-                    >
-                      {method.label}
-                    </Label>
-                  </div>
-                ))}
+                  );
+                })}
               </RadioGroup>
             </div>
 
-            {/* Promo Code */}
-            <div className="bg-card rounded-xl border border-border p-6">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Tag className="w-5 h-5" />
-                Mã Giảm Giá
+            {/* Promo Code Card */}
+            <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/70 border border-slate-200/90 dark:border-white/10 p-5 sm:p-6 shadow-sm backdrop-blur-md">
+              <h2 className="font-extrabold text-base sm:text-lg mb-3 flex items-center gap-2 text-slate-900 dark:text-white">
+                <Tag className="w-5 h-5 text-sky-500" />
+                <span>Mã Giảm Giá</span>
               </h2>
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3">
                 <Input
-                  placeholder="Nhập mã giảm giá"
+                  placeholder="Nhập mã ưu đãi / voucher của bạn"
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
-                  className="flex-1"
+                  className="flex-1 h-11 rounded-xl border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-zinc-800/50 font-mono text-sm"
                 />
-                <Button onClick={() => handleApplyPromo()} variant="outline">
+                <Button
+                  onClick={() => handleApplyPromo()}
+                  className="h-11 px-6 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-sm"
+                >
                   Áp dụng
                 </Button>
               </div>
               {discount > 0 && (
-                <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                  <BadgeCheck className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-700 dark:text-green-400 font-medium">
-                    Đã áp dụng mã <span className="font-mono">{promoCode}</span>{" "}
-                    — Giảm {discount.toLocaleString("vi-VN")}đ
+                <div className="flex items-center gap-2 mt-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40">
+                  <BadgeCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="text-sm text-emerald-800 dark:text-emerald-300 font-semibold break-words">
+                    Đã áp dụng mã <span className="font-mono font-bold">{promoCode}</span> — Giảm{" "}
+                    {discount.toLocaleString("vi-VN")}đ
                   </span>
                   <button
+                    type="button"
                     onClick={() => {
                       setDiscount(0);
                       setPromoCode("");
                       setAppliedVoucherId(null);
                     }}
-                    className="ml-auto text-green-600 hover:text-red-500"
+                    className="ml-auto p-1 text-emerald-700 hover:text-red-500 cursor-pointer"
+                    title="Gỡ bỏ mã"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
             </div>
+
             {/* Available Promotions & Vouchers */}
             {(activePromos.length > 0 || userVouchers.length > 0) && (
-              <div className="bg-card rounded-xl border border-border p-6">
-                <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <Ticket className="w-5 h-5" />
-                  Khuyến Mãi & Voucher Của Bạn
+              <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/70 border border-slate-200/90 dark:border-white/10 p-5 sm:p-6 shadow-sm backdrop-blur-md">
+                <h2 className="font-extrabold text-base sm:text-lg mb-4 flex items-center gap-2 text-slate-900 dark:text-white">
+                  <Ticket className="w-5 h-5 text-sky-500" />
+                  <span>Khuyến Mãi & Voucher Của Bạn</span>
                 </h2>
                 <div className="space-y-3">
-                  {/* User vouchers - showing all, eligible ones first */}
+                  {/* User vouchers */}
                   {userVouchers.map((v) => {
-                    // Check if voucher is usable
                     const isUsed = v.status === "USED";
                     const isValid = isVoucherValid(v);
                     const meetsMinOrder = isPromoEligible(v);
 
-                    // Check remaining quantity (if usage_limit is set)
                     const hasLimit = v.usage_limit && v.usage_limit > 0;
                     const remaining = hasLimit
                       ? Math.max(0, v.usage_limit - (v.used_count || 0))
@@ -1109,13 +1290,13 @@ const PaymentPage: React.FC = () => {
                       ? appliedVoucherId === Number(v.id)
                       : promoCode && promoCode === (v.code || v.promo_code);
 
-                    // Determine status for display
                     let statusLabel = "";
                     if (isUsed) statusLabel = "Đã sử dụng";
                     else if (isOutOfStock) statusLabel = "Hết lượt";
                     else if (v.status === "EXPIRED" || !isValid)
                       statusLabel = "Hết hạn";
                     else if (!meetsMinOrder) statusLabel = "Chưa đủ điều kiện";
+
                     return (
                       <div
                         key={`uv-${v.id}`}
@@ -1126,58 +1307,57 @@ const PaymentPage: React.FC = () => {
                         }
                         style={{ pointerEvents: eligible ? "auto" : "none" }}
                         className={cn(
-                          "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
+                          "relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200",
                           isApplied
-                            ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                            ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-sm ring-1 ring-emerald-500/30"
                             : eligible
-                              ? "border-border hover:border-primary/50 cursor-pointer"
-                              : "border-border opacity-50 cursor-not-allowed",
+                              ? "border-slate-200 dark:border-white/10 hover:border-sky-400/60 dark:hover:border-sky-500/40 bg-white/70 dark:bg-zinc-800/40 cursor-pointer shadow-sm"
+                              : "border-slate-200/60 dark:border-white/5 opacity-50 cursor-not-allowed bg-slate-100/50 dark:bg-zinc-800/20",
                         )}
                       >
                         <div
                           className={cn(
-                            "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                            eligible ? "bg-orange-500" : "bg-gray-400",
+                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                            eligible ? "bg-gradient-to-tr from-amber-500 to-orange-500 text-white" : "bg-slate-300 dark:bg-zinc-700 text-slate-500",
                           )}
                         >
-                          <Ticket className="w-6 h-6 text-white" />
+                          <Ticket className="w-6 h-6" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-bold text-sm">
+                            <span className="font-mono font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
                               {v.code || v.promo_code}
                             </span>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-[11px] font-semibold">
                               Voucher
                             </Badge>
                             {isApplied && (
-                              <BadgeCheck className="w-4 h-4 text-green-600" />
+                              <BadgeCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             )}
                             {statusLabel && !isApplied && (
                               <Badge
                                 variant="secondary"
-                                className="text-xs bg-red-100 text-red-600 dark:bg-red-900/20"
+                                className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                               >
                                 {statusLabel}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {v.description}
-                          </p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-sm font-semibold text-primary">
+                          {v.description && (
+                            <p className="text-xs text-slate-500 dark:text-zinc-400 break-words whitespace-normal leading-relaxed mt-1">
+                              {v.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                            <span className="text-sm font-bold text-sky-600 dark:text-sky-400">
                               {v.discount_type === "PERCENT"
                                 ? `Giảm ${v.discount_amount}%`
                                 : `Giảm ${Number(v.discount_amount).toLocaleString("vi-VN")}đ`}
                             </span>
                             {Number(v.min_order_value) > 0 && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-slate-400 dark:text-zinc-500">
                                 Đơn tối thiểu{" "}
-                                {Number(v.min_order_value).toLocaleString(
-                                  "vi-VN",
-                                )}
-                                đ
+                                {Number(v.min_order_value).toLocaleString("vi-VN")}đ
                               </span>
                             )}
                           </div>
@@ -1186,10 +1366,9 @@ const PaymentPage: React.FC = () => {
                     );
                   })}
 
-                  {/* Public active promotions (exclude system & user vouchers) */}
+                  {/* Public active promotions */}
                   {activePromos
                     .filter((p) => {
-                      // Check date validity - fix timezone issue
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
                       const [sYear, sMonth, sDay] = p.start_date
@@ -1215,7 +1394,6 @@ const PaymentPage: React.FC = () => {
                         !/^(REWARD_20K|REWARD_50K|TIER_|BIRTHDAY)/.test(p.code),
                     )
                     .map((p) => {
-                      // Check remaining quantity
                       const hasLimit = p.usage_limit && p.usage_limit > 0;
                       const remaining = hasLimit
                         ? Math.max(0, p.usage_limit - (p.used_count || 0))
@@ -1234,56 +1412,55 @@ const PaymentPage: React.FC = () => {
                             handleSelectPromoCard(p.code)
                           }
                           className={cn(
-                            "relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all",
+                            "relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200",
                             isApplied
-                              ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                              ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-sm ring-1 ring-emerald-500/30"
                               : eligible
-                                ? "border-border hover:border-primary/50 cursor-pointer"
-                                : "border-border opacity-50 cursor-not-allowed",
+                                ? "border-slate-200 dark:border-white/10 hover:border-sky-400/60 dark:hover:border-sky-500/40 bg-white/70 dark:bg-zinc-800/40 cursor-pointer shadow-sm"
+                                : "border-slate-200/60 dark:border-white/5 opacity-50 cursor-not-allowed bg-slate-100/50 dark:bg-zinc-800/20",
                           )}
                         >
                           <div
                             className={cn(
-                              "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                              eligible ? "bg-primary" : "bg-gray-400",
+                              "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                              eligible ? "bg-gradient-to-tr from-sky-500 to-blue-600 text-white" : "bg-slate-300 dark:bg-zinc-700 text-slate-500",
                             )}
                           >
-                            <Percent className="w-6 h-6 text-white" />
+                            <Percent className="w-6 h-6" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-sm">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
                                 {p.code}
                               </span>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge variant="secondary" className="text-[11px] font-semibold">
                                 Khuyến mãi
                               </Badge>
                               {isApplied && (
-                                <BadgeCheck className="w-4 h-4 text-green-600" />
+                                <BadgeCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {p.description}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-sm font-semibold text-primary">
+                            {p.description && (
+                              <p className="text-xs text-slate-500 dark:text-zinc-400 break-words whitespace-normal leading-relaxed mt-1">
+                                {p.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                              <span className="text-sm font-bold text-sky-600 dark:text-sky-400">
                                 {p.discount_type === "PERCENT"
                                   ? `Giảm ${p.discount_amount}%`
                                   : `Giảm ${Number(p.discount_amount).toLocaleString("vi-VN")}đ`}
                               </span>
                               {Number(p.min_order_value) > 0 && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-slate-400 dark:text-zinc-500">
                                   Đơn tối thiểu{" "}
-                                  {Number(p.min_order_value).toLocaleString(
-                                    "vi-VN",
-                                  )}
-                                  đ
+                                  {Number(p.min_order_value).toLocaleString("vi-VN")}đ
                                 </span>
                               )}
                             </div>
                           </div>
                           {!eligible && (
-                            <span className="text-xs text-red-500 shrink-0">
+                            <span className="text-xs text-red-500 font-medium shrink-0">
                               Chưa đủ điều kiện
                             </span>
                           )}
@@ -1295,54 +1472,89 @@ const PaymentPage: React.FC = () => {
             )}
           </div>
 
-          {/* Order Summary */}
-          <div className="bg-card rounded-xl border border-border p-6 h-fit sticky top-20">
-            <h2 className="font-bold text-lg mb-4">Chi Tiết Đơn Hàng</h2>
+          {/* Right Column: Order Summary Sidebar */}
+          <div className="sticky top-20 rounded-2xl bg-white/95 dark:bg-zinc-900/80 border border-slate-200/90 dark:border-white/10 backdrop-blur-2xl p-5 shadow-xl space-y-4 h-fit">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+              <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-sky-500" />
+                <span>Chi Tiết Đơn Hàng</span>
+              </h2>
+            </div>
 
             {/* Movie Info */}
-            <div className="flex gap-4 pb-4 mb-4 border-b border-border">
+            <div className="flex gap-3.5 pb-4 border-b border-slate-200/80 dark:border-white/10">
               <img
-                src={movie.poster}
-                alt={movie.title}
-                className="w-16 h-24 object-cover rounded-lg"
+                src={
+                  movie?.poster ||
+                  "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop"
+                }
+                alt={movie?.title || "Phim"}
+                className="w-14 h-20 object-cover rounded-xl shrink-0 border border-slate-200 dark:border-white/10 shadow-sm"
               />
-              <div>
-                <p className="font-semibold">{movie.title}</p>
-                <p className="text-sm text-muted-foreground mt-1">
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white break-words whitespace-normal leading-snug">
+                  {movie?.title || "Phim đã chọn"}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                  {selectedShowtime?.hall ||
+                    (selectedShowtime as unknown as { hall_name?: string })?.hall_name ||
+                    "Rạp"}{" "}
+                  • {selectedShowtime?.time}
+                </p>
+                <p className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400 mt-1 break-words">
                   Ghế: {seatCodes.join(", ")}
                 </p>
               </div>
             </div>
 
             {/* Price Breakdown */}
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Vé ({selectedSeats.length})
+            <div className="space-y-2.5 text-xs sm:text-sm">
+              <div className="flex justify-between items-center text-slate-600 dark:text-zinc-400">
+                <span>Vé xem phim ({selectedSeats.length} ghế)</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-zinc-200">
+                  {ticketTotal.toLocaleString("vi-VN")}đ
                 </span>
-                <span>{ticketTotal.toLocaleString("vi-VN")}đ</span>
               </div>
+
               {concessionTotal > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Combo & Bắp nước
-                  </span>
-                  <span>{concessionTotal.toLocaleString("vi-VN")}đ</span>
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5">
+                  <div className="flex justify-between items-center text-slate-600 dark:text-zinc-400">
+                    <span>Combo & Bắp nước</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-zinc-200">
+                      {concessionTotal.toLocaleString("vi-VN")}đ
+                    </span>
+                  </div>
+                  {/* Detailed list of concessions if selected */}
+                  <div className="pl-2 space-y-1 text-xs text-slate-500 dark:text-zinc-400">
+                    {concessions
+                      .filter((c) => c.quantity > 0)
+                      .map((c) => (
+                        <div key={c.id} className="flex justify-between items-center">
+                          <span className="break-words max-w-[200px] leading-tight">
+                            • {c.nameVi || c.name} x{c.quantity}
+                          </span>
+                          <span className="font-mono">
+                            {(c.price * c.quantity).toLocaleString("vi-VN")}đ
+                          </span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
+
               {discount > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-medium pt-1">
                   <span>Giảm giá ({promoCode})</span>
-                  <span>-{discount.toLocaleString("vi-VN")}đ</span>
+                  <span className="font-mono font-bold">-{discount.toLocaleString("vi-VN")}đ</span>
                 </div>
               )}
+
               {userTier && membershipDiscountAmount > 0 && (
-                <div className="flex justify-between text-blue-600">
+                <div className="flex justify-between items-center text-sky-600 dark:text-sky-400 font-medium">
                   <span>
-                    Ưu đãi thành viên {userTier.rank_name} (
-                    {userTier.discount_rate}%)
+                    Ưu đãi thành viên {userTier.rank_name} ({userTier.discount_rate}%)
                   </span>
-                  <span>
+                  <span className="font-mono font-bold">
                     -{membershipDiscountAmount.toLocaleString("vi-VN")}đ
                   </span>
                 </div>
@@ -1350,21 +1562,42 @@ const PaymentPage: React.FC = () => {
             </div>
 
             {/* Total */}
-            <div className="border-t border-border pt-4 mb-6">
-              <div className="flex justify-between items-center text-xl font-bold">
-                <span>Tổng thanh toán</span>
-                <span className="text-primary">
+            <div className="border-t border-slate-200 dark:border-white/10 pt-4">
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-400 font-semibold">
+                  Tổng thanh toán
+                </span>
+                <span className="text-2xl sm:text-3xl font-extrabold font-mono text-sky-600 dark:text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.3)]">
                   {grandTotal.toLocaleString("vi-VN")}đ
                 </span>
               </div>
+              <p className="text-[11px] text-slate-400 dark:text-zinc-500 text-right">
+                Đã bao gồm thuế GTGT
+              </p>
             </div>
 
             <Button
               onClick={() => processPayment(paymentMethod)}
-              className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+              disabled={isProcessing}
+              className="w-full h-12 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-extrabold text-sm sm:text-base shadow-[0_4px_20px_rgba(14,165,233,0.4)] hover:shadow-[0_6px_25px_rgba(14,165,233,0.6)] transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              Tiến Hành Thanh Toán
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Đang kết nối cổng thanh toán...</span>
+                </>
+              ) : (
+                <>
+                  <span>Tiến Hành Thanh Toán</span>
+                  <ChevronRight className="w-5 h-5" />
+                </>
+              )}
             </Button>
+
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-zinc-500 pt-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <span>Giao dịch bảo mật 100% qua cổng thanh toán</span>
+            </div>
           </div>
         </div>
       </main>

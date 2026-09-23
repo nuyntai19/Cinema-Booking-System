@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, BookingProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
@@ -138,7 +138,7 @@ const App = () => (
                 <Route path="/cinemas" element={<CinemasListPage />} />
                 <Route path="/promotions" element={<PromotionsPage />} />
                 <Route path="/concessions" element={<ConcessionMenuPage />} />
-                <Route path="/cinema/:id" element={<CinemaDetailPage />} />
+                <Route path="/cinema/:id" element={<Navigate to="/cinemas" replace />} />
                 <Route path="/movie/:id" element={<MovieDetailPage />} />
                 <Route path="/booking/seats" element={<SeatSelectionPage />} />
                 <Route

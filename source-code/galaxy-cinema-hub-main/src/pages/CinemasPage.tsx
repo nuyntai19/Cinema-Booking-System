@@ -1,20 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  Clock,
-  Calendar as CalendarIcon,
-  Filter,
+  Film,
   Search,
   Loader2,
+  Sparkles,
+  Calendar as CalendarIcon,
+  Clock,
+  Info,
+  X,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import MovieCard from "@/components/movie/MovieCard";
 import { API_ENDPOINTS, apiCall, getImageUrl } from "@/lib/api";
-import { Movie, AgeRating } from "@/types/cinema";
+import { Movie, AgeRating, calculateMovieStatus } from "@/types/cinema";
 
 interface BackendMovie {
   id: number;
@@ -28,107 +30,47 @@ interface BackendMovie {
   description: string;
   trailer_url: string | null;
   genres: string | null;
+  active_showtimes_count?: number;
 }
 
-interface ApiShowtime {
-  id: number;
-  movie_id: number;
-  start_time: string;
-  end_time?: string;
-}
-
-type ShowStatus = "now-showing" | "coming-soon" | "no-showtime";
-
-type MovieListItem = Movie & {
-  showStatus: ShowStatus;
-};
-
-const parseApiDate = (dateStr: string) => new Date(dateStr.replace(" ", "T"));
-
-const getShowStatus = (
-  movieId: number,
-  showtimes: ApiShowtime[],
-): ShowStatus => {
-  const now = new Date();
-  const movieShowtimes = showtimes.filter(
-    (s) => Number(s.movie_id) === movieId,
-  );
-
-  if (movieShowtimes.length === 0) {
-    return "no-showtime";
-  }
-
-  const hasNowShowing = movieShowtimes.some((s) => {
-    const start = parseApiDate(s.start_time);
-    if (Number.isNaN(start.getTime())) return false;
-
-    const end = s.end_time
-      ? parseApiDate(s.end_time)
-      : new Date(start.getTime() + 2 * 60 * 60 * 1000);
-
-    if (Number.isNaN(end.getTime())) return false;
-    return now >= start && now < end;
-  });
-
-  if (hasNowShowing) {
-    return "now-showing";
-  }
-
-  const hasUpcoming = movieShowtimes.some((s) => {
-    const start = parseApiDate(s.start_time);
-    if (Number.isNaN(start.getTime())) return false;
-    return start > now;
-  });
-
-  return hasUpcoming ? "coming-soon" : "no-showtime";
-};
+type FilterType = "all" | "now-showing" | "coming-soon" | "no-showtimes";
 
 const MoviesPage: React.FC = () => {
-  const [movies, setMovies] = useState<MovieListItem[]>([]);
+  const [searchParams] = useSearchParams();
+  const initialFilter: FilterType =
+    searchParams.get("type") === "coming" ? "coming-soon" : "all";
+
+  const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "now-showing" | "coming-soon">(
-    "all",
-  );
+  const [filter, setFilter] = useState<FilterType>(initialFilter);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const fetchMovies = async () => {
       try {
-        const [moviesResponse, showtimesResponse] = await Promise.all([
-          apiCall<{
-            success: boolean;
-            data: {
-              movies: BackendMovie[];
-              pagination: unknown;
-            };
-          }>(API_ENDPOINTS.MOVIES),
-          apiCall<{
-            success: boolean;
-            data: {
-              showtimes: ApiShowtime[];
-            };
-          }>(`${API_ENDPOINTS.SHOWTIMES}?limit=1000&page=1`),
-        ]);
+        setLoading(true);
+        const response = await apiCall<{
+          success: boolean;
+          data: {
+            movies: BackendMovie[];
+            pagination: unknown;
+          };
+        }>(API_ENDPOINTS.MOVIES);
 
-        if (!moviesResponse.success || !moviesResponse.data?.movies) {
-          console.error("Invalid movies API response");
-          return;
-        }
+        if (response.success && response.data?.movies) {
+          const mappedMovies: Movie[] = response.data.movies.map((movie) => {
+            const statusType = calculateMovieStatus(
+              movie.active_showtimes_count,
+              movie.release_date,
+            );
 
-        const showtimes = showtimesResponse.success
-          ? showtimesResponse.data?.showtimes || []
-          : [];
-
-        const mappedMovies: MovieListItem[] = moviesResponse.data.movies.map(
-          (movie) => {
-            const showStatus = getShowStatus(movie.id, showtimes);
             return {
               id: movie.id.toString(),
               title: movie.title,
               titleVi: movie.title,
               poster: getImageUrl(movie.poster_url),
-              duration: movie.duration,
-              ageRating: movie.age_rating as AgeRating,
+              duration: movie.duration || 120,
+              ageRating: (movie.age_rating as AgeRating) || "P",
               origin: movie.origin === "Vietnam" ? "VN" : "INT",
               genre: movie.genres
                 ? movie.genres.split(",").map((g) => g.trim())
@@ -136,16 +78,17 @@ const MoviesPage: React.FC = () => {
               director: "",
               cast: [],
               releaseDate: movie.release_date,
-              description: movie.description,
+              description: movie.description || "",
               trailerUrl: movie.trailer_url || undefined,
-              rating: undefined,
-              isNowShowing: showStatus === "now-showing",
-              showStatus,
+              rating: 8.2,
+              isNowShowing: statusType === "now-showing",
+              statusType,
+              activeShowtimesCount: Number(movie.active_showtimes_count || 0),
             };
-          },
-        );
+          });
 
-        setMovies(mappedMovies);
+          setMovies(mappedMovies);
+        }
       } catch (error) {
         console.error("Error fetching movies:", error);
       } finally {
@@ -156,175 +99,264 @@ const MoviesPage: React.FC = () => {
     fetchMovies();
   }, []);
 
-  const filteredMovies = movies.filter((movie) => {
-    const matchesSearch =
-      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      movie.titleVi?.toLowerCase().includes(searchQuery.toLowerCase());
+  const nowShowingMovies = useMemo(
+    () => movies.filter((m) => m.statusType === "now-showing"),
+    [movies],
+  );
 
+  const comingSoonMovies = useMemo(
+    () => movies.filter((m) => m.statusType === "coming-soon"),
+    [movies],
+  );
+
+  const noShowtimesMovies = useMemo(
+    () => movies.filter((m) => m.statusType === "no-showtimes"),
+    [movies],
+  );
+
+  const filteredMovies = useMemo(() => {
+    let list = movies;
     if (filter === "now-showing") {
-      return movie.showStatus === "now-showing" && matchesSearch;
+      list = nowShowingMovies;
+    } else if (filter === "coming-soon") {
+      list = comingSoonMovies;
+    } else if (filter === "no-showtimes") {
+      list = noShowtimesMovies;
     }
-    if (filter === "coming-soon") {
-      return movie.showStatus === "coming-soon" && matchesSearch;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (m) =>
+          m.title.toLowerCase().includes(q) ||
+          (m.titleVi && m.titleVi.toLowerCase().includes(q)) ||
+          m.genre.some((g) => g.toLowerCase().includes(q)),
+      );
     }
-    return matchesSearch;
-  });
+
+    return list;
+  }, [
+    movies,
+    filter,
+    searchQuery,
+    nowShowingMovies,
+    comingSoonMovies,
+    noShowtimesMovies,
+  ]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Danh Sách Phim
-          </h1>
-          <p className="text-muted-foreground">
-            Khám phá những bộ phim đang hot
-          </p>
-        </div>
+      <main className="flex-1 pb-16 relative">
+        {/* Ambient Top Glow for high-end cinematic atmosphere */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 max-w-5xl h-64 bg-primary/[0.04] blur-3xl pointer-events-none -z-10 rounded-full" />
 
-        {/* Filters & Search */}
-        <div className="mb-6 space-y-4">
-          {/* Search */}
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="Tìm kiếm phim..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-12"
-            />
-          </div>
+        {/* Hero Header Area */}
+        <div className="border-b border-border/40 bg-card/40 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-8 sm:py-10">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider mb-3 shadow-xs">
+                  <Film className="w-3.5 h-3.5" />
+                  <span>Galaxy Cinema Movies</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-foreground tracking-tight">
+                  Danh Sách Phim
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 max-w-xl">
+                  Khám phá các siêu phẩm điện ảnh đỉnh cao đang chiếu và sắp khởi chiếu tại toàn bộ hệ thống Galaxy Cinema.
+                </p>
+              </div>
 
-          {/* Filter Buttons */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={filter === "all" ? "default" : "outline"}
-              onClick={() => setFilter("all")}
-              className="gap-2"
-            >
-              <Filter className="w-4 h-4" />
-              Tất cả phim
-            </Button>
-            <Button
-              variant={filter === "now-showing" ? "default" : "outline"}
-              onClick={() => setFilter("now-showing")}
-            >
-              Đang chiếu
-            </Button>
-            <Button
-              variant={filter === "coming-soon" ? "default" : "outline"}
-              onClick={() => setFilter("coming-soon")}
-            >
-              Sắp chiếu
-            </Button>
+              {/* Quick Search */}
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Tìm kiếm theo tên phim, thể loại..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-9 h-11 rounded-xl bg-background/80 border-border/70 focus:border-primary text-xs sm:text-sm transition-all shadow-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Movies Grid */}
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="container mx-auto px-4 pt-8">
+          {/* Section: Modern Filter Tabs */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Phân Loại Phim</span>
+              </h2>
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Hiển thị {filteredMovies.length} bộ phim
+              </span>
+            </div>
+
+            <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none items-center">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border flex items-center gap-2 whitespace-nowrap active:scale-95 ${
+                  filter === "all"
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_4px_14px_rgba(255,107,0,0.25)] scale-[1.02]"
+                    : "bg-card text-foreground border-border/70 hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5"
+                }`}
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Tất cả phim</span>
+                <span
+                  className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${
+                    filter === "all"
+                      ? "bg-black/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {movies.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilter("now-showing")}
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border flex items-center gap-2 whitespace-nowrap active:scale-95 ${
+                  filter === "now-showing"
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_4px_14px_rgba(255,107,0,0.25)] scale-[1.02]"
+                    : "bg-card text-foreground border-border/70 hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Đang chiếu</span>
+                <span
+                  className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${
+                    filter === "now-showing"
+                      ? "bg-black/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {nowShowingMovies.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilter("coming-soon")}
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border flex items-center gap-2 whitespace-nowrap active:scale-95 ${
+                  filter === "coming-soon"
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_4px_14px_rgba(255,107,0,0.25)] scale-[1.02]"
+                    : "bg-card text-foreground border-border/70 hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5"
+                }`}
+              >
+                <CalendarIcon className="w-3.5 h-3.5" />
+                <span>Sắp chiếu</span>
+                <span
+                  className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${
+                    filter === "coming-soon"
+                      ? "bg-black/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {comingSoonMovies.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilter("no-showtimes")}
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border flex items-center gap-2 whitespace-nowrap active:scale-95 ${
+                  filter === "no-showtimes"
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_4px_14px_rgba(255,107,0,0.25)] scale-[1.02]"
+                    : "bg-card text-foreground border-border/70 hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Chưa có suất</span>
+                <span
+                  className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${
+                    filter === "no-showtimes"
+                      ? "bg-black/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {noShowtimesMovies.length}
+                </span>
+              </button>
+            </div>
           </div>
-        ) : filteredMovies.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-muted-foreground text-lg">
-              Không tìm thấy phim nào
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {filteredMovies.map((movie) => (
-              <Link key={movie.id} to={`/movie/${movie.id}`}>
-                <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 h-full">
-                  <CardContent className="p-0">
-                    {/* Movie Poster */}
-                    <div className="relative aspect-[2/3] overflow-hidden">
-                      <img
-                        src={movie.poster}
-                        alt={movie.title}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
 
-                      {/* Age Rating Badge */}
-                      <div className="absolute top-2 left-2">
-                        <Badge className="bg-primary text-primary-foreground font-bold">
-                          {movie.ageRating}
-                        </Badge>
-                      </div>
+          {/* Loading State */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-24 bg-card/40 rounded-3xl border border-border/40 my-6 animate-fade-in">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">
+                Đang tải danh sách phim...
+              </p>
+            </div>
+          )}
 
-                      {/* Status Badge */}
-                      {movie.showStatus === "now-showing" ? (
-                        <div className="absolute top-2 right-2">
-                          <Badge className="bg-green-500 text-white">
-                            Đang chiếu
-                          </Badge>
-                        </div>
-                      ) : movie.showStatus === "coming-soon" ? (
-                        <div className="absolute top-2 right-2">
-                          <Badge className="bg-blue-500 text-white">
-                            Sắp chiếu
-                          </Badge>
-                        </div>
-                      ) : (
-                        <div className="absolute top-2 right-2">
-                          <Badge className="bg-gray-500 text-white">
-                            Chưa có suất chiếu
-                          </Badge>
-                        </div>
-                      )}
+          {/* Empty State */}
+          {!loading && filteredMovies.length === 0 && (
+            <div className="text-center py-20 px-4 bg-card/40 rounded-3xl border border-border/40 my-6 animate-fade-in">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+                <Info className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-1">
+                Không tìm thấy bộ phim phù hợp
+              </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto mb-5">
+                Không có bộ phim nào khớp với từ khóa tìm kiếm hoặc danh mục bạn đã chọn.
+              </p>
+              <div className="flex justify-center gap-3">
+                {filter !== "all" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFilter("all")}
+                    className="rounded-xl text-xs hover:border-primary/50"
+                  >
+                    Xem tất cả phim
+                  </Button>
+                )}
+                {searchQuery && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                    className="rounded-xl text-xs hover:border-primary/50"
+                  >
+                    Xóa từ khóa tìm kiếm
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
-                      {/* Overlay on hover */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Button className="bg-primary hover:bg-primary/90">
-                          Đặt vé ngay
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Movie Info */}
-                    <div className="p-4 space-y-2">
-                      <h3 className="font-bold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-                        {movie.title}
-                      </h3>
-
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          {movie.duration}p
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <CalendarIcon className="w-3 h-3" />
-                        <span>
-                          {new Date(movie.releaseDate).toLocaleDateString(
-                            "vi-VN",
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1">
-                        {movie.genre.slice(0, 2).map((g) => (
-                          <Badge
-                            key={g}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {g}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+          {/* Movie Grid with 3D MovieCards */}
+          {!loading && filteredMovies.length > 0 && (
+            <div
+              key={`${filter}-${searchQuery}`}
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6 animate-fade-in"
+            >
+              {filteredMovies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} showBookButton={true} />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
 
       <Footer />
     </div>
@@ -332,3 +364,4 @@ const MoviesPage: React.FC = () => {
 };
 
 export default MoviesPage;
+

@@ -1374,9 +1374,13 @@ const AdminScheduler: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Date Input */}
                   <div className="space-y-2">
-                    <Label htmlFor="date">Ngày chiếu</Label>
+                    <Label htmlFor="date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <CalendarIcon className="w-3.5 h-3.5 text-primary" />
+                      Ngày chiếu
+                    </Label>
                     <Input
                       id="date"
                       type="date"
@@ -1384,10 +1388,21 @@ const AdminScheduler: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
+                      onClick={(e) => {
+                        try {
+                          (e.currentTarget as any).showPicker?.();
+                        } catch {}
+                      }}
+                      className="cursor-pointer [color-scheme:dark] h-10 text-sm font-medium pr-10"
                     />
                   </div>
+
+                  {/* Time Input */}
                   <div className="space-y-2">
-                    <Label htmlFor="time">Giờ chiếu</Label>
+                    <Label htmlFor="time" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      Giờ chiếu
+                    </Label>
                     <Input
                       id="time"
                       type="time"
@@ -1395,6 +1410,12 @@ const AdminScheduler: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, time: e.target.value })
                       }
+                      onClick={(e) => {
+                        try {
+                          (e.currentTarget as any).showPicker?.();
+                        } catch {}
+                      }}
+                      className="cursor-pointer [color-scheme:dark] h-10 text-sm font-medium pr-10"
                     />
                   </div>
                 </div>
@@ -1836,7 +1857,10 @@ const AdminScheduler: React.FC = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-date">Ngày Chiếu</Label>
+                  <Label htmlFor="edit-date" className="flex items-center gap-1.5 font-medium">
+                    <CalendarIcon className="w-3.5 h-3.5 text-primary" />
+                    Ngày Chiếu
+                  </Label>
                   <Input
                     id="edit-date"
                     type="date"
@@ -1847,12 +1871,21 @@ const AdminScheduler: React.FC = () => {
                         date: e.target.value,
                       })
                     }
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as any).showPicker?.();
+                      } catch {}
+                    }}
+                    className="cursor-pointer [color-scheme:dark]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-time">Giờ Chiếu</Label>
+                  <Label htmlFor="edit-time" className="flex items-center gap-1.5 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-primary" />
+                    Giờ Chiếu
+                  </Label>
                   <Input
                     id="edit-time"
                     type="time"
@@ -1863,6 +1896,12 @@ const AdminScheduler: React.FC = () => {
                         time: e.target.value,
                       })
                     }
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as any).showPicker?.();
+                      } catch {}
+                    }}
+                    className="cursor-pointer [color-scheme:dark]"
                   />
                 </div>
                 <div className="space-y-2">

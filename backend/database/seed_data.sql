@@ -73,10 +73,10 @@ INSERT INTO movie_genres (movie_id, genre_id) VALUES
 -- ============================================
 -- 4. CINEMAS, HALLS, SEAT TYPES, SEATS
 -- ============================================
-INSERT INTO cinemas (name, address, manager_id) VALUES
-('Galaxy Nguyễn Du', '116 Nguyễn Du, Q.1, TP.HCM', 2),
-('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Q.Tân Bình, TP.HCM', 2),
-('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Q.6, TP.HCM', NULL);
+INSERT INTO cinemas (name, address, street, district, city, lat, lng, hotline, manager_id) VALUES
+('Galaxy Nguyễn Du', '116 Nguyễn Du, Q.1, TP.HCM', '116 Nguyễn Du', 'Quận 1', 'TP. Hồ Chí Minh', 10.77662000, 106.69322000, '1900 2224', 2),
+('Galaxy Tân Bình', '246 Nguyễn Hồng Đào, Q.Tân Bình, TP.HCM', '246 Nguyễn Hồng Đào', 'Quận Tân Bình', 'TP. Hồ Chí Minh', 10.79365000, 106.64158000, '1900 2224', 2),
+('Galaxy Kinh Dương Vương', '718bis Kinh Dương Vương, Q.6, TP.HCM', '718bis Kinh Dương Vương', 'Quận 6', 'TP. Hồ Chí Minh', 10.74850000, 106.62680000, '1900 2224', NULL);
 
 INSERT INTO cinema_halls (cinema_id, name, total_seats) VALUES
 (1, 'Phòng 1', 120),

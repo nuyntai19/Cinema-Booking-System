@@ -89,12 +89,12 @@ const QuickBookingBar: React.FC = () => {
     fetchGenres();
   }, []);
 
-  // Fetch movies from API
+  // Fetch movies from API: strictly filter ONLY movies with active showtimes
   useEffect(() => {
     const fetchMovies = async () => {
       setLoadingMovies(true);
       try {
-        let url = `${API_ENDPOINTS.MOVIES}?status=Now Showing&limit=50`;
+        let url = `${API_ENDPOINTS.MOVIES}?limit=100`;
 
         // Add genre filter if selected (and not "all")
         if (genreId && genreId !== "all") {
@@ -103,11 +103,18 @@ const QuickBookingBar: React.FC = () => {
 
         const response = await fetch(url);
         const data = await response.json();
-        if (data.success && data.data) {
-          setMoviesFromAPI(data.data.movies || []);
+        if (data.success && data.data?.movies) {
+          // Strictly filter ONLY movies that have active showtimes
+          const activeOnly = data.data.movies.filter(
+            (m: any) => Number(m.active_showtimes_count || 0) > 0
+          );
+          setMoviesFromAPI(activeOnly);
+        } else {
+          setMoviesFromAPI([]);
         }
       } catch (error) {
         console.error("Error fetching movies:", error);
+        setMoviesFromAPI([]);
       } finally {
         setLoadingMovies(false);
       }
@@ -216,8 +223,8 @@ const QuickBookingBar: React.FC = () => {
   };
 
   return (
-    <div className="quick-booking-bar">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+    <div className="relative z-10 mx-auto max-w-5xl lg:max-w-6xl xl:max-w-[1240px] mt-4 sm:mt-6 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-card/95 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-border/60 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] transition-all duration-300">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
         {/* Genre Select */}
         <div className="lg:col-span-1">
           <Select
@@ -227,7 +234,7 @@ const QuickBookingBar: React.FC = () => {
               setMovieId(""); // Reset movie selection when genre changes
             }}
           >
-            <SelectTrigger className="h-12 bg-background">
+            <SelectTrigger className="h-12 rounded-xl bg-background/80 hover:bg-background border-border/70 hover:border-primary/50 transition-all font-medium text-sm focus:ring-2 focus:ring-primary/20">
               <SelectValue placeholder="Chọn thể loại" />
             </SelectTrigger>
             <SelectContent>
@@ -248,33 +255,39 @@ const QuickBookingBar: React.FC = () => {
             onValueChange={setMovieId}
             disabled={loadingMovies}
           >
-            <SelectTrigger className="h-12 bg-background">
+            <SelectTrigger className="h-12 rounded-xl bg-background/80 hover:bg-background border-border/70 hover:border-primary/50 transition-all font-medium text-sm focus:ring-2 focus:ring-primary/20">
               <SelectValue
                 placeholder={loadingMovies ? "Đang tải..." : "Chọn phim"}
               />
             </SelectTrigger>
             <SelectContent>
-              {moviesFromAPI.map((movie) => (
-                <SelectItem key={movie.id} value={movie.id.toString()}>
-                  <span className="flex items-center gap-2">
-                    {movie.age_rating && (
-                      <span
-                        className={`age-badge text-[10px] px-1.5 py-0 ${movie.age_rating === "P"
-                          ? "age-p"
-                          : movie.age_rating === "T13"
-                            ? "age-t13"
-                            : movie.age_rating === "T16"
-                              ? "age-t16"
-                              : "age-t18"
-                          }`}
-                      >
-                        {movie.age_rating}
-                      </span>
-                    )}
-                    {movie.title}
-                  </span>
-                </SelectItem>
-              ))}
+              {moviesFromAPI.length === 0 ? (
+                <div className="p-3 text-center text-xs text-muted-foreground">
+                  Chưa có phim nào có suất chiếu
+                </div>
+              ) : (
+                moviesFromAPI.map((movie) => (
+                  <SelectItem key={movie.id} value={movie.id.toString()}>
+                    <span className="flex items-center gap-2">
+                      {movie.age_rating && (
+                        <span
+                          className={`age-badge text-[10px] px-1.5 py-0 ${movie.age_rating === "P"
+                            ? "age-p"
+                            : movie.age_rating === "T13"
+                              ? "age-t13"
+                              : movie.age_rating === "T16"
+                                ? "age-t16"
+                                : "age-t18"
+                            }`}
+                        >
+                          {movie.age_rating}
+                        </span>
+                      )}
+                      {movie.title}
+                    </span>
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -286,7 +299,7 @@ const QuickBookingBar: React.FC = () => {
             onValueChange={setCinemaId}
             disabled={!movieId || loadingCinemas}
           >
-            <SelectTrigger className="h-12 bg-background">
+            <SelectTrigger className="h-12 rounded-xl bg-background/80 hover:bg-background border-border/70 hover:border-primary/50 transition-all font-medium text-sm focus:ring-2 focus:ring-primary/20">
               <SelectValue placeholder={loadingCinemas ? "Đang tải..." : "Chọn rạp"} />
             </SelectTrigger>
             <SelectContent>
@@ -302,7 +315,7 @@ const QuickBookingBar: React.FC = () => {
         {/* Date Select */}
         <div className="lg:col-span-1">
           <Select value={date} onValueChange={setDate} disabled={!cinemaId}>
-            <SelectTrigger className="h-12 bg-background">
+            <SelectTrigger className="h-12 rounded-xl bg-background/80 hover:bg-background border-border/70 hover:border-primary/50 transition-all font-medium text-sm focus:ring-2 focus:ring-primary/20">
               <SelectValue placeholder="Chọn ngày" />
             </SelectTrigger>
             <SelectContent>
@@ -318,7 +331,7 @@ const QuickBookingBar: React.FC = () => {
         {/* Time Select */}
         <div className="lg:col-span-1">
           <Select value={time} onValueChange={setTime} disabled={!date}>
-            <SelectTrigger className="h-12 bg-background">
+            <SelectTrigger className="h-12 rounded-xl bg-background/80 hover:bg-background border-border/70 hover:border-primary/50 transition-all font-medium text-sm focus:ring-2 focus:ring-primary/20">
               <SelectValue placeholder="Chọn suất" />
             </SelectTrigger>
             <SelectContent>
@@ -336,10 +349,10 @@ const QuickBookingBar: React.FC = () => {
           <Button
             onClick={handleBooking}
             disabled={!movieId || !cinemaId || !date || !time}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+            className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm sm:text-base shadow-[0_4px_16px_rgba(255,107,0,0.25)] hover:shadow-[0_6px_22px_rgba(255,107,0,0.38)] transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:shadow-none group"
           >
-            <Ticket className="w-5 h-5 mr-2" />
-            Mua Vé
+            <Ticket className="w-5 h-5 mr-2 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+            <span>Mua Vé</span>
           </Button>
         </div>
       </div>

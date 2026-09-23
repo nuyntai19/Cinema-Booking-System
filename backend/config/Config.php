@@ -101,6 +101,32 @@ class Config
         if (getenv('SMTP_FROM_NAME')) {
             self::$smtp_from_name = getenv('SMTP_FROM_NAME');
         }
+
+        // Load payment gateway config from environment if available
+        if (getenv('MOMO_PARTNER_CODE')) {
+            self::$momo_partner_code = getenv('MOMO_PARTNER_CODE');
+        }
+        if (getenv('MOMO_ACCESS_KEY')) {
+            self::$momo_access_key = getenv('MOMO_ACCESS_KEY');
+        }
+        if (getenv('MOMO_SECRET_KEY')) {
+            self::$momo_secret_key = getenv('MOMO_SECRET_KEY');
+        }
+        if (getenv('VNP_TMNCODE')) {
+            self::$vnpay_tmncode = getenv('VNP_TMNCODE');
+        }
+        if (getenv('VNP_HASH_SECRET')) {
+            self::$vnpay_hash_secret = getenv('VNP_HASH_SECRET');
+        }
+        if (getenv('VNP_URL')) {
+            self::$vnpay_url = getenv('VNP_URL');
+        }
+        if (getenv('VNPAY_RETURN_URL')) {
+            self::$vnpay_return_url = getenv('VNPAY_RETURN_URL');
+        }
+        if (getenv('VNPAY_NOTIFY_URL')) {
+            self::$vnpay_notify_url = getenv('VNPAY_NOTIFY_URL');
+        }
         
         // Define payment gateway constants for PaymentService
         if (!defined('MOMO_PARTNER_CODE')) {

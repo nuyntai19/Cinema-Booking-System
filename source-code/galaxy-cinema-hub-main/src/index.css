@@ -128,6 +128,43 @@
     @apply bg-black/40 backdrop-blur-xl border border-white/10;
   }
 
+  /* Custom Map Popup Styling */
+  .galaxy-cinema-custom-popup .maplibregl-popup-content {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .galaxy-cinema-custom-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+    border-top-color: #0f172a !important;
+  }
+
+  .galaxy-cinema-custom-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+    border-bottom-color: #0f172a !important;
+  }
+
+  .galaxy-cinema-custom-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: #0f172a !important;
+  }
+
+  .galaxy-cinema-custom-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: #0f172a !important;
+  }
+
+  .galaxy-cinema-custom-popup .maplibregl-popup-close-button {
+    color: #94a3b8 !important;
+    font-size: 16px !important;
+    padding: 6px 10px !important;
+    right: 4px !important;
+    top: 4px !important;
+  }
+
+  .galaxy-cinema-custom-popup .maplibregl-popup-close-button:hover {
+    color: #ffffff !important;
+    background: transparent !important;
+  }
+
   /* Glow Effects */
   .glow-orange {
     box-shadow:
@@ -232,7 +269,7 @@
 
   /* Quick Booking Bar */
   .quick-booking-bar {
-    @apply bg-card shadow-xl rounded-2xl p-4 -mt-8 relative z-10 mx-4 lg:mx-auto max-w-6xl;
+    @apply bg-card shadow-xl rounded-2xl p-4 mt-4 sm:mt-6 relative z-10 mx-auto max-w-6xl border border-border/40;
   }
 }
 
@@ -311,4 +348,44 @@
       background-position: 200% 0;
     }
   }
+
+  /* Native Date & Time Picker Controls */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    color-scheme: light;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .dark input[type="date"],
+  .dark input[type="time"],
+  .dark input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.85;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  input[type="time"]::-webkit-calendar-picker-indicator:hover,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+  }
 }
+
+

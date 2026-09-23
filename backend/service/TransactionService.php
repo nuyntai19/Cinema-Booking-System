@@ -82,6 +82,13 @@ class TransactionService
 
         if ($isSuccess) {
             $this->bookingModel->confirm((int) $transaction['booking_id']);
+        } else {
+            // Thanh toán thất bại -> tự động hủy booking, hoàn trả tồn kho bắp nước, ghế và voucher
+            try {
+                $this->bookingModel->cancel((int) $transaction['booking_id']);
+            } catch (Exception $e) {
+                error_log("Failed to cancel booking after payment failed: " . $e->getMessage());
+            }
         }
 
         // Notify frontend in realtime. Any push failure must not break payment verification.

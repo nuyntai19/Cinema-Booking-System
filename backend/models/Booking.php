@@ -152,7 +152,7 @@ class Booking {
 
     public function getById($id) {
         $stmt = $this->db->prepare(
-            "SELECT b.*, s.start_time, s.end_time, s.cinema_hall_id, m.title AS movie_title, m.duration_minutes,
+            "SELECT b.*, s.start_time, s.end_time, s.cinema_hall_id, m.title AS movie_title, m.duration_minutes, m.poster_url,
                     c.name AS cinema_name, h.name AS hall_name,
                     COALESCE(up.full_name, pc.name, CONCAT('User #', COALESCE(b.user_id, 'null'))) AS customer_name,
                     COALESCE(u.email, CASE WHEN pc.phone IS NOT NULL THEN CONCAT(pc.phone, '@guest.local') ELSE '-' END) AS customer_email,
@@ -238,12 +238,26 @@ class Booking {
         foreach ($bookings as &$booking) {
             $bookingId = (int)$booking['id'];
             $booking['seats'] = $this->getBookingSeatsSummary($bookingId);
+            $booking['seats_detail'] = $this->getBookingSeatsDetail($bookingId);
             $booking['concessions'] = $this->getBookingConcessionsSummary($bookingId);
             $booking['ticket_codes'] = $this->getBookingTicketCodes($bookingId);
         }
         unset($booking);
 
         return $bookings;
+    }
+
+    private function getBookingSeatsDetail($bookingId) {
+        $stmt = $this->db->prepare(
+            "SELECT s.row_code, s.number, CAST(t.price AS CHAR) AS price, st.name AS seat_type
+             FROM tickets t
+             JOIN seats s ON t.seat_id = s.id
+             LEFT JOIN seat_types st ON s.seat_type_id = st.id
+             WHERE t.booking_id = :booking_id
+             ORDER BY s.row_code, s.number"
+        );
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     private function getBookingSeatsSummary($bookingId) {
@@ -662,6 +676,50 @@ class Booking {
         }
     }
 
+    public function restoreConcessions($bookingId) {
+        try {
+            $stmtCinema = $this->db->prepare("
+                SELECT c.id as cinema_id
+                FROM bookings b
+                JOIN showtimes s ON s.id = b.showtime_id
+                JOIN cinema_halls ch ON ch.id = s.cinema_hall_id
+                JOIN cinemas c ON c.id = ch.cinema_id
+                WHERE b.id = :bid LIMIT 1
+            ");
+            $stmtCinema->execute([':bid' => $bookingId]);
+            $cinemaId = $stmtCinema->fetchColumn();
+
+            if ($cinemaId) {
+                $stmtItems = $this->db->prepare("
+                    SELECT concession_id, quantity 
+                    FROM booking_concessions 
+                    WHERE booking_id = :bid
+                ");
+                $stmtItems->execute([':bid' => $bookingId]);
+                $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($items as $item) {
+                    $cid = (int)$item['concession_id'];
+                    $qty = (int)$item['quantity'];
+                    if ($cid > 0 && $qty > 0) {
+                        $upd = $this->db->prepare("
+                            UPDATE cinema_concession_inventory 
+                            SET quantity = quantity + :qty 
+                            WHERE cinema_id = :cid AND concession_id = :concession_id
+                        ");
+                        $upd->execute([
+                            ':qty' => $qty,
+                            ':cid' => $cinemaId,
+                            ':concession_id' => $cid
+                        ]);
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("restoreConcessions error for booking #$bookingId: " . $e->getMessage());
+        }
+    }
+
     public function cancel($id) {
         $this->db->beginTransaction();
         try {
@@ -671,6 +729,23 @@ class Booking {
                 "UPDATE tickets SET status = 'REFUNDED' WHERE booking_id = :booking_id AND status IN ('HOLDING', 'SOLD')"
             );
             $stmt->execute([':booking_id' => $id]);
+
+            // Hoàn lại tồn kho bắp nước nếu có
+            $this->restoreConcessions($id);
+
+            // Hoàn lại voucher nếu đã dùng
+            $voucherStmt = $this->db->prepare(
+                "SELECT user_voucher_id FROM bookings WHERE id = :id"
+            );
+            $voucherStmt->execute([':id' => $id]);
+            $row = $voucherStmt->fetch(PDO::FETCH_ASSOC);
+            if (!empty($row['user_voucher_id'])) {
+                $restoreVoucher = $this->db->prepare(
+                    "UPDATE user_vouchers SET status = 'ACTIVE', used_at = NULL
+                     WHERE id = :id AND status = 'USED'"
+                );
+                $restoreVoucher->execute([':id' => $row['user_voucher_id']]);
+            }
 
             $this->db->commit();
             return true;
@@ -1294,6 +1369,9 @@ class Booking {
                     );
                     $restoreVoucher->execute([':id' => $row['user_voucher_id']]);
                 }
+
+                // Hoàn lại tồn kho bắp nước nếu có
+                $this->restoreConcessions($bookingId);
 
                 $this->db->commit();
                 $count++;

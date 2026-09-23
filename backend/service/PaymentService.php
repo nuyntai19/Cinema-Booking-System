@@ -98,7 +98,7 @@ class PaymentService
             'vnp_CurrCode'  => 'VND',
             'vnp_TxnRef'    => $orderId,
             'vnp_OrderInfo' => $orderInfo,
-            'vnp_OrderType' => 'other',
+            'vnp_OrderType' => 'billpayment',
             'vnp_Locale'    => 'vn',
             'vnp_ReturnUrl' => $returnUrl,
             'vnp_IpAddr'    => self::getClientIp(),
@@ -110,7 +110,7 @@ class PaymentService
             $params['vnp_BankCode'] = $bankCode;
         }
 
-        // Sort params and build two strings: hashing and URL query must both be urlencoded according to VNPay v2.1.0
+        // Sort params and build hash and query strings according to VNPay v2.1.0 standard
         ksort($params);
 
         $hashDataArr = [];
@@ -119,9 +119,8 @@ class PaymentService
             if ($value === null || $value === '') {
                 continue;
             }
-            // rawurlencode encodes spaces as %20 (RFC 3986) — VNPAY requires %20, not +
-            $encodedKey   = rawurlencode($key);
-            $encodedValue = rawurlencode($value);
+            $encodedKey   = urlencode($key);
+            $encodedValue = urlencode($value);
             $hashDataArr[] = $encodedKey . '=' . $encodedValue;
             $queryArr[]    = $encodedKey . '=' . $encodedValue;
         }
@@ -136,19 +135,18 @@ class PaymentService
 
     private static function getClientIp()
     {
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        if (strpos($ip, ':') !== false || $ip === '127.0.0.1') {
-            $ip = '13.111.12.3'; // Use a valid public IP format for VNPay Sandbox
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        if (strpos($ip, ',') !== false) {
+            $ip = trim(explode(',', $ip)[0]);
+        }
+        if (strpos($ip, ':') !== false || $ip === '127.0.0.1' || !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            $ip = '171.249.85.126'; // Valid public IP format for VNPay Sandbox
         }
         return $ip;
     }
 
     private static function requiredConfig($key)
     {
-        if (defined($key)) {
-            return constant($key);
-        }
-
         $value = getenv($key);
         if ($value !== false && $value !== '') {
             return trim($value);
@@ -156,6 +154,10 @@ class PaymentService
 
         if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
             return trim($_ENV[$key]);
+        }
+
+        if (defined($key)) {
+            return constant($key);
         }
 
         throw new Exception('Missing payment config: ' . $key, 500);
@@ -214,20 +216,27 @@ class PaymentService
         unset($params['vnp_SecureHash'], $params['vnp_SecureHashType']);
         ksort($params);
 
-        $hashDataArr = [];
+        $hashDataArr1 = [];
+        $hashDataArr2 = [];
         foreach ($params as $key => $value) {
             if ($value === null || $value === '') {
                 continue;
             }
-            $hashDataArr[] = rawurlencode($key) . '=' . rawurlencode($value);
+            $hashDataArr1[] = urlencode($key) . '=' . urlencode($value);
+            $hashDataArr2[] = rawurlencode($key) . '=' . rawurlencode($value);
         }
 
-        $hashData = implode('&', $hashDataArr);
-        $calculatedHash = hash_hmac('sha512', $hashData, $hashSecret);
+        $hashData1 = implode('&', $hashDataArr1);
+        $calc1 = hash_hmac('sha512', $hashData1, $hashSecret);
 
-        $isValid = hash_equals($calculatedHash, $secureHash) || hash_equals(strtolower($calculatedHash), strtolower($secureHash));
+        $hashData2 = implode('&', $hashDataArr2);
+        $calc2 = hash_hmac('sha512', $hashData2, $hashSecret);
+
+        $isValid = hash_equals(strtolower($calc1), strtolower($secureHash)) ||
+                   hash_equals(strtolower($calc2), strtolower($secureHash));
+
         if (!$isValid) {
-            error_log('VNPay signature verification failed: calculated=' . $calculatedHash . ' provided=' . $secureHash);
+            error_log('VNPay signature verification failed: calc1=' . $calc1 . ' calc2=' . $calc2 . ' provided=' . $secureHash);
         }
 
         return $isValid;

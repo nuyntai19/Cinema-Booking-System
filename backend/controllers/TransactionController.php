@@ -66,7 +66,24 @@ class TransactionController extends BaseController
 
     public function verifyMomo()
     {
-        $this->verifyGateway('Momo');
+        $data = array_merge($_GET, self::getRequestData());
+
+        try {
+            $result = $this->transactionService->processGatewayVerification('Momo', $data);
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+                http_response_code(204);
+                exit;
+            }
+            Response::success($result, 'Momo verification processed');
+        } catch (Exception $e) {
+            error_log('MoMo verify error: ' . $e->getMessage());
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+                http_response_code(400);
+                echo json_encode(['message' => $e->getMessage()]);
+                exit;
+            }
+            Response::error($e->getMessage(), $e->getCode() ?: 400);
+        }
     }
 
     public function verifyVNPay()

@@ -39,6 +39,8 @@ export interface User {
   cinema_name?: string;
 }
 
+export type MovieDisplayStatus = "now-showing" | "coming-soon" | "no-showtimes";
+
 export interface Movie {
   id: string;
   title: string;
@@ -56,7 +58,43 @@ export interface Movie {
   trailerUrl?: string;
   rating?: number;
   isNowShowing: boolean;
+  statusType?: MovieDisplayStatus;
+  activeShowtimesCount?: number;
 }
+
+/**
+ * Tính toán trạng thái hiển thị của phim:
+ * 1. Đang chiếu: Phim có suất chiếu từ hôm nay trở đi (activeShowtimesCount > 0)
+ * 2. Sắp chiếu: Phim chưa có suất chiếu VÀ ngày phát hành trong tương lai (release_date > today)
+ * 3. Chưa có suất chiếu: Phim không có suất chiếu VÀ ngày phát hành không phải tương lai
+ */
+export const calculateMovieStatus = (
+  activeShowtimesCount?: number,
+  releaseDate?: string,
+): MovieDisplayStatus => {
+  const count = Number(activeShowtimesCount || 0);
+
+  // Có suất chiếu -> Đang chiếu
+  if (count > 0) {
+    return "now-showing";
+  }
+
+  // Nếu không có suất chiếu, xét ngày phát hành (release_date)
+  if (releaseDate) {
+    const cleanDateStr = releaseDate.split(" ")[0].split("T")[0];
+    const today = new Date();
+    const tzOffsetMs = today.getTimezoneOffset() * 60000;
+    const localTodayStr = new Date(today.getTime() - tzOffsetMs)
+      .toISOString()
+      .split("T")[0];
+
+    if (cleanDateStr > localTodayStr) {
+      return "coming-soon";
+    }
+  }
+
+  return "no-showtimes";
+};
 
 export interface Cinema {
   id: string;
