@@ -18,7 +18,7 @@ export type BookingStatus =
   | "used"
   | "expired";
 
-export type PaymentMethod = "momo" | "atm" | "visa";
+export type PaymentMethod = "momo" | "atm" | "visa" | "cash";
 
 export type LoyaltyHistoryType = "PURCHASE" | "REDEEM" | "EVENT" | "BIRTHDAY";
 
@@ -264,6 +264,7 @@ export interface SystemConfig {
   curfewTimeU16: string; // Giờ giới nghiêm cho dưới 16 tuổi (HH:mm)
   minVietnameseQuota: number; // Tỷ lệ phim Việt tối thiểu (%)
   seatHoldDuration: number; // Thời gian giữ ghế (phút)
+  maxSeatsPerBooking: number; // Số ghế tối đa / đơn
   defaultCleanupDuration: number; // Thời gian dọn phòng mặc định (phút)
   loyaltyPointsRate: number; // Tỷ lệ quy đổi: amount -> points (VD: 10000 = 1 point)
   membershipTiers: {

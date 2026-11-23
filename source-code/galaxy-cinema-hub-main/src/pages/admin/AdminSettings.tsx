@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Save, Clock, Shield, ShieldAlert, TrendingUp, Award, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AppContext";
@@ -37,6 +39,13 @@ const AdminSettings: React.FC = () => {
   const [config, setConfig] = useState<SystemConfig>(systemConfig);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [chatScheduleDays, setChatScheduleDays] = useState(7);
+  const [chatShowtimesPerDay, setChatShowtimesPerDay] = useState(8);
+  const [chatShowReasons, setChatShowReasons] = useState(true);
+  const [chatGroupBy, setChatGroupBy] = useState("date_movie");
+  const [chatEmptyPolicy, setChatEmptyPolicy] = useState("suggest_alternatives");
+  const [chatContextTtl, setChatContextTtl] = useState(15);
+  const [chatAmbiguityPolicy, setChatAmbiguityPolicy] = useState("clarify");
 
   // Membership tiers from DB (ids are needed for PUT)
   const [dbTiers, setDbTiers] = useState<any[]>([]);
@@ -73,11 +82,19 @@ const AdminSettings: React.FC = () => {
       );
       if (res.success && res.data) {
         const dbConfig = res.data;
+        setChatScheduleDays(Number(dbConfig.ai_chat_schedule_days ?? 7));
+        setChatShowtimesPerDay(Number(dbConfig.ai_chat_showtimes_per_day ?? 8));
+        setChatShowReasons(String(dbConfig.ai_chat_show_reasons ?? "1") !== "0");
+        setChatGroupBy(dbConfig.ai_chat_group_by === "date_cinema" ? "date_cinema" : "date_movie");
+        setChatEmptyPolicy(dbConfig.ai_chat_empty_result_policy === "report_only" ? "report_only" : "suggest_alternatives");
+        setChatContextTtl(Number(dbConfig.ai_chat_context_ttl_minutes ?? 15));
+        setChatAmbiguityPolicy(dbConfig.ai_chat_ambiguity_policy === "first_match" ? "first_match" : "clarify");
         const mappedConfig: Partial<SystemConfig> = {};
         if (dbConfig.curfew_u13) mappedConfig.curfewTimeU13 = dbConfig.curfew_u13.substring(0, 5);
         if (dbConfig.curfew_u16) mappedConfig.curfewTimeU16 = dbConfig.curfew_u16.substring(0, 5);
         if (dbConfig.min_vietnamese_quota) mappedConfig.minVietnameseQuota = Number(dbConfig.min_vietnamese_quota);
         if (dbConfig.seat_hold_duration) mappedConfig.seatHoldDuration = Math.max(1, Math.floor(Number(dbConfig.seat_hold_duration) / 60));
+        if (Number(dbConfig.max_seats_per_booking) > 0) mappedConfig.maxSeatsPerBooking = Number(dbConfig.max_seats_per_booking);
         if (dbConfig.cleanup_duration) mappedConfig.defaultCleanupDuration = Number(dbConfig.cleanup_duration);
         if (dbConfig.loyalty_points_rate) mappedConfig.loyaltyPointsRate = Number(dbConfig.loyalty_points_rate);
         setConfig(prev => ({ ...prev, ...mappedConfig }));
@@ -117,6 +134,16 @@ const AdminSettings: React.FC = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
+      if (!Number.isInteger(chatScheduleDays) || chatScheduleDays < 1 || chatScheduleDays > 7 ||
+          !Number.isInteger(chatShowtimesPerDay) || chatShowtimesPerDay < 1 || chatShowtimesPerDay > 20) {
+        throw new Error("Chatbot hỗ trợ từ 1 đến 7 ngày và từ 1 đến 20 suất mỗi ngày.");
+      }
+      if (!Number.isInteger(chatContextTtl) || chatContextTtl < 1 || chatContextTtl > 120) {
+        throw new Error("Thời hạn ngữ cảnh phải là số nguyên từ 1 đến 120 phút.");
+      }
+      if (!Number.isInteger(config.maxSeatsPerBooking) || config.maxSeatsPerBooking < 1 || config.maxSeatsPerBooking > 20) {
+        throw new Error("Số ghế tối đa mỗi đơn phải là số nguyên từ 1 đến 20.");
+      }
 
       // 1. Save system_configs (giờ giới nghiêm, booking, loyalty rate, vietnamese quota)
       const payload = {
@@ -124,8 +151,16 @@ const AdminSettings: React.FC = () => {
         curfew_u16: config.curfewTimeU16 + ":00",
         min_vietnamese_quota: config.minVietnameseQuota,
         seat_hold_duration: config.seatHoldDuration * 60,
+        max_seats_per_booking: config.maxSeatsPerBooking,
         cleanup_duration: config.defaultCleanupDuration,
         loyalty_points_rate: config.loyaltyPointsRate,
+        ai_chat_schedule_days: chatScheduleDays,
+        ai_chat_showtimes_per_day: chatShowtimesPerDay,
+        ai_chat_show_reasons: chatShowReasons ? "1" : "0",
+        ai_chat_group_by: chatGroupBy,
+        ai_chat_empty_result_policy: chatEmptyPolicy,
+        ai_chat_context_ttl_minutes: chatContextTtl,
+        ai_chat_ambiguity_policy: chatAmbiguityPolicy,
       };
 
       const settingsRes = await apiCall<{ success: boolean; message: string }>(
@@ -303,6 +338,83 @@ const AdminSettings: React.FC = () => {
                   Khoảng thời gian cần thiết để dọn dẹp giữa các suất chiếu
                 </p>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="maxSeats">Số ghế tối đa mỗi đơn</Label>
+                <Input
+                  id="maxSeats"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={config.maxSeatsPerBooking}
+                  onChange={(e) =>
+                    updateConfig("maxSeatsPerBooking", Number(e.target.value))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Giới hạn số ghế trong một giao dịch để tránh đầu cơ vé
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cấu Hình Chatbot</CardTitle>
+            <CardDescription>Giới hạn tra cứu và cách trợ lý điện ảnh trả lời khách.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="chatScheduleDays">Số ngày được tra cứu</Label>
+              <Input id="chatScheduleDays" type="number" min={1} max={7} step={1}
+                value={chatScheduleDays} onChange={event => setChatScheduleDays(Number(event.target.value))} />
+              <p className="text-xs text-muted-foreground">Mặc định 7 ngày, gồm hôm nay và 6 ngày tiếp theo. Tối đa 1 tuần.</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="chatShowtimesPerDay">Số suất hiển thị mỗi ngày</Label>
+              <Input id="chatShowtimesPerDay" type="number" min={1} max={20} step={1}
+                value={chatShowtimesPerDay} onChange={event => setChatShowtimesPerDay(Number(event.target.value))} />
+              <p className="text-xs text-muted-foreground">Từ 1 đến 20 suất. Khi còn kết quả, chatbot dẫn đến trang Lịch chiếu.</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="chatGroupBy">Nhóm suất chiếu theo</Label>
+              <Select value={chatGroupBy} onValueChange={setChatGroupBy}>
+                <SelectTrigger id="chatGroupBy"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date_movie">Ngày và phim</SelectItem>
+                  <SelectItem value="date_cinema">Ngày và rạp</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="chatEmptyPolicy">Khi không có suất phù hợp</Label>
+              <Select value={chatEmptyPolicy} onValueChange={setChatEmptyPolicy}>
+                <SelectTrigger id="chatEmptyPolicy"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="suggest_alternatives">Gợi ý ngày hoặc rạp khác</SelectItem>
+                  <SelectItem value="report_only">Chỉ báo không có suất</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="chatContextTtl">Thời hạn ngữ cảnh (phút)</Label>
+              <Input id="chatContextTtl" type="number" min={1} max={120} step={1}
+                value={chatContextTtl} onChange={event => setChatContextTtl(Number(event.target.value))} />
+              <p className="text-xs text-muted-foreground">Tính từ lượt hỏi gần nhất. Mặc định 15 phút.</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="chatAmbiguityPolicy">Khi câu hỏi có nhiều cách hiểu</Label>
+              <Select value={chatAmbiguityPolicy} onValueChange={setChatAmbiguityPolicy}>
+                <SelectTrigger id="chatAmbiguityPolicy"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clarify">Hỏi lại phim, rạp hoặc ngày</SelectItem>
+                  <SelectItem value="first_match">Dùng kết quả nhận diện đầu tiên</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch id="chatShowReasons" checked={chatShowReasons} onCheckedChange={setChatShowReasons} />
+              <Label htmlFor="chatShowReasons">Hiện lý do gợi ý phim</Label>
             </div>
           </CardContent>
         </Card>

@@ -98,6 +98,10 @@ $router->get('/api/health', function () {
 // ============================================
 // HALL ROUTES
 // ============================================
+$router->get('/api/ai/recommendations', 'AIController@recommendations');
+$router->post('/api/ai/chat', 'AIController@chat');
+$router->post('/api/ai/reviews/sentiment', 'AIController@sentiments');
+
 $router->post('/api/halls', 'HallController@create'); // Admin
 $router->get('/api/halls/:id', 'HallController@show'); // Admin
 $router->put('/api/halls/:id', 'HallController@update'); // Admin
@@ -264,6 +268,7 @@ $router->get('/api/transactions/user/:userId', 'TransactionController@getHistory
 $router->post('/api/transactions/momo', 'TransactionController@createMoMoPayment');
 $router->post('/api/transactions/vnpay', 'TransactionController@createVNPayPayment');
 $router->post('/api/transactions/visa', 'TransactionController@createVisaPayment');
+$router->post('/api/transactions/cash', 'TransactionController@createCashPayment');
 // ============================================
 // TICKET ROUTES
 // ============================================

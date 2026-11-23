@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, BookingProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import CinemaAssistant from "@/components/ai/CinemaAssistant";
 
 // Pages
 import HomePage from "./pages/HomePage";
@@ -87,6 +88,10 @@ const SettingsLoader = () => {
               1,
               Math.floor(Number(dbConfig.seat_hold_duration) / 60),
             );
+          if (Number(dbConfig.max_seats_per_booking) > 0)
+            systemConfig.maxSeatsPerBooking = Number(
+              dbConfig.max_seats_per_booking,
+            );
           if (dbConfig.cleanup_duration)
             systemConfig.defaultCleanupDuration = Number(
               dbConfig.cleanup_duration,
@@ -119,6 +124,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <SettingsLoader />
+              <CinemaAssistant />
               <BookingFlowGuard />
               <Routes>
                 {/* Client Routes */}
